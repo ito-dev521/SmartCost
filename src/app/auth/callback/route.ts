@@ -9,10 +9,32 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = createServerComponentClient()
-    
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    
-    if (!error) {
+
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (!error && data.user) {
+      // ユーザーが存在しない場合は作成
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .single()
+
+      if (!existingUser) {
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email!,
+            name: data.user.user_metadata?.name || data.user.email!.split('@')[0],
+            role: data.user.email === 'ito@ii-stylelab.com' ? 'admin' : 'user', // 特定のメールアドレスは管理者
+            created_at: new Date().toISOString(),
+          })
+
+        if (insertError) {
+          console.error('ユーザー作成エラー:', insertError)
+        }
+      }
       const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
       const isLocalEnv = process.env.NODE_ENV === 'development'
       if (isLocalEnv) {
