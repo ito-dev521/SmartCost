@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
@@ -8,6 +8,24 @@ import { ThemeSupa } from '@supabase/auth-ui-shared'
 export default function AuthForm() {
   const [loading, setLoading] = useState(false)
   const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    // 認証状態の変更を監視
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔐 AuthForm: 認証状態変更', event, session?.user?.email)
+      if (event === 'SIGNED_IN' && session) {
+        console.log('✅ ログイン成功:', session.user.email)
+        window.location.href = '/projects'
+      }
+    })
+
+    // 現在のセッションを確認
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 AuthForm: 現在のセッション', session?.user?.email || 'なし')
+    })
+
+    return () => subscription.unsubscribe()
+  }, [supabase.auth])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -75,3 +93,4 @@ export default function AuthForm() {
     </div>
   )
 }
+

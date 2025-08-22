@@ -15,7 +15,17 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "reset-super-admin": "node scripts/reset-super-admin-password.js",
+    "test-auth": "node scripts/test-auth.js",
+    "fix-super-admin": "node scripts/fix-super-admin-table.js",
+    "fix-user-permissions": "node scripts/fix-user-permissions.js",
+    "fix-super-admin-rls": "node scripts/fix-super-admin-rls.js",
+    "check-all-users": "node scripts/check-all-users.js",
+    "add-ito-super-admin": "node scripts/add-ito-super-admin.js",
+    "delete-ito-user": "node scripts/delete-ito-user.js",
+    "debug-page-access": "node scripts/debug-page-access.js",
+    "debug-database-query": "node scripts/debug-database-query.js"
   },
   "dependencies": {
     "@supabase/auth-ui-react": "^0.4.7",
@@ -38,6 +48,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^16.6.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.0",
     "tailwindcss": "^4",

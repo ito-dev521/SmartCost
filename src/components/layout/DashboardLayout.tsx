@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
@@ -27,26 +27,57 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [supabase.auth])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  const navigation = [
-    { name: 'ダッシュボード', href: '/dashboard', icon: Home },
-    { name: 'プロジェクト管理', href: '/projects', icon: Building2 },
-    { name: '原価入力', href: '/cost-entry', icon: Calculator },
-    { name: '資金管理', href: '/cash-flow', icon: DollarSign },
-    { name: '分析・レポート', href: '/analytics', icon: BarChart3 },
-    { name: '工事進行基準', href: '/progress', icon: TrendingUp },
-    { name: 'AIアシスタント', href: '/ai-assistant', icon: Bot },
-    { name: 'レポート', href: '/reports', icon: FileText },
-    { name: 'ユーザー管理', href: '/users', icon: Users },
-    { name: '設定', href: '/settings', icon: Settings },
-  ]
+  // 権限に応じたナビゲーション項目
+  const getNavigationItems = () => {
+    const baseItems = [
+      { name: 'ダッシュボード', href: '/dashboard', icon: Home, requiresAuth: true },
+      { name: 'プロジェクト管理', href: '/projects', icon: Building2, requiresAuth: true },
+    ]
+
+    // デフォルトでは全ユーザーに表示（実際の権限チェックは各ページで行う）
+    const userItems = [
+      { name: '原価入力', href: '/cost-entry', icon: Calculator, requiresAuth: true },
+      { name: '分析・レポート', href: '/analytics', icon: BarChart3, requiresAuth: true },
+      { name: '資金管理', href: '/cash-flow', icon: DollarSign, requiresAuth: true },
+      { name: '工事進行基準', href: '/progress', icon: TrendingUp, requiresAuth: true },
+    ]
+
+    const managerItems: typeof baseItems = [
+      // マネージャー固有のメニュー項目があればここに追加
+    ]
+
+    const adminItems = [
+      { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true },
+      { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true },
+      { name: '管理者パネル', href: '/admin', icon: Settings, requiresAuth: true },
+    ]
+
+    // スーパー管理者用メニュー（スーパー管理者のみ表示）
+    const superAdminItems = [
+      { name: 'スーパー管理者パネル', href: '/super-admin', icon: Settings, requiresAuth: true },
+    ]
+
+    return [...baseItems, ...userItems, ...managerItems, ...adminItems]
+  }
+
+  const navigation = getNavigationItems()
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -8,7 +8,7 @@ export default async function Login() {
   const { data: { session } } = await supabase.auth.getSession()
   
   if (session) {
-    redirect('/dashboard')
+    redirect('/projects')
   }
 
   return <AuthForm />
