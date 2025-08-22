@@ -328,7 +328,7 @@ export interface Database {
           prediction_value: number | null
           confidence_score: number | null
           explanation: string | null
-          recommendations: any | null
+          recommendations: Record<string, unknown> | null
           created_at: string
         }
         Insert: {
@@ -338,7 +338,7 @@ export interface Database {
           prediction_value?: number | null
           confidence_score?: number | null
           explanation?: string | null
-          recommendations?: any | null
+          recommendations?: Record<string, unknown> | null
           created_at?: string
         }
         Update: {
@@ -348,7 +348,7 @@ export interface Database {
           prediction_value?: number | null
           confidence_score?: number | null
           explanation?: string | null
-          recommendations?: any | null
+          recommendations?: Record<string, unknown> | null
           created_at?: string
         }
       }
@@ -358,9 +358,9 @@ export interface Database {
           project_type: string | null
           project_scale: string | null
           seasonal_factor: string | null
-          cost_pattern: any | null
-          timeline_pattern: any | null
-          risk_factors: any | null
+          cost_pattern: Record<string, unknown> | null
+          timeline_pattern: Record<string, unknown> | null
+          risk_factors: Record<string, unknown> | null
           created_at: string
         }
         Insert: {
@@ -368,9 +368,9 @@ export interface Database {
           project_type?: string | null
           project_scale?: string | null
           seasonal_factor?: string | null
-          cost_pattern?: any | null
-          timeline_pattern?: any | null
-          risk_factors?: any | null
+          cost_pattern?: Record<string, unknown> | null
+          timeline_pattern?: Record<string, unknown> | null
+          risk_factors?: Record<string, unknown> | null
           created_at?: string
         }
         Update: {
@@ -378,9 +378,9 @@ export interface Database {
           project_type?: string | null
           project_scale?: string | null
           seasonal_factor?: string | null
-          cost_pattern?: any | null
-          timeline_pattern?: any | null
-          risk_factors?: any | null
+          cost_pattern?: Record<string, unknown> | null
+          timeline_pattern?: Record<string, unknown> | null
+          risk_factors?: Record<string, unknown> | null
           created_at?: string
         }
       }

@@ -46,7 +46,7 @@ interface PaymentData {
 export default function CashFlowDashboard() {
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([])
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
-  const [aiPredictions, setAiPredictions] = useState<any[]>([])
+  const [aiPredictions, setAiPredictions] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClientComponentClient()
 
