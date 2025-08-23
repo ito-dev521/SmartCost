@@ -66,3 +66,5 @@ SELECT COUNT(*) as total_records FROM clients;
 
 -- 5. サンプルデータ（最初の3件）
 SELECT * FROM clients LIMIT 3;
+
+

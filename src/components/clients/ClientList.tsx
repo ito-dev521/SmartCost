@@ -3,45 +3,26 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Client } from '@/types/database'
-import { Building2, User, Mail, Phone, MapPin, Briefcase, Plus, Search, Edit, Trash2 } from 'lucide-react'
-import { usePermissions } from '@/lib/permissions'
+import { Building2, Phone, MapPin, Plus, Search, Edit, Trash2 } from 'lucide-react'
 import { createClientComponentClient } from '@/lib/supabase'
 
 interface ClientListProps {
   onEdit?: (client: Client) => void
   onDelete?: (clientId: string) => void
+  onCreateNew?: () => void
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
 }
 
-export default function ClientList({ onEdit, onDelete }: ClientListProps) {
+export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = false, canEdit = false, canDelete = false }: ClientListProps) {
+  console.log('🔍 ClientList: 権限状態:', { canCreate, canEdit, canDelete })
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [permissions, setPermissions] = useState<any>(null)
   const supabase = createClientComponentClient()
-
-  // 権限チェック
-  useEffect(() => {
-    const checkPermissions = async () => {
-      try {
-        // 実際のユーザーセッションからIDを取得
-        const { data: { session } } = await supabase.auth.getSession()
-
-        if (session?.user?.id) {
-          const perms = await usePermissions(session.user.id)
-          setPermissions(perms)
-        } else {
-          console.warn('認証セッションなし - 権限チェックをスキップ')
-          setPermissions(null)
-        }
-      } catch (error) {
-        console.error('権限チェックエラー:', error)
-        setPermissions(null)
-      }
-    }
-    checkPermissions()
-  }, [])
 
   // クライアント一覧を取得
   useEffect(() => {
@@ -52,7 +33,7 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
         // Supabaseクライアントからセッションを取得
         const { data: { session } } = await supabase.auth.getSession()
 
-        let headers: Record<string, string> = {
+        const headers: Record<string, string> = {
           'Content-Type': 'application/json',
         }
 
@@ -85,34 +66,57 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
 
   // 検索フィルター
   const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (client.contact_person && client.contact_person.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (client.industry && client.industry.toLowerCase().includes(searchTerm.toLowerCase()))
+    client.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const handleDelete = async (clientId: string, clientName: string) => {
+    console.log('🔍 ClientList: handleDelete呼び出し:', { clientId, clientName })
+    
+    // 削除確認
     if (!confirm(`${clientName}を削除しますか？この操作は取り消せません。`)) {
+      console.log('❌ ClientList: 削除キャンセル')
       return
     }
 
-    try {
-      const response = await fetch(`/api/clients/${clientId}`, {
-        method: 'DELETE',
-      })
+    console.log('✅ ClientList: 削除確認完了')
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'クライアントの削除に失敗しました')
-      }
-
-      // リストから削除
-      setClients(prev => prev.filter(client => client.id !== clientId))
-
-      if (onDelete) {
+    // 親コンポーネントのonDeleteコールバックを呼び出し
+    if (onDelete) {
+      console.log('📋 ClientList: 親コンポーネントのonDeleteを呼び出し')
+      console.log('📋 ClientList: onDelete関数の型:', typeof onDelete)
+      console.log('📋 ClientList: onDelete関数の内容:', onDelete.toString())
+      
+      try {
+        console.log('🔍 ClientList: onDelete関数を実行中...')
         onDelete(clientId)
+        console.log('✅ ClientList: onDelete呼び出し完了')
+        console.log('🎉 ClientList: 削除処理完了')
+      } catch (error) {
+        console.error('❌ ClientList: onDelete呼び出しエラー:', error)
       }
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'クライアントの削除に失敗しました')
+    } else {
+      console.log('⚠️ ClientList: onDeleteプロパティが存在しない、フォールバック処理を実行')
+      // フォールバック: 直接削除処理を実行
+      try {
+        console.log('🔍 ClientList: フォールバック削除処理開始:', clientId)
+
+        const response = await fetch(`/api/clients/${clientId}`, {
+          method: 'DELETE',
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'クライアントの削除に失敗しました')
+        }
+
+        console.log('✅ ClientList: フォールバック削除処理成功')
+
+        // ローカル状態を更新
+        setClients(prev => prev.filter(client => client.id !== clientId))
+      } catch (error) {
+        console.error('❌ ClientList: フォールバック削除処理エラー:', error)
+        alert(error instanceof Error ? error.message : 'クライアントの削除に失敗しました')
+      }
     }
   }
 
@@ -141,9 +145,9 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
           <h2 className="text-2xl font-bold text-gray-900">クライアント管理</h2>
           <p className="text-gray-600 mt-1">クライアント情報の登録・編集・削除</p>
         </div>
-        {permissions?.isManager && (
+        {canCreate && clients.length > 0 && (
           <button
-            onClick={() => router.push('/clients/new')}
+            onClick={onCreateNew}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -155,45 +159,23 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
       {/* 検索バー */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="クライアント名、担当者、業種で検索..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
+                        <input
+                  type="text"
+                  placeholder="クライアント名で検索..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
       </div>
 
       {/* 統計情報 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center">
             <Building2 className="h-8 w-8 text-blue-600 mr-3" />
             <div>
               <p className="text-sm text-blue-600">総クライアント数</p>
               <p className="text-2xl font-bold text-blue-900">{clients.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-green-50 p-4 rounded-lg">
-          <div className="flex items-center">
-            <User className="h-8 w-8 text-green-600 mr-3" />
-            <div>
-              <p className="text-sm text-green-600">担当者登録数</p>
-              <p className="text-2xl font-bold text-green-900">
-                {clients.filter(c => c.contact_person).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <div className="flex items-center">
-            <Briefcase className="h-8 w-8 text-purple-600 mr-3" />
-            <div>
-              <p className="text-sm text-purple-600">業種別</p>
-              <p className="text-2xl font-bold text-purple-900">
-                {new Set(clients.filter(c => c.industry).map(c => c.industry)).size}
-              </p>
             </div>
           </div>
         </div>
@@ -212,13 +194,13 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
               : '新規クライアントを作成して、プロジェクト管理を始めましょう'
             }
           </p>
-          {permissions?.isManager && !searchTerm && (
+          {canCreate && !searchTerm && (
             <button
-              onClick={() => router.push('/clients/new')}
+              onClick={onCreateNew}
               className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-4 w-4 mr-2" />
-              最初のクライアントを作成
+              新規クライアントを作成
             </button>
           )}
         </div>
@@ -236,7 +218,7 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
                     </h3>
                   </div>
                   <div className="flex space-x-1">
-                    {permissions?.canEditClients && (
+                    {canEdit && (
                       <button
                         onClick={() => onEdit ? onEdit(client) : router.push(`/clients/${client.id}/edit`)}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -245,33 +227,27 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
                         <Edit className="h-4 w-4" />
                       </button>
                     )}
-                    {permissions?.canDeleteClients && (
+                    {canDelete && (
                       <button
-                        onClick={() => handleDelete(client.id, client.name)}
+                        onClick={() => {
+                          console.log('🔍 ClientList: 削除ボタンクリック:', { clientId: client.id, clientName: client.name })
+                          handleDelete(client.id, client.name)
+                        }}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                         title="削除"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     )}
+                    {!canDelete && (
+                      <div className="p-1 text-gray-300">
+                        <Trash2 className="h-4 w-4" />
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* 担当者 */}
-                {client.contact_person && (
-                  <div className="flex items-center text-sm text-gray-600 mb-2">
-                    <User className="h-4 w-4 mr-2" />
-                    <span>{client.contact_person}</span>
-                  </div>
-                )}
 
-                {/* メール */}
-                {client.email && (
-                  <div className="flex items-center text-sm text-gray-600 mb-2">
-                    <Mail className="h-4 w-4 mr-2" />
-                    <span className="truncate">{client.email}</span>
-                  </div>
-                )}
 
                 {/* 電話 */}
                 {client.phone && (
@@ -281,13 +257,7 @@ export default function ClientList({ onEdit, onDelete }: ClientListProps) {
                   </div>
                 )}
 
-                {/* 業種 */}
-                {client.industry && (
-                  <div className="flex items-center text-sm text-gray-600 mb-2">
-                    <Briefcase className="h-4 w-4 mr-2" />
-                    <span>{client.industry}</span>
-                  </div>
-                )}
+
 
                 {/* 住所 */}
                 {client.address && (

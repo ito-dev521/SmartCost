@@ -1,5 +1,7 @@
 import { createServerComponentClient } from '@/lib/supabase-server'
-import { User, Database } from '@/types/database'
+
+// Supabaseクライアントの型定義
+type SupabaseClient = ReturnType<typeof createServerComponentClient>
 
 // 権限レベルの定義
 export const PERMISSION_LEVELS = {
@@ -27,21 +29,23 @@ export class PermissionChecker {
   // ユーザーのロールを取得
   async getUserRole(userId: string): Promise<Role | null> {
     try {
-      const { data: user } = await this.supabase
+      console.log('🔍 PermissionChecker: getUserRole開始', { userId })
+      const { data: user, error } = await this.supabase
         .from('users')
         .select('role')
         .eq('id', userId)
         .single()
 
+      console.log('📋 PermissionChecker: getUserRole 結果', { userId, user, error })
       return user?.role as Role || null
     } catch (error) {
-      console.error('Error fetching user role:', error)
+      console.error('❌ PermissionChecker: getUserRole エラー:', error)
       return null
     }
   }
 
   // APIルート用の権限チェック（Supabaseクライアントを引数で受け取る）
-  async getUserRoleWithClient(supabase: any, userId: string): Promise<Role | null> {
+  async getUserRoleWithClient(supabase: SupabaseClient, userId: string): Promise<Role | null> {
     try {
       const { data: user } = await supabase
         .from('users')
@@ -57,7 +61,7 @@ export class PermissionChecker {
   }
 
   // APIルート用の管理者権限チェック
-  async isAdminWithClient(supabase: any, userId: string): Promise<boolean> {
+  async isAdminWithClient(supabase: SupabaseClient, userId: string): Promise<boolean> {
     try {
       console.log('🔍 PermissionChecker: isAdminWithClientチェック開始', { userId })
       const { data: user } = await supabase
@@ -112,8 +116,12 @@ export class PermissionChecker {
 
   // ビューアー権限チェック（閲覧権限以上）
   async canView(userId: string): Promise<boolean> {
+    console.log('🔍 PermissionChecker: canViewチェック開始', { userId })
     const role = await this.getUserRole(userId)
-    return role === ROLES.VIEWER || role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN
+    console.log('📋 PermissionChecker: canView ユーザーロール取得', { userId, role })
+    const result = role === ROLES.VIEWER || role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN
+    console.log('📋 PermissionChecker: canView 結果', { userId, role, result })
+    return result
   }
 
   // プロジェクト閲覧権限チェック
@@ -196,7 +204,10 @@ export class PermissionChecker {
 
   // クライアント閲覧権限チェック
   async canViewClients(userId: string): Promise<boolean> {
-    return await this.canView(userId)
+    console.log('🔍 PermissionChecker: canViewClientsチェック開始', { userId })
+    const result = await this.canView(userId)
+    console.log('📋 PermissionChecker: canViewClients結果', { userId, result })
+    return result
   }
 
   // クライアント作成権限チェック

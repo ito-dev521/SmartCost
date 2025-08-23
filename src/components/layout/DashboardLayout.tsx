@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
+
 import {
   BarChart3,
   Building2,
@@ -28,13 +29,27 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [userPermissions, setUserPermissions] = useState({
+    canViewClients: false,
+    canManageUsers: false,
+    canManageSystem: false
+  })
   const router = useRouter()
   const supabase = createClientComponentClient()
 
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      setUserId(user?.id || null)
+      if (user) {
+        setUserId(user.id)
+        // デバッグ用に権限を一時的にtrueに設定
+        const permissions = {
+          canViewClients: true, // デバッグ用に一時的にtrue
+          canManageUsers: true, // デバッグ用に一時的にtrue
+          canManageSystem: true // デバッグ用に一時的にtrue
+        }
+        setUserPermissions(permissions)
+      }
     }
     getCurrentUser()
   }, [supabase.auth])
@@ -63,10 +78,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // マネージャー固有のメニュー項目があればここに追加
     ]
 
-    const adminItems = [
-      { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true },
-      { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true },
-      { name: '管理者パネル', href: '/admin', icon: Settings, requiresAuth: true },
+    const adminItems: Array<typeof baseItems[0] & { show?: boolean }> = [
+      { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true, show: userPermissions.canManageUsers },
+      { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true, show: true }, // クライアント管理は常に表示
+      { name: '管理者パネル', href: '/admin', icon: Settings, requiresAuth: true, show: userPermissions.canManageSystem },
     ]
 
     // スーパー管理者用メニュー（スーパー管理者のみ表示）
@@ -74,7 +89,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       { name: 'スーパー管理者パネル', href: '/super-admin', icon: Settings, requiresAuth: true },
     ]
 
-    return [...baseItems, ...userItems, ...managerItems, ...adminItems]
+    // 権限に応じて表示する項目をフィルタリング
+    const filteredAdminItems = adminItems.filter(item => item.show !== false)
+    
+    return [...baseItems, ...userItems, ...managerItems, ...filteredAdminItems]
   }
 
   const navigation = getNavigationItems()

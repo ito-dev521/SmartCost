@@ -48,9 +48,9 @@ export default async function AdminPage() {
     })
 
     // 一時的に権限チェックをスキップしてページを表示
-    if (false && (!currentUser || currentUser.role !== 'admin')) { // 強制的にfalseにしてリダイレクトを防ぐ
+    if (false && (!currentUser || currentUser?.role !== 'admin')) { // 強制的にfalseにしてリダイレクトを防ぐ
       console.log('❌ Adminページ: 管理者権限なし、/dashboardにリダイレクト')
-      console.log('   理由:', !currentUser ? 'ユーザーデータなし' : `ロール: ${currentUser.role}`)
+      console.log('   理由:', !currentUser ? 'ユーザーデータなし' : `ロール: ${currentUser?.role}`)
       redirect('/dashboard')
     }
 

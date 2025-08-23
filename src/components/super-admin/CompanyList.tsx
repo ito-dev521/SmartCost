@@ -124,7 +124,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-green-600">総ユーザー数</p>
               <p className="text-2xl font-bold text-green-900">
-                {companies.reduce((sum, company) => sum + (company as any).users?.[0]?.count || 0, 0)}
+                {companies.reduce((sum, company) => sum + ((company as any).users?.[0]?.count || 0), 0)}
               </p>
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-purple-600">総クライアント数</p>
               <p className="text-2xl font-bold text-purple-900">
-                {companies.reduce((sum, company) => sum + (company as any).clients?.[0]?.count || 0, 0)}
+                {companies.reduce((sum, company) => sum + ((company as any).clients?.[0]?.count || 0), 0)}
               </p>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-orange-600">総プロジェクト数</p>
               <p className="text-2xl font-bold text-orange-900">
-                {companies.reduce((sum, company) => sum + (company as any).projects?.[0]?.count || 0, 0)}
+                {companies.reduce((sum, company) => sum + ((company as any).projects?.[0]?.count || 0), 0)}
               </p>
             </div>
           </div>
@@ -262,3 +262,5 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
     </div>
   )
 }
+
+

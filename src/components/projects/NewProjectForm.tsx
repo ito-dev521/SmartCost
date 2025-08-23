@@ -17,6 +17,7 @@ import Link from 'next/link'
 
 interface ProjectFormData {
   name: string
+  description: string
   client_id: string
   client_name: string // 既存データとの互換性のため残す
   budget: string
@@ -27,6 +28,7 @@ interface ProjectFormData {
 
 const initialFormData: ProjectFormData = {
   name: '',
+  description: '',
   client_id: '',
   client_name: '',
   budget: '',

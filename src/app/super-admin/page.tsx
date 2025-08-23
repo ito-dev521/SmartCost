@@ -22,7 +22,7 @@ export default async function SuperAdminPage() {
   console.log('🔍 super-adminページ: スーパー管理者チェック開始')
   console.log('   ユーザー:', session.user.email)
 
-  let { data: superAdmin, error: checkError } = await supabase
+  let { data: superAdmin } = await supabase
     .from('super_admins')
     .select('*')
     .eq('email', session.user.email)
@@ -30,7 +30,6 @@ export default async function SuperAdminPage() {
     .single()
 
   console.log('   スーパー管理者レコード:', superAdmin)
-  console.log('   チェックエラー:', checkError)
 
   // スーパー管理者レコードがない場合は作成
   if (!superAdmin) {
@@ -66,7 +65,6 @@ export default async function SuperAdminPage() {
   if (!superAdmin) {
     console.log('スーパー管理者権限なし、ダッシュボードにリダイレクト')
     console.log('現在のユーザー:', session.user.email)
-    console.log('スーパー管理者チェックエラー:', checkError)
     redirect('/dashboard')
   }
 

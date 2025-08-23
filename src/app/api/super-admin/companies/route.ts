@@ -102,3 +102,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
 }
+
+

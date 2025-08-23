@@ -231,7 +231,7 @@ export interface Database {
           company_id: string
           user_id: string
           role: string
-          permissions: any | null
+          permissions: Record<string, boolean> | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -241,7 +241,7 @@ export interface Database {
           company_id: string
           user_id: string
           role?: string
-          permissions?: any | null
+          permissions?: Record<string, boolean> | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -251,7 +251,7 @@ export interface Database {
           company_id?: string
           user_id?: string
           role?: string
-          permissions?: any | null
+          permissions?: Record<string, boolean> | null
           is_active?: boolean
           created_at?: string
           updated_at?: string

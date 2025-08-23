@@ -28,3 +28,5 @@ NEXT_PUBLIC_APP_URL=http://localhost:3001
 - `SUPABASE_SERVICE_ROLE_KEY` は非常に重要なキーで、サーバーサイドでのみ使用してください
 - このキーはデータベースの完全なアクセス権限を持ちます
 - `.env.local` ファイルは `.gitignore` に含まれていることを確認してください
+
+

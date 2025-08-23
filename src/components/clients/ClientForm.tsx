@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Client } from '@/types/database'
-import { Building2, User, Mail, Phone, MapPin, Briefcase, FileText, Save, X } from 'lucide-react'
+import { Building2, Phone, MapPin, FileText, Save, X } from 'lucide-react'
 
 interface ClientFormProps {
   client?: Client | null
@@ -13,11 +13,8 @@ interface ClientFormProps {
 
 export interface ClientFormData {
   name: string
-  contact_person: string
-  email: string
   phone: string
   address: string
-  industry: string
   notes: string
   payment_cycle_type: string
   payment_cycle_closing_day: number | null
@@ -30,14 +27,13 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([])
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false)
 
   const [formData, setFormData] = useState<ClientFormData>({
     name: client?.name || '',
-    contact_person: client?.contact_person || '',
-    email: client?.email || '',
     phone: client?.phone || '',
     address: client?.address || '',
-    industry: client?.industry || '',
     notes: client?.notes || '',
     payment_cycle_type: client?.payment_cycle_type || 'month_end',
     payment_cycle_closing_day: client?.payment_cycle_closing_day || 31,
@@ -56,12 +52,46 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+    
+    // 会社名が変更された時に住所候補を取得
+    if (name === 'name' && value.trim().length > 2) {
+      fetchAddressSuggestions(value.trim())
+    }
   }
 
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     const numValue = value === '' ? null : parseInt(value, 10)
     setFormData(prev => ({ ...prev, [name]: numValue }))
+  }
+
+  const fetchAddressSuggestions = async (companyName: string) => {
+    if (companyName.length < 3) return
+    
+    setIsLoadingAddress(true)
+    try {
+      // OpenAI APIを使用して住所候補を取得
+      const response = await fetch('/api/ai/address-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyName })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAddressSuggestions(data.suggestions || [])
+        console.log('📋 住所候補取得結果:', data)
+      }
+    } catch (error) {
+      console.error('住所候補取得エラー:', error)
+    } finally {
+      setIsLoadingAddress(false)
+    }
+  }
+
+  const selectAddressSuggestion = (address: string) => {
+    setFormData(prev => ({ ...prev, address }))
+    setAddressSuggestions([])
   }
 
   const updatePaymentCycleDescription = () => {
@@ -92,10 +122,6 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
       setSubmitError('クライアント名は必須です')
       return false
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setSubmitError('メールアドレスの形式が正しくありません')
-      return false
-    }
     return true
   }
 
@@ -111,12 +137,24 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
           await onSubmit(formData)
         } else {
           // デフォルトの送信処理
+          // Supabaseクライアントからセッションを取得
+          const { data: { session } } = await supabase.auth.getSession()
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          }
+
+          if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`
+          }
+
           const response = await fetch(
             client ? `/api/clients/${client.id}` : '/api/clients',
             {
               method: client ? 'PUT' : 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify(formData),
+              credentials: 'include'
             }
           )
 
@@ -158,7 +196,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 基本情報 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
           {/* クライアント名 */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -177,39 +215,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
             />
           </div>
 
-          {/* 担当者 */}
-          <div>
-            <label htmlFor="contact_person" className="block text-sm font-medium text-gray-700 mb-2">
-              <User className="h-4 w-4 inline mr-1" />
-              担当者
-            </label>
-            <input
-              type="text"
-              id="contact_person"
-              name="contact_person"
-              value={formData.contact_person}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="田中太郎"
-            />
-          </div>
 
-          {/* メールアドレス */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="h-4 w-4 inline mr-1" />
-              メールアドレス
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="info@example.com"
-            />
-          </div>
 
           {/* 電話番号 */}
           <div>
@@ -228,22 +234,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
             />
           </div>
 
-          {/* 業種 */}
-          <div>
-            <label htmlFor="industry" className="block text-sm font-medium text-gray-700 mb-2">
-              <Briefcase className="h-4 w-4 inline mr-1" />
-              業種
-            </label>
-            <input
-              type="text"
-              id="industry"
-              name="industry"
-              value={formData.industry}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="建設業"
-            />
-          </div>
+
         </div>
 
         {/* 住所 */}
@@ -261,6 +252,34 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="東京都○○区○○1-2-3"
           />
+          
+          {/* 住所候補 */}
+          {addressSuggestions.length > 0 && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-700 mb-2 font-medium">AIが提案する住所候補:</p>
+              <div className="space-y-2">
+                {addressSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => selectAddressSuggestion(suggestion)}
+                    className="block w-full text-left p-2 text-sm text-blue-600 hover:bg-blue-100 rounded border border-blue-200 hover:border-blue-300 transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {isLoadingAddress && (
+            <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded-md">
+              <div className="flex items-center text-sm text-gray-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                AIが住所候補を生成中...
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 入金サイクル設定 */}

@@ -4,7 +4,7 @@ import { Company } from '@/types/database'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createClient()
@@ -27,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: 'スーパー管理者権限が必要です' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     // 法人詳細を取得
     const { data: company, error } = await supabase
@@ -59,7 +59,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createClient()
@@ -82,7 +82,7 @@ export async function PUT(
       return NextResponse.json({ error: 'スーパー管理者権限が必要です' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { name } = body
 
@@ -119,7 +119,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createClient()
@@ -142,7 +142,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'スーパー管理者権限が必要です' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     // 法人を削除（カスケード削除で関連データも削除）
     const { error } = await supabase
@@ -161,3 +161,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
 }
+
+
