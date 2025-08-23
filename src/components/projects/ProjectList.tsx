@@ -9,7 +9,6 @@ import {
   Search,
   Filter,
   MoreVertical,
-  Edit,
   Trash2,
   Calendar,
   DollarSign,
@@ -21,18 +20,21 @@ import Link from 'next/link'
 interface Project {
   id: string
   name: string
+  business_number: string
   client_name: string
   contract_amount: number
   start_date: string
   end_date: string
-  status: 'active' | 'completed' | 'suspended'
+  status: 'planning' | 'active' | 'completed' | 'suspended' | 'cancelled'
   created_at: string
 }
 
 const statusConfig = {
+  planning: { label: '計画中', color: 'bg-yellow-100 text-yellow-800' },
   active: { label: '進行中', color: 'bg-blue-100 text-blue-800' },
   completed: { label: '完了', color: 'bg-green-100 text-green-800' },
-  suspended: { label: '保留中', color: 'bg-gray-100 text-gray-800' }
+  suspended: { label: '保留中', color: 'bg-gray-100 text-gray-800' },
+  cancelled: { label: '中止', color: 'bg-red-100 text-red-800' }
 }
 
 export default function ProjectList() {
@@ -40,6 +42,7 @@ export default function ProjectList() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
@@ -48,42 +51,43 @@ export default function ProjectList() {
 
   const fetchProjects = async () => {
     try {
-      // 仮のデータを使用（実際のデータベース実装時に変更）
-      // TODO: 実際のデータベースからプロジェクトデータを取得
-      setProjects([
-        {
-          id: '1',
-          name: '新宿ビル建設プロジェクト',
-          client_name: '新宿開発株式会社',
-          contract_amount: 50000000,
-          start_date: '2024-01-15',
-          end_date: '2025-12-30',
-          status: 'active',
-          created_at: '2024-01-10'
-        },
-        {
-          id: '2',
-          name: '横浜マンション建設',
-          client_name: '横浜不動産株式会社',
-          contract_amount: 80000000,
-          start_date: '2024-03-01',
-          end_date: '2026-02-28',
-          status: 'active',
-          created_at: '2024-01-12'
-        },
-        {
-          id: '3',
-          name: '大阪オフィス改装',
-          client_name: '大阪商事株式会社',
-          contract_amount: 15000000,
-          start_date: '2023-06-01',
-          end_date: '2023-11-30',
-          status: 'completed',
-          created_at: '2023-05-20'
-        }
-      ])
+      console.log('🔍 ProjectList: プロジェクト一覧取得開始')
+      console.log('🔍 ProjectList: 現在の状態:', { projects: projects.length, loading })
+
+      // 認証トークンを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      console.log('🔑 ProjectList: セッション取得:', session ? '成功' : '失敗')
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+        console.log('🔑 ProjectList: 認証トークンをヘッダーに追加')
+      }
+
+      // APIエンドポイントからプロジェクトを取得
+      const response = await fetch('/api/projects', {
+        method: 'GET',
+        headers,
+      })
+
+      console.log('📡 ProjectList: APIレスポンス:', { status: response.status, ok: response.ok })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📋 ProjectList: 取得したプロジェクト数:', data.projects?.length || 0)
+        console.log('📋 ProjectList: 取得したプロジェクト:', data.projects)
+        setProjects(data.projects || [])
+      } else {
+        const errorText = await response.text()
+        console.error('❌ ProjectList: プロジェクト取得エラー:', errorText)
+        setProjects([]) // エラー時は空の配列に設定
+      }
     } catch (error) {
-      console.error('Error fetching projects:', error)
+      console.error('❌ ProjectList: プロジェクト取得エラー:', error)
+      setProjects([]) // エラー時は空の配列に設定
     } finally {
       setLoading(false)
     }
@@ -105,6 +109,49 @@ export default function ProjectList() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ja-JP')
+  }
+
+  const handleEdit = (project: Project) => {
+    console.log('🔍 ProjectList: 編集開始:', project)
+    // 編集ページにリダイレクト
+    window.location.href = `/projects/${project.id}/edit`
+  }
+
+  const handleDelete = async (projectId: string) => {
+    console.log('🔍 ProjectList: 削除開始:', projectId)
+    
+    if (!confirm('このプロジェクトを削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+        headers,
+      })
+
+      if (response.ok) {
+        console.log('✅ ProjectList: プロジェクト削除成功')
+        // プロジェクト一覧を再取得
+        fetchProjects()
+      } else {
+        const errorText = await response.text()
+        console.error('❌ ProjectList: プロジェクト削除エラー:', errorText)
+        alert('プロジェクトの削除に失敗しました')
+      }
+    } catch (error) {
+      console.error('❌ ProjectList: プロジェクト削除エラー:', error)
+      alert('プロジェクトの削除に失敗しました')
+    }
   }
 
   if (loading) {
@@ -142,24 +189,26 @@ export default function ProjectList() {
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <input
-            type="text"
-            placeholder="プロジェクト名、クライアント、場所で検索..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+                          <input
+                  type="text"
+                  placeholder="プロジェクト名、元請け先、場所で検索..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="all">すべてのステータス</option>
-          <option value="active">進行中</option>
-          <option value="completed">完了</option>
-          <option value="suspended">保留中</option>
-        </select>
+                      <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">すべてのステータス</option>
+                <option value="planning">計画中</option>
+                <option value="active">進行中</option>
+                <option value="completed">完了</option>
+                <option value="suspended">保留中</option>
+                <option value="cancelled">中止</option>
+              </select>
       </div>
 
       {/* プロジェクト一覧 */}
@@ -179,41 +228,70 @@ export default function ProjectList() {
           </div>
         ) : (
           filteredProjects.map((project) => (
-            <div key={project.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div 
+              key={project.id} 
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-lg hover:border-blue-300 transition-all duration-200 cursor-pointer group"
+              onClick={() => handleEdit(project)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handleEdit(project)
+                }
+              }}
+              aria-label={`プロジェクト「${project.name}」を編集する`}
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {project.business_number ? `[${project.business_number}] ` : ''}{project.name}
+                        <span className="text-sm font-normal text-gray-500 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          (クリックして編集)
+                        </span>
+                      </h3>
+                    </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig[project.status].color}`}>
                       {statusConfig[project.status].label}
                     </span>
                   </div>
-                  <p className="text-gray-600 mb-4">クライアント: {project.client_name}</p>
+                  <div className="mb-4 text-sm text-gray-600">
+                    <span>元請け先: {project.client_name}</span>
+                  </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <DollarSign className="h-4 w-4 mr-1" />
-                      {formatCurrency(project.contract_amount)}
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center text-base font-medium text-gray-700">
+                      <span className="text-gray-600 mr-2">契約金額:</span>
+                      <span className="text-green-600 font-semibold">{formatCurrency(project.contract_amount)}</span>
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Users className="h-4 w-4 mr-1" />
-                      {project.client_name}
-                    </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {formatDate(project.start_date)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="flex items-center text-base text-gray-700">
+                        <Calendar className="h-5 w-5 mr-2 text-blue-600" />
+                        <span className="text-gray-600 mr-2">開始日:</span>
+                        <span className="font-medium">{formatDate(project.start_date)}</span>
+                      </div>
+                      <div className="flex items-center text-base text-gray-700">
+                        <Calendar className="h-5 w-5 mr-2 text-red-600" />
+                        <span className="text-gray-600 mr-2">終了日:</span>
+                        <span className="font-medium">{formatDate(project.end_date)}</span>
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>クライアント: {project.client_name}</span>
                     <span>作成日: {formatDate(project.created_at)}</span>
                   </div>
                 </div>
 
-                <div className="ml-4">
-                  <button className="p-2 text-gray-400 hover:text-gray-600">
-                    <MoreVertical className="h-5 w-5" />
+                <div className="ml-4" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => handleDelete(project.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    title="削除"
+                  >
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -242,7 +320,7 @@ export default function ProjectList() {
               <DollarSign className="h-6 w-6 text-green-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">総予算</p>
+              <p className="text-sm font-medium text-gray-600">総契約金額</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(projects.reduce((sum, p) => sum + p.contract_amount, 0))}
               </p>

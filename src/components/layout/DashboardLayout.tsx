@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
-
+import { permissionChecker } from '@/lib/permissions'
 import {
   BarChart3,
   Building2,
@@ -49,6 +49,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           canManageSystem: true // デバッグ用に一時的にtrue
         }
         setUserPermissions(permissions)
+        console.log('🔍 DashboardLayout: 権限設定完了:', permissions)
       }
     }
     getCurrentUser()
@@ -80,7 +81,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const adminItems: Array<typeof baseItems[0] & { show?: boolean }> = [
       { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true, show: userPermissions.canManageUsers },
-      { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true, show: true }, // クライアント管理は常に表示
+      { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true, show: userPermissions.canViewClients },
       { name: '管理者パネル', href: '/admin', icon: Settings, requiresAuth: true, show: userPermissions.canManageSystem },
     ]
 

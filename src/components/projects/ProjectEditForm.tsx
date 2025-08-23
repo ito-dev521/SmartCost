@@ -20,7 +20,7 @@ interface ProjectFormData {
   business_number: string
   description: string
   client_id: string
-  client_name: string // 既存データとの互換性のため残す
+  client_name: string
   budget: string
   start_date: string
   end_date: string
@@ -47,35 +47,89 @@ const statusOptions = [
   { value: 'cancelled', label: '中止' }
 ]
 
-export default function NewProjectForm() {
+interface ProjectEditFormProps {
+  projectId: string
+}
+
+export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
   const [formData, setFormData] = useState<ProjectFormData>(initialFormData)
   const [errors, setErrors] = useState<Partial<ProjectFormData>>({})
   const [isPending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
+  const [loadingProject, setLoadingProject] = useState(true)
   const [businessNumberError, setBusinessNumberError] = useState<string>('')
   const router = useRouter()
   const supabase = createClientComponentClient()
 
-  // クライアント一覧を取得
+  // プロジェクト情報を取得
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchProject = async () => {
       try {
-        setLoadingClients(true)
-        console.log('🔍 NewProjectForm: クライアント一覧取得開始')
+        setLoadingProject(true)
+        console.log('🔍 ProjectEditForm: プロジェクト情報取得開始:', projectId)
 
-        // 認証トークンを取得
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('🔑 NewProjectForm: セッション取得:', session ? '成功' : '失敗')
-
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
         }
 
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
-          console.log('🔑 NewProjectForm: 認証トークンをヘッダーに追加')
+        }
+
+        const response = await fetch(`/api/projects/${projectId}`, {
+          method: 'GET',
+          headers,
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('📋 ProjectEditForm: 取得したプロジェクト:', data.project)
+          
+          const project = data.project
+          setFormData({
+            name: project.name || '',
+            business_number: project.business_number || '',
+            description: project.description || '',
+            client_id: project.client_id || '',
+            client_name: project.client_name || '',
+            budget: project.contract_amount?.toString() || '',
+            start_date: project.start_date || '',
+            end_date: project.end_date || '',
+            status: project.status || 'planning'
+          })
+        } else {
+          const errorText = await response.text()
+          console.error('❌ ProjectEditForm: プロジェクト取得エラー:', errorText)
+          setSubmitError('プロジェクト情報の取得に失敗しました')
+        }
+      } catch (error) {
+        console.error('❌ ProjectEditForm: プロジェクト取得エラー:', error)
+        setSubmitError('プロジェクト情報の取得に失敗しました')
+      } finally {
+        setLoadingProject(false)
+      }
+    }
+
+    fetchProject()
+  }, [projectId, supabase.auth])
+
+  // クライアント一覧を取得
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setLoadingClients(true)
+        console.log('🔍 ProjectEditForm: クライアント一覧取得開始')
+
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        }
+
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
         }
 
         const response = await fetch('/api/clients', {
@@ -83,18 +137,15 @@ export default function NewProjectForm() {
           headers,
         })
 
-        console.log('📡 NewProjectForm: APIレスポンス:', { status: response.status, ok: response.ok })
-
         if (response.ok) {
           const data = await response.json()
-          console.log('📋 NewProjectForm: 取得したクライアント数:', data.clients?.length || 0)
           setClients(data.clients || [])
         } else {
           const errorText = await response.text()
-          console.error('❌ NewProjectForm: APIエラー:', errorText)
+          console.error('❌ ProjectEditForm: クライアント取得エラー:', errorText)
         }
       } catch (error) {
-        console.error('❌ NewProjectForm: クライアント取得エラー:', error)
+        console.error('❌ ProjectEditForm: クライアント取得エラー:', error)
       } finally {
         setLoadingClients(false)
       }
@@ -103,39 +154,7 @@ export default function NewProjectForm() {
     fetchClients()
   }, [supabase.auth])
 
-  // 業務番号の重複チェック
-  const checkBusinessNumberDuplicate = async (businessNumber: string) => {
-    if (!businessNumber.trim()) return
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      }
-
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-
-      const response = await fetch('/api/projects', {
-        method: 'GET',
-        headers,
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const existingProject = data.projects?.find((p: any) => 
-          p.business_number === businessNumber
-        )
-
-        if (existingProject) {
-          setBusinessNumberError(`業務番号「${businessNumber}」は既に使用されています（プロジェクト: ${existingProject.name}）`)
-        }
-      }
-    } catch (error) {
-      console.error('❌ 業務番号重複チェックエラー:', error)
-    }
-  }
 
   const validateForm = (): boolean => {
     const newErrors: Partial<ProjectFormData> = {}
@@ -144,13 +163,7 @@ export default function NewProjectForm() {
       newErrors.name = 'プロジェクト名は必須です'
     }
 
-    if (!formData.business_number.trim()) {
-      newErrors.business_number = '業務番号は必須です'
-    } else if (!/^[A-Za-z0-9\-_]+$/.test(formData.business_number.trim())) {
-      newErrors.business_number = '業務番号は半角英数、ハイフン、アンダースコアのみ入力可能です'
-    } else if (businessNumberError) {
-      newErrors.business_number = businessNumberError
-    }
+
 
     if (!formData.client_id.trim()) {
       newErrors.client_id = '元請け先は必須です'
@@ -191,54 +204,48 @@ export default function NewProjectForm() {
           name: formData.name.trim(),
           business_number: formData.business_number.trim(),
           client_id: formData.client_id,
-          client_name: formData.client_name, // 既存データとの互換性のため残す
+          client_name: formData.client_name,
           contract_amount: formData.budget ? Number(formData.budget) : 0,
           start_date: formData.start_date,
           end_date: formData.end_date,
           status: formData.status
-          // description: formData.description.trim() || null  // 一時的に除外
         }
 
-        console.log('📡 NewProjectForm: APIリクエスト開始', projectData)
+        console.log('📡 ProjectEditForm: APIリクエスト開始', projectData)
 
-        // 認証トークンを取得
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('🔑 NewProjectForm: セッション取得:', session ? '成功' : '失敗')
-
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
         }
 
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
-          console.log('🔑 NewProjectForm: 認証トークンをヘッダーに追加')
         }
 
-        // APIエンドポイントを呼び出し
-        const response = await fetch('/api/projects', {
-          method: 'POST',
+        const response = await fetch(`/api/projects/${projectId}`, {
+          method: 'PUT',
           headers,
           body: JSON.stringify(projectData)
         })
 
-        console.log('📡 NewProjectForm: APIレスポンス:', { status: response.status, ok: response.ok })
+        console.log('📡 ProjectEditForm: APIレスポンス:', { status: response.status, ok: response.ok })
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error('❌ NewProjectForm: APIエラー:', errorText)
-          throw new Error(`プロジェクト作成に失敗しました (${response.status})`)
+          console.error('❌ ProjectEditForm: APIエラー:', errorText)
+          throw new Error(`プロジェクト更新に失敗しました (${response.status})`)
         }
 
         const result = await response.json()
-        console.log('✅ NewProjectForm: プロジェクト作成成功:', result)
+        console.log('✅ ProjectEditForm: プロジェクト更新成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
         router.push('/projects')
         router.refresh()
 
       } catch (error) {
-        console.error('プロジェクト作成エラー:', error)
-        setSubmitError('プロジェクトの作成に失敗しました。もう一度お試しください。')
+        console.error('プロジェクト更新エラー:', error)
+        setSubmitError('プロジェクトの更新に失敗しました。もう一度お試しください。')
       }
     })
   }
@@ -252,14 +259,55 @@ export default function NewProjectForm() {
       setErrors(prev => ({ ...prev, [name]: undefined }))
     }
 
-    // 業務番号の重複チェック
-    if (name === 'business_number' && value.trim()) {
-      setBusinessNumberError('')
-      // 入力が完了してから重複チェック（500ms後）
-      setTimeout(() => {
-        checkBusinessNumberDuplicate(value.trim())
-      }, 500)
+
+  }
+
+  const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const clientId = e.target.value
+    const selectedClient = clients.find(client => client.id === clientId)
+    
+    setFormData(prev => ({
+      ...prev,
+      client_id: clientId,
+      client_name: selectedClient?.name || ''
+    }))
+
+    if (errors.client_id) {
+      setErrors(prev => ({ ...prev, client_id: undefined }))
     }
+  }
+
+  if (loadingProject) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="space-y-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (submitError) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          {submitError}
+        </div>
+        <div className="mt-4">
+          <Link
+            href="/projects"
+            className="text-blue-600 hover:text-blue-800"
+          >
+            ← プロジェクト一覧に戻る
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -275,7 +323,7 @@ export default function NewProjectForm() {
         </Link>
         <div className="flex items-center text-sm text-gray-500">
           <Building2 className="w-4 h-4 mr-1" />
-          新規プロジェクト作成
+          プロジェクト編集
         </div>
       </div>
 
@@ -304,7 +352,7 @@ export default function NewProjectForm() {
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                   errors.name ? 'border-red-300' : 'border-gray-300'
                 }`}
-                placeholder="例: 〇〇ビル建設プロジェクト"
+                placeholder="プロジェクト名を入力"
               />
             </div>
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
@@ -313,7 +361,7 @@ export default function NewProjectForm() {
           {/* 業務番号 */}
           <div className="md:col-span-2">
             <label htmlFor="business_number" className="block text-sm font-medium text-gray-700 mb-2">
-              業務番号 *
+              業務番号 * （変更不可）
             </label>
             <div className="relative">
               <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -322,93 +370,37 @@ export default function NewProjectForm() {
                 id="business_number"
                 name="business_number"
                 value={formData.business_number}
-                onChange={handleInputChange}
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.business_number ? 'border-red-300' : 'border-gray-300'
-                }`}
+                readOnly
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
                 placeholder="例: E04-031"
-                pattern="[A-Za-z0-9\-_]+"
-                title="半角英数、ハイフン、アンダースコアのみ入力可能"
               />
             </div>
-            <p className="mt-1 text-sm text-gray-500">半角英数、ハイフン(-)、アンダースコア(_)のみ入力可能</p>
-            {businessNumberError && <p className="mt-1 text-sm text-red-600">{businessNumberError}</p>}
-            {errors.business_number && <p className="mt-1 text-sm text-red-600">{errors.business_number}</p>}
+            <p className="mt-1 text-sm text-gray-500">業務番号は作成後に変更できません</p>
           </div>
 
-          {/* 説明 */}
+          {/* クライアント選択 */}
           <div className="md:col-span-2">
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-              プロジェクト説明
-            </label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows={4}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="プロジェクトの詳細な説明を入力してください"
-              />
-            </div>
-          </div>
-
-          {/* クライアント */}
-          <div>
             <label htmlFor="client_id" className="block text-sm font-medium text-gray-700 mb-2">
               元請け先 *
             </label>
-            <div className="relative">
-              <Users className="absolute left-3 top-3 w-5 h-5 text-gray-400 z-10" />
-              <select
-                id="client_id"
-                name="client_id"
-                value={formData.client_id}
-                onChange={(e) => {
-                  const selectedClientId = e.target.value
-                  const selectedClient = clients.find(c => c.id === selectedClientId)
-                  setFormData(prev => ({
-                    ...prev,
-                    client_id: selectedClientId,
-                    client_name: selectedClient?.name || ''
-                  }))
-                }}
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white ${
-                  errors.client_id ? 'border-red-300' : 'border-gray-300'
-                }`}
-                disabled={loadingClients}
-              >
-                <option value="">
-                  {loadingClients ? '元請け先を読み込み中...' : '元請け先を選択してください'}
+            <select
+              id="client_id"
+              name="client_id"
+              value={formData.client_id}
+              onChange={handleClientChange}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.client_id ? 'border-red-300' : 'border-gray-300'
+              }`}
+            >
+                              <option value="">元請け先を選択</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
                 </option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                    {client.contact_person && ` (${client.contact_person})`}
-                  </option>
-                ))}
-              </select>
-              {/* カスタムドロップダウン矢印 */}
-              <div className="absolute right-3 top-3 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+              ))}
+            </select>
             {errors.client_id && <p className="mt-1 text-sm text-red-600">{errors.client_id}</p>}
-            {clients.length === 0 && !loadingClients && (
-              <p className="mt-1 text-sm text-blue-600">
-                元請け先が登録されていません。
-                <a href="/clients/new" className="underline hover:no-underline">
-                  新しい元請け先を作成
-                </a>
-              </p>
-            )}
           </div>
-
-
 
           {/* 契約金額 */}
           <div>
@@ -430,8 +422,6 @@ export default function NewProjectForm() {
             </div>
             {errors.budget && <p className="mt-1 text-sm text-red-600">{errors.budget}</p>}
           </div>
-
-
 
           {/* 開始日 */}
           <div>
@@ -507,19 +497,10 @@ export default function NewProjectForm() {
           <button
             type="submit"
             disabled={isPending}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isPending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                作成中...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                プロジェクトを作成
-              </>
-            )}
+            <Save className="w-5 h-5 mr-2" />
+            {isPending ? '更新中...' : '更新'}
           </button>
         </div>
       </form>
