@@ -19,6 +19,7 @@ import {
   Users,
   X,
   Bot,
+  ClipboardList,
 } from 'lucide-react'
 import AIAssistant from '@/components/ai/AIAssistant'
 
@@ -70,6 +71,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // デフォルトでは全ユーザーに表示（実際の権限チェックは各ページで行う）
     const userItems = [
       { name: '原価入力', href: '/cost-entry', icon: Calculator, requiresAuth: true },
+      { name: '作業日報', href: '/daily-report', icon: ClipboardList, requiresAuth: true },
       { name: '分析・レポート', href: '/analytics', icon: BarChart3, requiresAuth: true },
       { name: '資金管理', href: '/cash-flow', icon: DollarSign, requiresAuth: true },
       { name: '工事進行基準', href: '/progress', icon: TrendingUp, requiresAuth: true },

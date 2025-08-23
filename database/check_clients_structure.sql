@@ -68,3 +68,4 @@ SELECT COUNT(*) as total_records FROM clients;
 SELECT * FROM clients LIMIT 3;
 
 
+

@@ -197,6 +197,63 @@ ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE super_admins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE company_admins ENABLE ROW LEVEL SECURITY;
 
+-- プロジェクトのRLSポリシー
+CREATE POLICY "Users can view projects in their company" ON projects
+  FOR SELECT USING (
+    company_id IN (
+      SELECT company_id FROM users
+      WHERE id = auth.uid()
+    ) OR
+    EXISTS (
+      SELECT 1 FROM super_admins
+      WHERE email = auth.jwt() ->> 'email'
+      AND is_active = true
+    ) OR
+    company_id IN (
+      SELECT id FROM companies
+      WHERE name = 'サンプル建設コンサルタント株式会社'
+    )
+  );
+
+CREATE POLICY "Users can insert projects in their company" ON projects
+  FOR INSERT WITH CHECK (
+    company_id IN (
+      SELECT company_id FROM users
+      WHERE id = auth.uid()
+    ) OR
+    EXISTS (
+      SELECT 1 FROM super_admins
+      WHERE email = auth.jwt() ->> 'email'
+      AND is_active = true
+    )
+  );
+
+CREATE POLICY "Users can update projects in their company" ON projects
+  FOR UPDATE USING (
+    company_id IN (
+      SELECT company_id FROM users
+      WHERE id = auth.uid()
+    ) OR
+    EXISTS (
+      SELECT 1 FROM super_admins
+      WHERE email = auth.jwt() ->> 'email'
+      AND is_active = true
+    )
+  );
+
+CREATE POLICY "Users can delete projects in their company" ON projects
+  FOR DELETE USING (
+    company_id IN (
+      SELECT company_id FROM users
+      WHERE id = auth.uid()
+    ) OR
+    EXISTS (
+      SELECT 1 FROM super_admins
+      WHERE email = auth.jwt() ->> 'email'
+      AND is_active = true
+    )
+  );
+
 CREATE POLICY "Super admins can access everything" ON companies
   FOR ALL USING (
     EXISTS (
@@ -210,6 +267,8 @@ CREATE POLICY "Super admins can access everything" ON companies
 INSERT INTO companies (name) VALUES
   ('サンプル建設コンサルタント株式会社');
 
+
+
 INSERT INTO departments (company_id, name, parent_id) VALUES
   ((SELECT id FROM companies WHERE name = 'サンプル建設コンサルタント株式会社'), '本社', NULL),
   ((SELECT id FROM companies WHERE name = 'サンプル建設コンサルタント株式会社'), '技術部', (SELECT id FROM departments WHERE name = '本社')),
@@ -217,6 +276,8 @@ INSERT INTO departments (company_id, name, parent_id) VALUES
 
 INSERT INTO super_admins (email, name, password_hash) VALUES
   ('superadmin@example.com', 'スーパー管理者', '$2b$10$dummy.hash.for.demo.purposes.only');
+
+
 
 -- 完了メッセージ
 SELECT '最小限のスキーマ作成が完了しました' as message;
