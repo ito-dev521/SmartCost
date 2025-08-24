@@ -43,14 +43,44 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setUserId(user.id)
-        // デバッグ用に権限を一時的にtrueに設定
-        const permissions = {
-          canViewClients: true, // デバッグ用に一時的にtrue
-          canManageUsers: true, // デバッグ用に一時的にtrue
-          canManageSystem: true // デバッグ用に一時的にtrue
+        
+        // ユーザーの権限をデータベースから取得
+        try {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('role, company_id')
+            .eq('id', user.id)
+            .single()
+          
+          if (error) {
+            console.error('ユーザー権限取得エラー:', error)
+            // エラーの場合は権限なしとして設定
+            setUserPermissions({
+              canViewClients: false,
+              canManageUsers: false,
+              canManageSystem: false
+            })
+          } else {
+            // ロールに基づいて権限を設定
+            const permissions = {
+              canViewClients: userData.role === 'admin' || userData.role === 'manager',
+              canManageUsers: userData.role === 'admin',
+              canManageSystem: userData.role === 'admin'
+            }
+            setUserPermissions(permissions)
+            console.log('🔍 DashboardLayout: 権限設定完了:', {
+              role: userData.role,
+              permissions
+            })
+          }
+        } catch (error) {
+          console.error('権限チェックエラー:', error)
+          setUserPermissions({
+            canViewClients: false,
+            canManageUsers: false,
+            canManageSystem: false
+          })
         }
-        setUserPermissions(permissions)
-        console.log('🔍 DashboardLayout: 権限設定完了:', permissions)
       }
     }
     getCurrentUser()
@@ -94,6 +124,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     // 権限に応じて表示する項目をフィルタリング
     const filteredAdminItems = adminItems.filter(item => item.show !== false)
+    
+    console.log('🔍 DashboardLayout: ナビゲーション項目フィルタリング結果', {
+      adminItems: adminItems.map(item => ({ name: item.name, show: item.show })),
+      filteredAdminItems: filteredAdminItems.map(item => item.name),
+      userPermissions
+    })
     
     return [...baseItems, ...userItems, ...managerItems, ...filteredAdminItems]
   }

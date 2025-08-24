@@ -86,13 +86,74 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
   const fetchDepartments = async () => {
     try {
-      const { data: departments } = await supabase
+      console.log('🔍 UserManagement: fetchDepartments開始')
+      const { data, error } = await supabase
         .from('departments')
         .select('*')
         .order('name')
-      setDepartments(departments || [])
+      
+      if (error) {
+        console.error('❌ UserManagement: 部署取得エラー:', error)
+        throw error
+      }
+
+      console.log('✅ UserManagement: 部署取得成功:', data?.length || 0, '件')
+      setDepartments(data || [])
     } catch (error) {
-      console.error('Error fetching departments:', error)
+      console.error('❌ UserManagement: fetchDepartmentsエラー:', error)
+      setDepartments([])
+    }
+  }
+
+  // ユーザー削除処理
+  const handleUserDelete = async (user: User) => {
+    try {
+      console.log('🔍 UserManagement: ユーザー削除開始:', user.email)
+      
+      // セッションからアクセストークンを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('認証が必要です。再度ログインしてください。')
+      }
+
+      // 自分自身を削除しようとしている場合は拒否
+      if (user.id === session.user.id) {
+        throw new Error('自分自身のアカウントは削除できません')
+      }
+
+      // 削除確認
+      if (!confirm(`ユーザー "${user.name}" (${user.email}) を本当に削除しますか？\n\nこの操作は取り消せません。`)) {
+        return
+      }
+
+      // APIでユーザー削除を実行
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `削除に失敗しました (HTTP ${response.status})`)
+      }
+
+      console.log('✅ UserManagement: ユーザー削除成功')
+      
+      // 削除確認ダイアログを閉じる
+      setDeleteConfirm(null)
+      
+      // ユーザー一覧を再取得
+      await fetchUsers()
+      
+      // 成功メッセージ
+      alert('ユーザーが正常に削除されました')
+      
+    } catch (error) {
+      console.error('❌ UserManagement: ユーザー削除エラー:', error)
+      alert(`ユーザーの削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
     }
   }
 
@@ -106,25 +167,7 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
     setShowForm(true)
   }
 
-  const handleUserDelete = async (user: User) => {
-    try {
-      const response = await fetch(`/api/users?id=${user.id}`, {
-        method: 'DELETE'
-      })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to delete user')
-      }
-
-      await fetchUsers()
-      setDeleteConfirm(null)
-      if (onUserUpdate) onUserUpdate()
-    } catch (error) {
-      console.error('Error deleting user:', error)
-      alert('ユーザーの削除に失敗しました')
-    }
-  }
 
   const handleFormSuccess = () => {
     fetchUsers()
@@ -382,3 +425,4 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
     </div>
   )
 }
+

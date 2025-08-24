@@ -8,13 +8,19 @@ interface UserFormData {
   email: string
   name: string
   role: 'admin' | 'user'
+  department_id: string
 }
 
-export default function AdminUserForm() {
+interface AdminUserFormProps {
+  departments: Array<{ id: string; name: string }>
+}
+
+export default function AdminUserForm({ departments }: AdminUserFormProps) {
   const [formData, setFormData] = useState<UserFormData>({
     email: '',
     name: '',
-    role: 'user'
+    role: 'user',
+    department_id: ''
   })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -39,7 +45,7 @@ export default function AdminUserForm() {
 
       if (response.ok) {
         setMessage({ type: 'success', text: 'ユーザーが正常に作成されました' })
-        setFormData({ email: '', name: '', role: 'user' })
+        setFormData({ email: '', name: '', role: 'user', department_id: '' })
       } else {
         setMessage({ type: 'error', text: result.error || 'エラーが発生しました' })
       }
@@ -115,6 +121,25 @@ export default function AdminUserForm() {
           >
             <option value="user">一般ユーザー</option>
             <option value="admin">管理者</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="department_id" className="block text-sm font-medium text-gray-700 mb-1">
+            部署
+          </label>
+          <select
+            id="department_id"
+            value={formData.department_id}
+            onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">部署未設定</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
           </select>
         </div>
 

@@ -3,6 +3,17 @@ import { createServerClient } from '@supabase/ssr'
 import { permissionChecker } from '@/lib/permissions'
 import { User } from '@/types/database'
 
+// パスワード生成関数
+function generatePassword(): string {
+  const length = 12
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length))
+  }
+  return password
+}
+
 export async function GET(request: NextRequest) {
   try {
     console.log('🔍 /api/users: GETリクエスト受信')
@@ -261,11 +272,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ユーザー作成
+    // パスワードを自動生成
+    const generatedPassword = generatePassword()
+    
+    console.log('🔍 /api/users: 認証ユーザー作成開始', {
+      email,
+      hasPassword: !!generatedPassword,
+      passwordLength: generatedPassword.length,
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '設定済み' : '未設定',
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? '設定済み' : '未設定'
+    })
+    
+    // Supabaseの認証システムでユーザーを作成
+    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password: generatedPassword,
+      email_confirm: true, // メール確認をスキップ
+      user_metadata: {
+        name,
+        role,
+        department_id: department_id || null
+      }
+    })
+
+    if (authError) {
+      console.error('❌ /api/users: 認証ユーザー作成エラー:', {
+        error: authError,
+        message: authError.message,
+        status: authError.status,
+        details: authError.details
+      })
+      return NextResponse.json(
+        { error: `認証ユーザーの作成に失敗しました: ${authError.message}` },
+        { status: 500 }
+      )
+    }
+
+    console.log('✅ /api/users: 認証ユーザー作成成功:', authUser.user.id)
+
+    // カスタムユーザーテーブルにユーザー情報を保存
     const { data: newUser, error: createError } = await supabase
       .from('users')
       .insert([
         {
+          id: authUser.user.id, // Supabaseの認証ユーザーIDを使用
           email,
           name,
           role,
@@ -276,16 +326,23 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (createError) {
-      console.error('User creation error:', createError)
+      console.error('User table creation error:', createError)
+      // 認証ユーザーは作成されているので、削除を試行
+      try {
+        await supabase.auth.admin.deleteUser(authUser.user.id)
+      } catch (deleteError) {
+        console.error('Failed to delete auth user after table error:', deleteError)
+      }
       return NextResponse.json(
-        { error: 'ユーザーの作成に失敗しました' },
+        { error: 'ユーザーテーブルの作成に失敗しました' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       message: 'ユーザーが正常に作成されました',
-      user: newUser
+      user: newUser,
+      password: generatedPassword // 生成されたパスワードを返す
     }, { status: 201 })
 
   } catch (error) {
@@ -480,6 +537,14 @@ export async function DELETE(request: NextRequest) {
 
     // Supabaseクライアントを作成
     const { createClient } = await import('@supabase/supabase-js')
+    
+    console.log('🔍 /api/users: Supabaseクライアント作成', {
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '設定済み' : '未設定',
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? '設定済み' : '未設定',
+      urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
+      keyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0
+    })
+    
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!

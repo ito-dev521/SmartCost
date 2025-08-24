@@ -13,6 +13,9 @@ interface DailyReportEntry {
   notes: string
   created_at?: string
   updated_at?: string
+  user_id?: string
+  user_name?: string
+  user_email?: string
 }
 
 interface Project {
@@ -47,6 +50,29 @@ export default function DailyReportPage() {
   
 
   const supabase = createClientComponentClient()
+
+  // プロジェクト毎の工数集計を計算
+  const calculateProjectSummary = (reports: any[]) => {
+    const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number } } = {}
+    
+    reports.forEach(monthData => {
+      monthData.entries.forEach((entry: any) => {
+        const projectKey = entry.project_id || `${entry.business_number}-${entry.project_name}`
+        if (!projectSummary[projectKey]) {
+          projectSummary[projectKey] = {
+            name: entry.project_name || '不明',
+            business_number: entry.business_number || '不明',
+            totalHours: 0,
+            days: 0
+          }
+        }
+        projectSummary[projectKey].totalHours += entry.work_hours || 0
+        projectSummary[projectKey].days += 1
+      })
+    })
+    
+    return Object.values(projectSummary).sort((a, b) => b.totalHours - a.totalHours)
+  }
 
   useEffect(() => {
     fetchProjects()
@@ -117,7 +143,7 @@ export default function DailyReportPage() {
     try {
       console.log('作業日報取得開始...')
       console.log('選択された日付:', selectedDate)
-      
+
       const { data, error } = await supabase
         .from('daily_reports')
         .select('*')
@@ -136,14 +162,50 @@ export default function DailyReportPage() {
       }
 
       console.log('取得した作業日報:', data)
-      
+
       if (!data || data.length === 0) {
         console.log('日次データがありません')
         setEntries([])
         return
       }
-      
-      setEntries(data)
+
+      // 各エントリーのユーザー情報を取得
+      const entriesWithUserInfo = await Promise.all(
+        data.map(async (entry: any) => {
+          let userName = '不明'
+          let userEmail = ''
+          
+          if (entry.user_id) {
+            try {
+              // usersテーブルからユーザー情報を取得
+              const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('name, email')
+                .eq('id', entry.user_id)
+                .single()
+              
+              if (!userError && userData) {
+                userName = userData.name || userData.email || '不明'
+                userEmail = userData.email || ''
+                console.log(`ユーザー情報取得成功: ${entry.user_id} -> ${userName}`)
+              } else {
+                console.warn('ユーザー情報取得エラー:', userError)
+              }
+            } catch (userErr) {
+              console.warn('ユーザー情報取得例外:', userErr)
+            }
+          }
+
+          return {
+            ...entry,
+            user_name: userName,
+            user_email: userEmail
+          }
+        })
+      )
+
+      console.log('エントリー情報:', entriesWithUserInfo)
+      setEntries(entriesWithUserInfo)
     } catch (error) {
       console.error('作業日報取得エラー:', error)
       setEntries([])
@@ -198,13 +260,40 @@ export default function DailyReportPage() {
         return
       }
       
-      // 日付ごとにグループ化
-      const groupedByDate = data.reduce((acc: any, report: any) => {
+      // 日付ごとにグループ化（ユーザー情報を個別取得）
+      const groupedByDate: any = {}
+      
+      for (const report of data) {
         const date = report.date
-        if (!acc[date]) {
-          acc[date] = []
+        if (!groupedByDate[date]) {
+          groupedByDate[date] = []
         }
-        acc[date].push({
+        
+        // ユーザー情報を個別に取得
+        let userName = '不明'
+        let userEmail = ''
+        
+        if (report.user_id) {
+          try {
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('name, email')
+              .eq('id', report.user_id)
+              .single()
+            
+            if (!userError && userData) {
+              userName = userData.name || userData.email || '不明'
+              userEmail = userData.email || ''
+              console.log(`月次ユーザー情報取得成功: ${report.user_id} -> ${userName}`)
+            } else {
+              console.warn('月次ユーザー情報取得エラー:', userError)
+            }
+          } catch (userErr) {
+            console.warn('月次ユーザー情報取得例外:', userErr)
+          }
+        }
+        
+        groupedByDate[date].push({
           id: report.id,
           date: report.date,
           project_id: report.project_id,
@@ -214,10 +303,11 @@ export default function DailyReportPage() {
           created_at: report.created_at,
           updated_at: report.updated_at,
           project_name: report.projects?.name || '不明',
-          business_number: report.projects?.business_number || 'N/A'
+          business_number: report.projects?.business_number || 'N/A',
+          user_name: userName,
+          user_email: userEmail
         })
-        return acc
-      }, {})
+      }
 
       // 日付順にソート
       const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a))
@@ -337,6 +427,7 @@ export default function DailyReportPage() {
             .from('daily_reports')
             .delete()
             .eq('id', deletedId)
+            .eq('user_id', user?.id) // 自分のエントリーのみ削除可能
 
           if (error) {
             console.error('削除エラー:', error)
@@ -364,6 +455,7 @@ export default function DailyReportPage() {
               updated_at: new Date().toISOString()
             })
             .eq('id', entry.id)
+            .eq('user_id', user?.id) // 自分のエントリーのみ更新可能
 
           if (error) {
             console.error('更新エラー:', error)
@@ -420,25 +512,88 @@ export default function DailyReportPage() {
   }
 
   const exportToCSV = () => {
-    const csvContent = [
-      ['日付', '業務番号 - プロジェクト名', '作業内容', '工数（人工）', '備考'],
-      ...entries.map(entry => {
-        const project = projects.find(p => p.id === entry.project_id)
-        return [
-          entry.date,
-          project ? `${project.business_number} - ${project.name}` : '',
-          entry.work_content,
-          entry.work_hours.toString(),
-          entry.notes
-        ]
-      })
-    ].map(row => row.map(field => `"${field}"`).join(',')).join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `作業日報_${selectedDate}.csv`
-    link.click()
+    if (showMonthlyView && monthlyReports.length > 0) {
+      // 月次表示の場合は月次データをCSV出力
+      const csvContent = [
+        // プロジェクト毎工数集計
+        ['=== プロジェクト毎工数集計 ==='],
+        ['業務番号', 'プロジェクト名', '総工数（人工）', '作業日数', '平均工数/日'],
+        ...calculateProjectSummary(monthlyReports).map(project => [
+          project.business_number,
+          project.name,
+          project.totalHours.toFixed(1),
+          project.days.toString(),
+          (project.totalHours / project.days).toFixed(1)
+        ]),
+        ['', '', '', '', ''],
+        ['合計', `${calculateProjectSummary(monthlyReports).length}件`, 
+         monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(1),
+         monthlyReports.reduce((total, monthData) => total + monthData.entries.length, 0).toString(),
+         ''],
+        ['', '', '', '', ''],
+        ['', '', '', '', ''],
+        // 日別詳細
+        ['=== 日別詳細 ==='],
+        ['日付', '業務番号', 'プロジェクト名', '作業内容', '工数（人工）', '備考', '入力者', '作成日時'],
+        ...monthlyReports.flatMap(monthData => 
+          monthData.entries.map((entry: any) => [
+            monthData.date,
+            entry.business_number || '',
+            entry.project_name || '',
+            entry.work_content || '',
+            (entry.work_hours || 0).toString(),
+            entry.notes || '',
+            entry.user_name || '不明',
+            entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : ''
+          ])
+        )
+      ]
+      
+      const csvString = csvContent.map(row => 
+        row.map(cell => `"${cell}"`).join(',')
+      ).join('\n')
+      
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `作業日報_月次_${selectedMonth}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } else {
+      // 日次表示の場合は従来のCSV出力
+      const csvContent = [
+        ['日付', '業務番号 - プロジェクト名', '作業内容', '工数（人工）', '備考', '入力者', '作成日時'],
+        ...entries.map(entry => {
+          const project = projects.find(p => p.id === entry.project_id)
+          return [
+            entry.date,
+            project ? `${project.business_number} - ${project.name}` : '',
+            entry.work_content,
+            entry.work_hours.toString(),
+            entry.notes || '',
+            entry.user_name || '不明',
+            entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : ''
+          ]
+        })
+      ]
+      
+      const csvString = csvContent.map(row => 
+        row.map(field => `"${field}"`).join(',')
+      ).join('\n')
+      
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `作業日報_日次_${selectedDate}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
   }
 
   const getTotalHours = () => {
@@ -557,11 +712,28 @@ export default function DailyReportPage() {
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">作業日報がありません</h3>
               <p className="text-gray-500 mb-4">選択した日付の作業日報がまだ作成されていません</p>
-
             </div>
           ) : (
             entries.map((entry, index) => (
               <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* ユーザー情報表示 */}
+                {entry.user_name && entry.user_name !== '不明' && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                    <div className="flex items-center gap-2 text-sm text-blue-800">
+                      <span className="font-medium">入力者:</span>
+                      <span>{entry.user_name}</span>
+                      {entry.user_email && entry.user_email !== entry.user_name && (
+                        <span className="text-blue-600">({entry.user_email})</span>
+                      )}
+                      {entry.created_at && (
+                        <span className="ml-4 text-blue-600">
+                          作成日時: {new Date(entry.created_at).toLocaleString('ja-JP')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                   {/* プロジェクト選択 */}
                   <div>
@@ -797,6 +969,83 @@ export default function DailyReportPage() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             {selectedMonth} の作業日報一覧
           </h3>
+          
+          {/* プロジェクト毎の工数集計 */}
+          {monthlyReports.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                プロジェクト毎工数集計
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        業務番号
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        プロジェクト名
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        総工数（人工）
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        作業日数
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        平均工数/日
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {calculateProjectSummary(monthlyReports).map((project, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900 border-b border-gray-200">
+                          {project.business_number}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
+                          {project.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-blue-600 border-b border-gray-200">
+                          {project.totalHours.toFixed(1)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
+                          {project.days}日
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
+                          {(project.totalHours / project.days).toFixed(1)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-900 border-t border-gray-200">
+                        合計
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
+                        {calculateProjectSummary(monthlyReports).length}件
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-blue-600 border-t border-gray-200">
+                        {monthlyReports.reduce((total, monthData) => 
+                          total + monthData.totalHours, 0
+                        ).toFixed(1)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
+                        {monthlyReports.reduce((total, monthData) => 
+                          total + monthData.entries.length, 0
+                        )}日
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
+                        -
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
           {monthlyReports.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               選択した月の作業日報がありません
@@ -828,11 +1077,21 @@ export default function DailyReportPage() {
                             {entry.work_hours}人工
                           </span>
                         </div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 mb-1">
                           {entry.work_content || '-'}
                         </div>
+                        {entry.user_name && entry.user_name !== '不明' && (
+                          <div className="text-xs text-blue-600 mb-1">
+                            入力者: {entry.user_name}
+                            {entry.created_at && (
+                              <span className="ml-2 text-blue-500">
+                                ({new Date(entry.created_at).toLocaleString('ja-JP')})
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {entry.notes && (
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-gray-500">
                             備考: {entry.notes}
                           </div>
                         )}

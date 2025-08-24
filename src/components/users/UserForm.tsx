@@ -20,6 +20,11 @@ interface UserFormData {
   department_id: string
 }
 
+interface GeneratedPassword {
+  password: string
+  showPassword: boolean
+}
+
 const initialFormData: UserFormData = {
   email: '',
   name: '',
@@ -50,10 +55,28 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
   const [errors, setErrors] = useState<Partial<UserFormData>>({})
   const [isPending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [generatedPassword, setGeneratedPassword] = useState<GeneratedPassword>({
+    password: '',
+    showPassword: false
+  })
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClientComponentClient()
 
   const isEditing = !!user
+
+  // パスワード生成関数
+  const generatePassword = (): string => {
+    const length = 12
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+    let password = ''
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length))
+    }
+    return password
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Partial<UserFormData> = {}
@@ -136,18 +159,80 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
 
           if (!response.ok) {
             const error = await response.json()
-            throw new Error(error.error || 'ユーザーの作成に失敗しました')
+            console.error('❌ ユーザー作成失敗:', {
+              status: response.status,
+              statusText: response.statusText,
+              error: error,
+              errorMessage: error.error,
+              fullError: error
+            })
+            throw new Error(error.error || `ユーザーの作成に失敗しました! (HTTP ${response.status})`)
+          }
+          
+          console.log('✅ ユーザー作成成功、レスポンス状態:', response.status)
+
+          // 成功時の処理
+          if (!isEditing) {
+            // 新規作成時はパスワードを表示
+            try {
+              const responseData = await response.json()
+              console.log('🔍 ユーザー作成レスポンス:', responseData)
+              
+              if (responseData.password) {
+                console.log('✅ パスワード取得成功:', responseData.password)
+                setGeneratedPassword({
+                  password: responseData.password,
+                  showPassword: true
+                })
+                setShowPasswordModal(true)
+                console.log('🔍 パスワードモーダル表示設定:', true)
+                
+                // メール送信を試行
+                try {
+                  const emailResponse = await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                      email: formData.email,
+                      name: formData.name,
+                      password: responseData.password
+                    })
+                  })
+                  
+                  if (emailResponse.ok) {
+                    console.log('✅ メール送信成功')
+                    setEmailSent(true)
+                    setEmailError(null)
+                  } else {
+                    const errorData = await emailResponse.json()
+                    console.error('❌ メール送信失敗:', emailResponse.status, errorData)
+                    setEmailSent(false)
+                    setEmailError(errorData.error || 'メール送信に失敗しました')
+                  }
+                } catch (emailError) {
+                  console.error('❌ メール送信エラー:', emailError)
+                  setEmailSent(false)
+                  setEmailError('メール送信でエラーが発生しました')
+                }
+              } else {
+                console.log('⚠️ レスポンスにパスワードが含まれていません')
+              }
+            } catch (parseError) {
+              console.error('レスポンスの解析に失敗:', parseError)
+            }
           }
         }
 
-        // 成功時の処理
         if (onSuccess) {
           onSuccess()
         } else {
           router.refresh()
         }
 
-        if (onClose) {
+        if (onClose && isEditing) {
           onClose()
         }
 
@@ -344,6 +429,128 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
           </button>
         </div>
       </form>
+
+      {/* パスワード表示モーダル */}
+      {/* デバッグ情報 */}
+      <div className="text-xs text-gray-500 mb-2">
+        showPasswordModal: {showPasswordModal.toString()}, 
+        generatedPassword: {generatedPassword.password ? '設定済み' : '未設定'}
+        <button 
+          onClick={() => setShowPasswordModal(true)}
+          className="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded"
+        >
+          テスト表示
+        </button>
+      </div>
+      
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-green-100 rounded-full">
+                <UserPlus className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">ユーザー作成完了</h3>
+                <p className="text-sm text-gray-600">生成されたパスワードを確認してください</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  メールアドレス
+                </label>
+                <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border">
+                  {formData.email}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  生成されたパスワード
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border font-mono">
+                    {generatedPassword.showPassword ? generatedPassword.password : '••••••••••••'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGeneratedPassword(prev => ({ ...prev, showPassword: !prev.showPassword }))}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    {generatedPassword.showPassword ? '隠す' : '表示'}
+                  </button>
+                </div>
+              </div>
+
+              {/* メール送信状況 */}
+              {emailSent && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-green-800">
+                        パスワード通知メールが正常に送信されました。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {emailError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-800">
+                        メール送信エラー: {emailError}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-800">
+                      このパスワードをユーザーに安全に共有してください。初回ログイン後に変更することを推奨します。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordModal(false)
+                  setFormData(initialFormData)
+                  if (onClose) onClose()
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                完了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
