@@ -195,6 +195,16 @@ export class PermissionChecker {
     return await this.isUser(userId)
   }
 
+  // 原価入力閲覧権限チェック
+  async canViewCostEntries(userId: string): Promise<boolean> {
+    return await this.isUser(userId)
+  }
+
+  // 給与入力権限チェック
+  async canManageSalaries(userId: string): Promise<boolean> {
+    return await this.isManager(userId)
+  }
+
   // 資金管理権限チェック
   async canManageCashFlow(userId: string): Promise<boolean> {
     return await this.isUser(userId)

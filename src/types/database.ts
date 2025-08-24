@@ -260,6 +260,79 @@ export interface Database {
           updated_at?: string
         }
       }
+      salary_entries: {
+        Row: {
+          id: string
+          employee_name: string
+          employee_department: string | null
+          salary_amount: number
+          salary_period_start: string
+          salary_period_end: string
+          total_work_hours: number | null
+          hourly_rate: number | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_name: string
+          employee_department?: string | null
+          salary_amount: number
+          salary_period_start: string
+          salary_period_end: string
+          total_work_hours?: number | null
+          hourly_rate?: number | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_name?: string
+          employee_department?: string | null
+          salary_amount?: number
+          salary_period_start?: string
+          salary_period_end?: string
+          total_work_hours?: number | null
+          hourly_rate?: number | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      salary_allocations: {
+        Row: {
+          id: string
+          salary_entry_id: string
+          project_id: string
+          work_hours: number
+          hourly_rate: number
+          labor_cost: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          salary_entry_id: string
+          project_id: string
+          work_hours: number
+          hourly_rate: number
+          labor_cost: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          salary_entry_id?: string
+          project_id?: string
+          work_hours?: number
+          hourly_rate?: number
+          labor_cost?: number
+          created_at?: string
+        }
+      }
     }
   }
 }
@@ -272,3 +345,5 @@ export type Department = Database['public']['Tables']['departments']['Row']
 export type Client = Database['public']['Tables']['clients']['Row']
 export type SuperAdmin = Database['public']['Tables']['super_admins']['Row']
 export type CompanyAdmin = Database['public']['Tables']['company_admins']['Row']
+export type SalaryEntry = Database['public']['Tables']['salary_entries']['Row']
+export type SalaryAllocation = Database['public']['Tables']['salary_allocations']['Row']

@@ -30,6 +30,7 @@ const defaultNavigationItems: NavigationItem[] = [
   { href: '/dashboard', label: 'ダッシュボード', icon: Home },
   { href: '/projects', label: 'プロジェクト管理', icon: Building2 },
   { href: '/cost-entry', label: '原価入力', icon: Calculator },
+  { href: '/salary', label: '給与入力', icon: DollarSign },
   { href: '/daily-report', label: '作業日報', icon: ClipboardList },
   { href: '/analytics', label: '分析・レポート', icon: BarChart3 },
   { href: '/cash-flow', label: '資金管理', icon: DollarSign },

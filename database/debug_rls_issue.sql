@@ -151,3 +151,4 @@ SELECT
     WHEN NOT EXISTS (SELECT 1 FROM super_admins WHERE email = auth.jwt() ->> 'email' AND is_active = true) THEN 'Create super admin record or fix email'
     ELSE 'Check RLS policies and user permissions'
   END as action_required;
+

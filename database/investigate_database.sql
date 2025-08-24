@@ -159,3 +159,4 @@ SELECT
   MAX(created_at),
   MIN(created_at)
 FROM users;
+

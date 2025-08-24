@@ -47,6 +47,12 @@ export default function PermissionGuard({
             case 'canViewDailyReports':
               permission = await permissionChecker.canViewDailyReports(user.id)
               break
+            case 'canViewCostEntries':
+              permission = await permissionChecker.canViewCostEntries(user.id)
+              break
+            case 'canManageSalaries':
+              permission = await permissionChecker.canManageSalaries(user.id)
+              break
             case 'canViewProgress':
               permission = await permissionChecker.canViewProgress(user.id)
               break

@@ -54,3 +54,4 @@ SELECT
     sort_order
 FROM category_tree
 ORDER BY path;
+

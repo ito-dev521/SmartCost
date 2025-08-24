@@ -41,3 +41,4 @@ ORDER BY created_at DESC;
 
 -- 6. インデックスを追加（必要に応じて）
 -- CREATE INDEX IF NOT EXISTS idx_projects_project_number ON projects(project_number);
+
