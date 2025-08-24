@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import ProjectList from '@/components/projects/ProjectList'
+import PermissionGuard from '@/components/auth/PermissionGuard'
 
 export default async function Projects() {
   console.log('🔍 Projectsページ: 認証チェック開始')
@@ -32,7 +33,9 @@ export default async function Projects() {
   console.log('✅ Projectsページ: 認証成功、ページ表示')
   return (
     <DashboardLayout>
-      <ProjectList />
+      <PermissionGuard requiredPermission="canManageProjects">
+        <ProjectList />
+      </PermissionGuard>
     </DashboardLayout>
   )
 }

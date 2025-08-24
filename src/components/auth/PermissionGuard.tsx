@@ -3,87 +3,107 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
-import { permissionChecker, Role, PermissionLevel } from '@/lib/permissions'
-import { Shield, Lock, Eye, EyeOff } from 'lucide-react'
+import { permissionChecker } from '@/lib/permissions'
 
 interface PermissionGuardProps {
   children: React.ReactNode
-  requiredRole?: Role
-  requiredPermission?: PermissionLevel
-  projectId?: string
+  requiredRole?: 'user' | 'manager' | 'admin'
+  requiredPermission?: string
   fallback?: React.ReactNode
-  redirectTo?: string
 }
 
-export default function PermissionGuard({
-  children,
-  requiredRole,
+export default function PermissionGuard({ 
+  children, 
+  requiredRole = 'user',
   requiredPermission,
-  projectId,
-  fallback,
-  redirectTo = '/dashboard'
+  fallback 
 }: PermissionGuardProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClientComponentClient()
 
   useEffect(() => {
-    checkPermission()
-  }, [requiredRole, requiredPermission, projectId])
+    const checkPermission = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user) {
+          router.push('/login')
+          return
+        }
 
-  const checkPermission = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
+        let permission = false
 
-      if (!user) {
+        if (requiredPermission) {
+          // 特定の権限をチェック
+          switch (requiredPermission) {
+            case 'canManageProjects':
+              permission = await permissionChecker.canManageProjects(user.id)
+              break
+            case 'canViewAnalytics':
+              permission = await permissionChecker.canViewAnalytics(user.id)
+              break
+            case 'canViewDailyReports':
+              permission = await permissionChecker.canViewDailyReports(user.id)
+              break
+            case 'canViewProgress':
+              permission = await permissionChecker.canViewProgress(user.id)
+              break
+            case 'canManageCosts':
+              permission = await permissionChecker.canManageCosts(user.id)
+              break
+            case 'canManageCashFlow':
+              permission = await permissionChecker.canManageCashFlow(user.id)
+              break
+            case 'canViewClients':
+              permission = await permissionChecker.canViewClients(user.id)
+              break
+            case 'canManageUsers':
+              permission = await permissionChecker.canManageUsers(user.id)
+              break
+            case 'canManageSystem':
+              permission = await permissionChecker.canManageSystem(user.id)
+              break
+            default:
+              permission = false
+          }
+        } else {
+          // ロールベースの権限チェック
+          switch (requiredRole) {
+            case 'admin':
+              permission = await permissionChecker.isAdmin(user.id)
+              break
+            case 'manager':
+              permission = await permissionChecker.isManager(user.id)
+              break
+            case 'user':
+              permission = await permissionChecker.isUser(user.id)
+              break
+            default:
+              permission = false
+          }
+        }
+
+        setHasPermission(permission)
+      } catch (error) {
+        console.error('権限チェックエラー:', error)
         setHasPermission(false)
-        setIsLoading(false)
-        return
+      } finally {
+        setLoading(false)
       }
-
-      let hasAccess = false
-
-      if (requiredRole) {
-        // ロールベースの権限チェック
-        const userRole = await permissionChecker.getUserRole(user.id)
-        hasAccess = userRole === requiredRole
-      } else if (requiredPermission && projectId) {
-        // プロジェクト権限チェック
-        const permission = await permissionChecker.getUserProjectPermission(user.id, projectId)
-        hasAccess = permission === requiredPermission
-      } else if (requiredPermission === 'read') {
-        // 一般的な閲覧権限
-        hasAccess = await permissionChecker.canView(user.id)
-      } else if (requiredPermission === 'write') {
-        // 一般的な編集権限
-        hasAccess = await permissionChecker.isUser(user.id)
-      } else if (requiredPermission === 'admin') {
-        // 管理者権限
-        hasAccess = await permissionChecker.isAdmin(user.id)
-      } else {
-        // デフォルトはログインユーザーのみ
-        hasAccess = true
-      }
-
-      setHasPermission(hasAccess)
-
-      if (!hasAccess && redirectTo) {
-        router.push(redirectTo)
-      }
-    } catch (error) {
-      console.error('Permission check error:', error)
-      setHasPermission(false)
-    } finally {
-      setIsLoading(false)
     }
-  }
 
-  if (isLoading) {
+    checkPermission()
+  }, [requiredRole, requiredPermission, router, supabase.auth])
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">権限を確認中...</span>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">権限を確認中...</p>
+        </div>
       </div>
     )
   }
@@ -92,24 +112,28 @@ export default function PermissionGuard({
     if (fallback) {
       return <>{fallback}</>
     }
-
+    
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="bg-red-100 rounded-full p-3 mb-4">
-          <Shield className="h-8 w-8 text-red-600" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+            <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">アクセス権限がありません</h3>
+          <p className="mt-2 text-sm text-gray-500">
+            このページにアクセスするには{requiredRole === 'admin' ? '管理者' : requiredRole === 'manager' ? 'マネージャー' : '一般ユーザー'}以上の権限が必要です。
+          </p>
+          <div className="mt-6">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              ダッシュボードに戻る
+            </button>
+          </div>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          アクセス権限がありません
-        </h3>
-        <p className="text-gray-600 mb-4">
-          この機能にアクセスするには、適切な権限が必要です。
-        </p>
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          ダッシュボードに戻る
-        </button>
       </div>
     )
   }

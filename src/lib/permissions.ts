@@ -172,6 +172,31 @@ export class PermissionChecker {
 
   // 分析・レポート閲覧権限チェック
   async canViewAnalytics(userId: string): Promise<boolean> {
+    return await this.isManager(userId)
+  }
+
+  // プロジェクト管理権限チェック
+  async canManageProjects(userId: string): Promise<boolean> {
+    return await this.isManager(userId)
+  }
+
+  // 作業日報閲覧権限チェック
+  async canViewDailyReports(userId: string): Promise<boolean> {
+    return await this.isUser(userId)
+  }
+
+  // 工事進行基準閲覧権限チェック
+  async canViewProgress(userId: string): Promise<boolean> {
+    return await this.isUser(userId)
+  }
+
+  // 原価入力権限チェック
+  async canManageCosts(userId: string): Promise<boolean> {
+    return await this.isUser(userId)
+  }
+
+  // 資金管理権限チェック
+  async canManageCashFlow(userId: string): Promise<boolean> {
     return await this.isUser(userId)
   }
 

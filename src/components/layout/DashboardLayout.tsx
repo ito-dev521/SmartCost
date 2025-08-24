@@ -33,7 +33,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userPermissions, setUserPermissions] = useState({
     canViewClients: false,
     canManageUsers: false,
-    canManageSystem: false
+    canManageSystem: false,
+    canManageProjects: false,
+    canViewAnalytics: false,
+    canViewDailyReports: false,
+    canViewProgress: false,
+    canManageCosts: false,
+    canManageCashFlow: false
   })
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -58,14 +64,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             setUserPermissions({
               canViewClients: false,
               canManageUsers: false,
-              canManageSystem: false
+              canManageSystem: false,
+              canManageProjects: false,
+              canViewAnalytics: false,
+              canViewDailyReports: false,
+              canViewProgress: false,
+              canManageCosts: false,
+              canManageCashFlow: false
             })
           } else {
             // ロールに基づいて権限を設定
             const permissions = {
               canViewClients: userData.role === 'admin' || userData.role === 'manager',
               canManageUsers: userData.role === 'admin',
-              canManageSystem: userData.role === 'admin'
+              canManageSystem: userData.role === 'admin',
+              canManageProjects: userData.role === 'admin' || userData.role === 'manager',
+              canViewAnalytics: userData.role === 'admin' || userData.role === 'manager',
+              canViewDailyReports: userData.role === 'admin' || userData.role === 'manager' || userData.role === 'user',
+              canViewProgress: userData.role === 'admin' || userData.role === 'manager' || userData.role === 'user',
+              canManageCosts: userData.role === 'admin' || userData.role === 'manager' || userData.role === 'user',
+              canManageCashFlow: userData.role === 'admin' || userData.role === 'manager' || userData.role === 'user'
             }
             setUserPermissions(permissions)
             console.log('🔍 DashboardLayout: 権限設定完了:', {
@@ -78,7 +96,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           setUserPermissions({
             canViewClients: false,
             canManageUsers: false,
-            canManageSystem: false
+            canManageSystem: false,
+            canManageProjects: false,
+            canViewAnalytics: false,
+            canViewDailyReports: false,
+            canViewProgress: false,
+            canManageCosts: false,
+            canManageCashFlow: false
           })
         }
       }
@@ -95,25 +119,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const getNavigationItems = () => {
     const baseItems = [
       { name: 'ダッシュボード', href: '/dashboard', icon: Home, requiresAuth: true },
-      { name: 'プロジェクト管理', href: '/projects', icon: Building2, requiresAuth: true },
     ]
 
-    // デフォルトでは全ユーザーに表示（実際の権限チェックは各ページで行う）
+    // 一般ユーザー以上に表示する項目
     const userItems = [
-      { name: '原価入力', href: '/cost-entry', icon: Calculator, requiresAuth: true },
-      { name: '作業日報', href: '/daily-report', icon: ClipboardList, requiresAuth: true },
-      { name: '分析・レポート', href: '/analytics', icon: BarChart3, requiresAuth: true },
-      { name: '資金管理', href: '/cash-flow', icon: DollarSign, requiresAuth: true },
-      { name: '工事進行基準', href: '/progress', icon: TrendingUp, requiresAuth: true },
+      { name: '作業日報', href: '/daily-report', icon: ClipboardList, requiresAuth: true, show: userPermissions.canViewDailyReports },
+      { name: '工事進行基準', href: '/progress', icon: TrendingUp, requiresAuth: true, show: userPermissions.canViewProgress },
     ]
 
-    const managerItems: typeof baseItems = [
-      // マネージャー固有のメニュー項目があればここに追加
-    ]
-
-    const adminItems: Array<typeof baseItems[0] & { show?: boolean }> = [
-      { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true, show: userPermissions.canManageUsers },
+    // マネージャー以上に表示する項目
+    const managerItems = [
+      { name: 'プロジェクト管理', href: '/projects', icon: Building2, requiresAuth: true, show: userPermissions.canManageProjects },
+      { name: '分析・レポート', href: '/analytics', icon: BarChart3, requiresAuth: true, show: userPermissions.canViewAnalytics },
       { name: 'クライアント管理', href: '/clients', icon: Building2, requiresAuth: true, show: userPermissions.canViewClients },
+    ]
+
+    // 全ユーザーに表示する項目（権限チェック不要）
+    const commonItems = [
+      { name: '原価入力', href: '/cost-entry', icon: Calculator, requiresAuth: true },
+      { name: '資金管理', href: '/cash-flow', icon: DollarSign, requiresAuth: true },
+    ]
+
+    // 管理者のみに表示する項目
+    const adminItems = [
+      { name: 'ユーザー管理', href: '/users', icon: Users, requiresAuth: true, show: userPermissions.canManageUsers },
       { name: '管理者パネル', href: '/admin', icon: Settings, requiresAuth: true, show: userPermissions.canManageSystem },
     ]
 
@@ -123,15 +152,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ]
 
     // 権限に応じて表示する項目をフィルタリング
+    const filteredUserItems = userItems.filter(item => item.show !== false)
+    const filteredManagerItems = managerItems.filter(item => item.show !== false)
     const filteredAdminItems = adminItems.filter(item => item.show !== false)
     
     console.log('🔍 DashboardLayout: ナビゲーション項目フィルタリング結果', {
+      userItems: userItems.map(item => ({ name: item.name, show: item.show })),
+      managerItems: managerItems.map(item => ({ name: item.name, show: item.show })),
       adminItems: adminItems.map(item => ({ name: item.name, show: item.show })),
+      filteredUserItems: filteredUserItems.map(item => item.name),
+      filteredManagerItems: filteredManagerItems.map(item => item.name),
       filteredAdminItems: filteredAdminItems.map(item => item.name),
       userPermissions
     })
     
-    return [...baseItems, ...userItems, ...managerItems, ...filteredAdminItems]
+    return [...baseItems, ...filteredUserItems, ...filteredManagerItems, ...commonItems, ...filteredAdminItems]
   }
 
   const navigation = getNavigationItems()

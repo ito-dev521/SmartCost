@@ -1,6 +1,7 @@
 import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import PermissionGuard from '@/components/auth/PermissionGuard'
 import { TrendingUp, Calendar, CheckCircle, Clock } from 'lucide-react'
 
 export default async function Progress() {
@@ -24,24 +25,39 @@ export default async function Progress() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <TrendingUp className="h-8 w-8 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">工事進行基準</h1>
-            <p className="text-sm text-gray-600">プロジェクトの進捗管理と完了基準の設定</p>
+      <PermissionGuard requiredPermission="canViewProgress">
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <TrendingUp className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">工事進行基準</h1>
+              <p className="text-sm text-gray-600">プロジェクトの進捗管理と完了基準の設定</p>
+            </div>
           </div>
-        </div>
 
         {/* 進捗統計 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">計画中</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {projects?.filter(p => p.status === 'planning').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <TrendingUp className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">進行中プロジェクト</p>
+                <p className="text-sm font-medium text-gray-600">進行中</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {projects?.filter(p => p.status === 'in_progress').length || 0}
                 </p>
@@ -55,7 +71,7 @@ export default async function Progress() {
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">完了プロジェクト</p>
+                <p className="text-sm font-medium text-gray-600">完了</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {projects?.filter(p => p.status === 'completed').length || 0}
                 </p>
@@ -65,13 +81,13 @@ export default async function Progress() {
 
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
             <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="h-6 w-6 text-yellow-600" />
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <Clock className="h-6 w-6 text-gray-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">計画中プロジェクト</p>
+                <p className="text-sm font-medium text-gray-600">保留中</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {projects?.filter(p => p.status === 'planned').length || 0}
+                  {projects?.filter(p => p.status === 'on_hold').length || 0}
                 </p>
               </div>
             </div>
@@ -79,12 +95,14 @@ export default async function Progress() {
 
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
             <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-purple-600" />
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Calendar className="h-6 w-6 text-red-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">進捗記録数</p>
-                <p className="text-2xl font-bold text-gray-900">{progressData?.length || 0}</p>
+                <p className="text-sm font-medium text-gray-600">中止</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {projects?.filter(p => p.status === 'cancelled').length || 0}
+                </p>
               </div>
             </div>
           </div>
@@ -107,17 +125,28 @@ export default async function Progress() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        <h4 className="text-lg font-medium text-gray-900">{project.name}</h4>
+                        <h4 className="text-lg font-medium text-gray-900">
+                          {project.business_number} - {project.name}
+                        </h4>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           project.status === 'completed'
                             ? 'bg-green-100 text-green-800'
                             : project.status === 'in_progress'
                             ? 'bg-blue-100 text-blue-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            : project.status === 'planning'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : project.status === 'on_hold'
+                            ? 'bg-gray-100 text-gray-800'
+                            : project.status === 'cancelled'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
                         }`}>
                           {project.status === 'completed' ? '完了'
                            : project.status === 'in_progress' ? '進行中'
-                           : '計画中'}
+                           : project.status === 'planning' ? '計画中'
+                           : project.status === 'on_hold' ? '保留中'
+                           : project.status === 'cancelled' ? '中止'
+                           : '不明'}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mt-1">{project.client_name}</p>
@@ -170,8 +199,10 @@ export default async function Progress() {
                 </label>
                 <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option>プロジェクトを選択...</option>
-                  {projects?.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
+                  {projects?.filter(p => p.status === 'in_progress' || p.status === 'planning').map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.business_number} - {project.name} ({project.status === 'in_progress' ? '進行中' : '計画中'})
+                    </option>
                   ))}
                 </select>
               </div>
@@ -237,6 +268,7 @@ export default async function Progress() {
           </div>
         </div>
       </div>
+        </PermissionGuard>
     </DashboardLayout>
   )
 }

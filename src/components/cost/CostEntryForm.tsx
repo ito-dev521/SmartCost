@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Tables } from '@/lib/supabase'
-import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase } from 'lucide-react'
+import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X } from 'lucide-react'
 
 type Project = Tables<'projects'>
 type BudgetCategory = Tables<'budget_categories'>
@@ -26,6 +26,8 @@ export default function CostEntryForm({
   const [loading, setLoading] = useState(false)
   const [savingProject, setSavingProject] = useState(false)
   const [savingGeneral, setSavingGeneral] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<CostEntry | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
   
   // プロジェクト原価用のフォームデータ
   const [projectFormData, setProjectFormData] = useState({
@@ -53,6 +55,57 @@ export default function CostEntryForm({
   const getCurrentUserId = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     return user?.id || 'unknown'
+  }
+
+  // 編集モードを開始
+  const startEditing = (entry: CostEntry) => {
+    setEditingEntry(entry)
+    setIsEditing(true)
+    
+    if (entry.project_id) {
+      // プロジェクト原価の場合
+      setProjectFormData({
+        project_id: entry.project_id,
+        category_id: entry.category_id,
+        entry_date: entry.entry_date,
+        amount: entry.amount.toString(),
+        description: entry.description || '',
+        entry_type: entry.entry_type as 'direct' | 'indirect',
+      })
+    } else {
+      // 一般管理費の場合
+      setGeneralFormData({
+        category_id: entry.category_id,
+        company_name: (entry as any).company_name || '',
+        entry_date: entry.entry_date,
+        amount: entry.amount.toString(),
+        description: entry.description || '',
+        entry_type: 'general_admin',
+      })
+    }
+  }
+
+  // 編集モードをキャンセル
+  const cancelEditing = () => {
+    setEditingEntry(null)
+    setIsEditing(false)
+    // フォームをリセット
+    setProjectFormData({
+      project_id: '',
+      category_id: '',
+      entry_date: new Date().toISOString().split('T')[0],
+      amount: '',
+      description: '',
+      entry_type: 'direct',
+    })
+    setGeneralFormData({
+      category_id: '',
+      company_name: '',
+      entry_date: new Date().toISOString().split('T')[0],
+      amount: '',
+      description: '',
+      entry_type: 'general_admin',
+    })
   }
 
   // データの再取得（保存後の更新用）
@@ -113,40 +166,52 @@ export default function CostEntryForm({
     try {
       const currentUserId = await getCurrentUserId()
       
-      const entryData = {
-        project_id: projectFormData.project_id,
-        category_id: projectFormData.category_id,
-        entry_date: projectFormData.entry_date,
-        amount: parseFloat(projectFormData.amount),
-        description: projectFormData.description || null,
-        entry_type: projectFormData.entry_type,
-        created_by: currentUserId,
-        created_at: new Date().toISOString(),
+      if (isEditing && editingEntry) {
+        // 編集モード：既存エントリーを更新
+        const { error } = await supabase
+          .from('cost_entries')
+          .update({
+            project_id: projectFormData.project_id,
+            category_id: projectFormData.category_id,
+            entry_date: projectFormData.entry_date,
+            amount: parseFloat(projectFormData.amount),
+            description: projectFormData.description || null,
+            entry_type: projectFormData.entry_type,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingEntry.id)
+
+        if (error) throw error
+
+        alert('プロジェクト原価データを更新しました')
+        cancelEditing()
+      } else {
+        // 新規作成モード
+        const entryData = {
+          project_id: projectFormData.project_id,
+          category_id: projectFormData.category_id,
+          entry_date: projectFormData.entry_date,
+          amount: parseFloat(projectFormData.amount),
+          description: projectFormData.description || null,
+          entry_type: projectFormData.entry_type,
+          created_by: currentUserId,
+          created_at: new Date().toISOString(),
+        }
+
+        const { error } = await supabase
+          .from('cost_entries')
+          .insert([entryData])
+
+        if (error) throw error
+
+        alert('プロジェクト原価データを保存しました')
       }
-
-      const { error } = await supabase
-        .from('cost_entries')
-        .insert([entryData])
-
-      if (error) throw error
-
-      // フォームをリセット
-      setProjectFormData({
-        project_id: '',
-        category_id: '',
-        entry_date: new Date().toISOString().split('T')[0],
-        amount: '',
-        description: '',
-        entry_type: 'direct',
-      })
 
       // データを再取得
       await refreshData()
-
-      alert('プロジェクト原価データを保存しました')
     } catch (error) {
       console.error('Error saving project cost entry:', error)
-      alert('プロジェクト原価データの保存に失敗しました')
+      alert(isEditing ? 'プロジェクト原価データの更新に失敗しました' : 'プロジェクト原価データの保存に失敗しました')
     } finally {
       setSavingProject(false)
     }
@@ -172,41 +237,53 @@ export default function CostEntryForm({
     try {
       const currentUserId = await getCurrentUserId()
       
-      const entryData = {
-        project_id: null, // その他経費はプロジェクトに紐づかない
-        category_id: generalFormData.category_id,
-        company_name: generalFormData.company_name || null,
-        entry_date: generalFormData.entry_date,
-        amount: parseFloat(generalFormData.amount),
-        description: generalFormData.description || null,
-        entry_type: generalFormData.entry_type,
-        created_by: currentUserId,
-        created_at: new Date().toISOString(),
+      if (isEditing && editingEntry) {
+        // 編集モード：既存エントリーを更新
+        const { error } = await supabase
+          .from('cost_entries')
+          .update({
+            category_id: generalFormData.category_id,
+            company_name: generalFormData.company_name || null,
+            entry_date: generalFormData.entry_date,
+            amount: parseFloat(generalFormData.amount),
+            description: generalFormData.description || null,
+            entry_type: generalFormData.entry_type,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingEntry.id)
+
+        if (error) throw error
+
+        alert('その他経費データを更新しました')
+        cancelEditing()
+      } else {
+        // 新規作成モード
+        const entryData = {
+          project_id: null, // その他経費はプロジェクトに紐づかない
+          category_id: generalFormData.category_id,
+          company_name: generalFormData.company_name || null,
+          entry_date: generalFormData.entry_date,
+          amount: parseFloat(generalFormData.amount),
+          description: generalFormData.description || null,
+          entry_type: generalFormData.entry_type,
+          created_by: currentUserId,
+          created_at: new Date().toISOString(),
+        }
+
+        const { error } = await supabase
+          .from('cost_entries')
+          .insert([entryData])
+
+        if (error) throw error
+
+        alert('その他経費データを保存しました')
       }
-
-      const { error } = await supabase
-        .from('cost_entries')
-        .insert([entryData])
-
-      if (error) throw error
-
-      // フォームをリセット
-      setGeneralFormData({
-        category_id: '',
-        company_name: '',
-        entry_date: new Date().toISOString().split('T')[0],
-        amount: '',
-        description: '',
-        entry_type: 'general_admin',
-      })
 
       // データを再取得
       await refreshData()
-
-      alert('その他経費データを保存しました')
     } catch (error) {
       console.error('Error saving general admin cost entry:', error)
-      alert('その他経費データの保存に失敗しました')
+      alert(isEditing ? 'その他経費データの更新に失敗しました' : 'その他経費データの保存に失敗しました')
     } finally {
       setSavingGeneral(false)
     }
@@ -305,9 +382,23 @@ export default function CostEntryForm({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* プロジェクト原価入力フォーム */}
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center mb-6">
-            <Briefcase className="h-6 w-6 text-blue-600 mr-2" />
-            <h2 className="text-lg font-medium text-gray-900">プロジェクト原価入力</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center">
+              <Briefcase className="h-6 w-6 text-blue-600 mr-2" />
+              <h2 className="text-lg font-medium text-gray-900">
+                {isEditing ? 'プロジェクト原価編集' : 'プロジェクト原価入力'}
+              </h2>
+            </div>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <X className="h-4 w-4 mr-2" />
+                キャンセル
+              </button>
+            )}
           </div>
 
           <form onSubmit={handleProjectSubmit} className="space-y-6">
@@ -322,7 +413,8 @@ export default function CostEntryForm({
                 required
                 value={projectFormData.project_id}
                 onChange={handleProjectChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                disabled={isEditing}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">プロジェクトを選択してください</option>
                 {projects.map((project) => (
@@ -455,7 +547,7 @@ export default function CostEntryForm({
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 disabled:opacity-50"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {savingProject ? '保存中...' : 'プロジェクト原価を保存'}
+                {savingProject ? '保存中...' : isEditing ? 'プロジェクト原価を更新' : 'プロジェクト原価を保存'}
               </button>
             </div>
           </form>
@@ -463,9 +555,23 @@ export default function CostEntryForm({
 
         {/* その他経費入力フォーム */}
         <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center mb-6">
-            <Building className="h-6 w-6 text-orange-600 mr-2" />
-            <h2 className="text-lg font-medium text-gray-900">その他経費入力</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center">
+              <Building className="h-6 w-6 text-orange-600 mr-2" />
+              <h2 className="text-lg font-medium text-gray-900">
+                {isEditing ? 'その他経費編集' : 'その他経費入力'}
+              </h2>
+            </div>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+              >
+                <X className="h-4 w-4 mr-2" />
+                キャンセル
+              </button>
+            )}
           </div>
 
           <form onSubmit={handleGeneralSubmit} className="space-y-6">
@@ -567,7 +673,7 @@ export default function CostEntryForm({
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-600 disabled:opacity-50"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {savingGeneral ? '保存中...' : 'その他経費を保存'}
+                {savingGeneral ? '保存中...' : isEditing ? 'その他経費を更新' : 'その他経費を保存'}
               </button>
             </div>
           </form>
@@ -588,7 +694,7 @@ export default function CostEntryForm({
                 entry.project_id ? 'border-blue-400' : 'border-orange-400'
               }`}>
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900">
                       {getProjectName(entry.project_id)}
                     </p>
@@ -607,13 +713,27 @@ export default function CostEntryForm({
                       </p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCurrency(entry.amount)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(entry.entry_date).toLocaleDateString('ja-JP')}
-                    </p>
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(entry)}
+                      className={`inline-flex items-center px-2 py-1 border text-xs font-medium rounded focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        entry.project_id 
+                          ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:ring-blue-500' 
+                          : 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100 focus:ring-orange-500'
+                      }`}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      編集
+                    </button>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatCurrency(entry.amount)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(entry.entry_date).toLocaleDateString('ja-JP')}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
