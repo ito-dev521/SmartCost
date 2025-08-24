@@ -49,6 +49,12 @@ export default function CostEntryForm({
 
   const supabase = createClientComponentClient()
 
+  // 現在のユーザーIDを取得
+  const getCurrentUserId = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user?.id || 'unknown'
+  }
+
   // データの再取得（保存後の更新用）
   const refreshData = async () => {
     try {
@@ -90,9 +96,23 @@ export default function CostEntryForm({
   // プロジェクト原価の保存処理
   const handleProjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // バリデーション
+    if (!projectFormData.project_id || !projectFormData.category_id || !projectFormData.amount) {
+      alert('必須項目を入力してください')
+      return
+    }
+    
+    if (parseFloat(projectFormData.amount) <= 0) {
+      alert('金額は0より大きい値を入力してください')
+      return
+    }
+    
     setSavingProject(true)
 
     try {
+      const currentUserId = await getCurrentUserId()
+      
       const entryData = {
         project_id: projectFormData.project_id,
         category_id: projectFormData.category_id,
@@ -100,7 +120,7 @@ export default function CostEntryForm({
         amount: parseFloat(projectFormData.amount),
         description: projectFormData.description || null,
         entry_type: projectFormData.entry_type,
-        created_by: 'user-1', // TODO: 実際のユーザーIDを取得
+        created_by: currentUserId,
         created_at: new Date().toISOString(),
       }
 
@@ -132,21 +152,35 @@ export default function CostEntryForm({
     }
   }
 
-  // 一般管理費の保存処理
+  // その他経費の保存処理
   const handleGeneralSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // バリデーション
+    if (!generalFormData.category_id || !generalFormData.amount) {
+      alert('必須項目を入力してください')
+      return
+    }
+    
+    if (parseFloat(generalFormData.amount) <= 0) {
+      alert('金額は0より大きい値を入力してください')
+      return
+    }
+    
     setSavingGeneral(true)
 
     try {
+      const currentUserId = await getCurrentUserId()
+      
       const entryData = {
-        project_id: null, // 一般管理費はプロジェクトに紐づかない
+        project_id: null, // その他経費はプロジェクトに紐づかない
         category_id: generalFormData.category_id,
         company_name: generalFormData.company_name || null,
         entry_date: generalFormData.entry_date,
         amount: parseFloat(generalFormData.amount),
         description: generalFormData.description || null,
         entry_type: generalFormData.entry_type,
-        created_by: 'user-1', // TODO: 実際のユーザーIDを取得
+        created_by: currentUserId,
         created_at: new Date().toISOString(),
       }
 
@@ -169,10 +203,10 @@ export default function CostEntryForm({
       // データを再取得
       await refreshData()
 
-      alert('一般管理費データを保存しました')
+      alert('その他経費データを保存しました')
     } catch (error) {
       console.error('Error saving general admin cost entry:', error)
-      alert('一般管理費データの保存に失敗しました')
+      alert('その他経費データの保存に失敗しました')
     } finally {
       setSavingGeneral(false)
     }
@@ -202,7 +236,7 @@ export default function CostEntryForm({
   }
 
   const getProjectName = (projectId: string) => {
-    if (!projectId) return '一般管理費'
+    if (!projectId) return 'その他経費'
     const project = projects.find(p => p.id === projectId)
     if (!project) return '不明'
     
@@ -215,24 +249,21 @@ export default function CostEntryForm({
   // プロジェクト原価用のカテゴリを取得
   const getProjectCategories = () => {
     return categories.filter(c => 
-      // 直接費、間接費、人件費、現場管理費、外注費、材料費、機械費を含める
-      c.name.includes('直接費') || 
-      c.name.includes('間接費') ||
+      // 指定された4つの原価のみを含める
       c.name.includes('人件費') ||
-      c.name.includes('現場管理費') ||
+      c.name.includes('委託費') ||
       c.name.includes('外注費') ||
-      c.name.includes('材料費') ||
-      c.name.includes('機械費') ||
-      // レベル1の主要カテゴリ
-      (c.level === 1 && (c.name.includes('プロジェクト') || c.name.includes('直接') || c.name.includes('間接')))
+      c.name.includes('材料費')
     )
   }
 
-  // 一般管理費用のカテゴリを取得
+  // その他経費用のカテゴリを取得
   const getGeneralCategories = () => {
     return categories.filter(c => 
-      // 一般管理費のみを含める
-      c.name.includes('一般管理費')
+      // 一般管理費、開発費、間接費を含める
+      c.name.includes('一般管理費') ||
+      c.name.includes('開発費') ||
+      c.name.includes('間接費')
     )
   }
 
@@ -430,11 +461,11 @@ export default function CostEntryForm({
           </form>
         </div>
 
-        {/* 一般管理費入力フォーム */}
+        {/* その他経費入力フォーム */}
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center mb-6">
             <Building className="h-6 w-6 text-orange-600 mr-2" />
-            <h2 className="text-lg font-medium text-gray-900">一般管理費入力</h2>
+            <h2 className="text-lg font-medium text-gray-900">その他経費入力</h2>
           </div>
 
           <form onSubmit={handleGeneralSubmit} className="space-y-6">
@@ -536,7 +567,7 @@ export default function CostEntryForm({
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-600 disabled:opacity-50"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {savingGeneral ? '保存中...' : '一般管理費を保存'}
+                {savingGeneral ? '保存中...' : 'その他経費を保存'}
               </button>
             </div>
           </form>
