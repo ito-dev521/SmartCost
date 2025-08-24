@@ -84,3 +84,4 @@ FROM information_schema.columns
 WHERE table_schema = 'public'
 AND table_name IN ('cost_entries', 'projects', 'budget_categories')
 ORDER BY table_name, ordinal_position;
+

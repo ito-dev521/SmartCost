@@ -70,3 +70,4 @@ COMMENT ON COLUMN daily_reports.notes IS '備考';
 COMMENT ON COLUMN daily_reports.created_at IS '作成日時';
 COMMENT ON COLUMN daily_reports.updated_at IS '更新日時';
 
+

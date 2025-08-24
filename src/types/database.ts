@@ -40,6 +40,7 @@ export interface Database {
           completion_method: string
           progress_calculation_method: string
           status: string
+          business_number: string | null
           created_at: string
           updated_at: string
         }
@@ -55,6 +56,7 @@ export interface Database {
           completion_method?: string
           progress_calculation_method?: string
           status?: string
+          business_number?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -70,8 +72,9 @@ export interface Database {
           completion_method?: string
           progress_calculation_method?: string
           status?: string
+          business_number?: string | null
           created_at?: string
-          updated_at?: string
+          updated_at: string
         }
       }
       clients: {

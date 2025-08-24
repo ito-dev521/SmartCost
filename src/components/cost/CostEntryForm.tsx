@@ -9,11 +9,21 @@ type Project = Tables<'projects'>
 type BudgetCategory = Tables<'budget_categories'>
 type CostEntry = Tables<'cost_entries'>
 
-export default function CostEntryForm() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [categories, setCategories] = useState<BudgetCategory[]>([])
-  const [costEntries, setCostEntries] = useState<CostEntry[]>([])
-  const [loading, setLoading] = useState(true)
+interface CostEntryFormProps {
+  initialProjects: Project[]
+  initialCategories: BudgetCategory[]
+  initialCostEntries: CostEntry[]
+}
+
+export default function CostEntryForm({ 
+  initialProjects, 
+  initialCategories, 
+  initialCostEntries 
+}: CostEntryFormProps) {
+  const [projects, setProjects] = useState<Project[]>(initialProjects)
+  const [categories, setCategories] = useState<BudgetCategory[]>(initialCategories)
+  const [costEntries, setCostEntries] = useState<CostEntry[]>(initialCostEntries)
+  const [loading, setLoading] = useState(false)
   const [savingProject, setSavingProject] = useState(false)
   const [savingGeneral, setSavingGeneral] = useState(false)
   
@@ -39,79 +49,25 @@ export default function CostEntryForm() {
 
   const supabase = createClientComponentClient()
 
-  useEffect(() => {
-    fetchInitialData()
-  }, [])
-
-  const fetchInitialData = async () => {
+  // データの再取得（保存後の更新用）
+  const refreshData = async () => {
     try {
-      console.log('🔍 データ取得開始...')
+      setLoading(true)
       
-      // プロジェクト一覧を取得（RLSをバイパスするオプションを試行）
-      console.log('📋 プロジェクト取得中...')
-      
-      // まず通常の方法で取得を試行
-      let { data: projectsData, error: projectsError } = await supabase
+      // プロジェクトデータを再取得
+      const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
-        .eq('status', 'active')
         .order('name')
 
-      console.log('📋 通常のプロジェクト取得結果:', { projectsData, projectsError })
-
-      // エラーが発生した場合、RLSの問題の可能性があるため、別のアプローチを試行
-      if (projectsError || !projectsData || projectsData.length === 0) {
-        console.log('⚠️ 通常の取得でエラーまたはデータなし、RLSバイパスを試行...')
-        
-        // 全プロジェクトを取得してみる（RLSポリシーの問題を特定）
-        const { data: allProjects, error: allProjectsError } = await supabase
-          .from('projects')
-          .select('*')
-        
-        console.log('📊 全プロジェクト取得結果:', { allProjects, allProjectsError })
-        
-        // 特定の会社IDで取得してみる
-        if (allProjects && allProjects.length > 0) {
-          const firstProject = allProjects[0]
-          console.log('🔍 最初のプロジェクトの会社ID:', firstProject.company_id)
-          
-          const { data: companyProjects, error: companyProjectsError } = await supabase
-            .from('projects')
-            .select('*')
-            .eq('company_id', firstProject.company_id)
-            .eq('status', 'active')
-          
-          console.log('🏢 特定会社のプロジェクト取得結果:', { companyProjects, companyProjectsError })
-          
-          if (companyProjects && companyProjects.length > 0) {
-            projectsData = companyProjects
-            projectsError = null
-          }
-        }
-      }
-
-      if (projectsError) {
-        console.error('❌ プロジェクト取得エラー:', projectsError)
-        throw projectsError
-      }
-
-      // 予算科目一覧を取得
-      console.log('🏷️ カテゴリ取得中...')
-      const { data: categoriesData, error: categoriesError } = await supabase
+      // 予算科目データを再取得
+      const { data: categoriesData } = await supabase
         .from('budget_categories')
         .select('*')
         .order('level, sort_order')
 
-      console.log('🏷️ カテゴリ取得結果:', { categoriesData, categoriesError })
-
-      if (categoriesError) {
-        console.error('❌ カテゴリ取得エラー:', categoriesError)
-        throw categoriesError
-      }
-
-      // 最近の原価エントリーを取得
-      console.log('💰 原価エントリー取得中...')
-      const { data: entriesData, error: entriesError } = await supabase
+      // 最近の原価エントリーを再取得
+      const { data: entriesData } = await supabase
         .from('cost_entries')
         .select(`
           *,
@@ -121,96 +77,11 @@ export default function CostEntryForm() {
         .order('created_at', { ascending: false })
         .limit(10)
 
-      console.log('💰 原価エントリー取得結果:', { entriesData, entriesError })
-
-      if (entriesError) {
-        console.error('❌ 原価エントリー取得エラー:', entriesError)
-        throw entriesError
-      }
-
-      // プロジェクトデータを設定
-      if (projectsData && projectsData.length > 0) {
-        console.log('✅ プロジェクトデータ設定:', projectsData.length, '件')
-        console.log('📋 プロジェクト詳細:', projectsData.map(p => ({ id: p.id, name: p.name, company_id: p.company_id, status: p.status })))
-        setProjects(projectsData)
-      } else {
-        console.log('⚠️ データベースにアクティブなプロジェクトが見つかりません')
-        console.log('📊 プロジェクトテーブルの全データを確認中...')
-        
-        // プロジェクトテーブルの全データを確認
-        const { data: allProjects, error: allProjectsError } = await supabase
-          .from('projects')
-          .select('*')
-        
-        if (allProjectsError) {
-          console.error('❌ 全プロジェクト取得エラー:', allProjectsError)
-        } else {
-          console.log('📊 プロジェクトテーブルの全データ:', allProjects)
-          if (allProjects && allProjects.length > 0) {
-            console.log('📋 各プロジェクトの詳細:')
-            allProjects.forEach((project, index) => {
-              console.log(`  ${index + 1}. ID: ${project.id}, 名前: ${project.name}, 会社ID: ${project.company_id}, ステータス: ${project.status}`)
-            })
-          }
-        }
-        
-        setProjects([])
-      }
-
-      // カテゴリデータを設定
-      if (categoriesData && categoriesData.length > 0) {
-        console.log('✅ カテゴリデータ設定:', categoriesData.length, '件')
-        setCategories(categoriesData)
-      } else {
-        // データベースにカテゴリがない場合のフォールバック
-        console.log('⚠️ データベースに予算カテゴリが見つかりません、フォールバックデータを使用')
-        setCategories([
-          // プロジェクト原価関連
-          { id: '1', name: 'プロジェクト直接費', parent_id: null, level: 1, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-          { id: '2', name: 'プロジェクト間接費', parent_id: null, level: 1, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-          { id: '3', name: '人件費', parent_id: '1', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-          { id: '4', name: '外注費', parent_id: '1', level: 2, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-          { id: '5', name: '材料費', parent_id: '1', level: 2, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-          { id: '6', name: '機械費', parent_id: '1', level: 2, sort_order: 4, created_at: '2024-01-01T00:00:00Z' },
-          { id: '7', name: '現場管理費', parent_id: '2', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-          
-          // 一般管理費関連
-          { id: '8', name: '一般管理費', parent_id: null, level: 1, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-          { id: '9', name: '開発費', parent_id: '8', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-          { id: '10', name: '一般事務給与', parent_id: '8', level: 2, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-          { id: '11', name: 'オフィス経費', parent_id: '8', level: 2, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-          { id: '12', name: '通信費', parent_id: '8', level: 2, sort_order: 4, created_at: '2024-01-01T00:00:00Z' },
-          { id: '13', name: '光熱費', parent_id: '8', level: 2, sort_order: 5, created_at: '2024-01-01T00:00:00Z' },
-          { id: '14', name: 'その他経費', parent_id: '8', level: 2, sort_order: 6, created_at: '2024-01-01T00:00:00Z' },
-        ])
-      }
-
-      setCostEntries(entriesData || [])
-      console.log('✅ データ取得完了')
+      if (projectsData) setProjects(projectsData)
+      if (categoriesData) setCategories(categoriesData)
+      if (entriesData) setCostEntries(entriesData)
     } catch (error) {
-      console.error('❌ データ取得エラー:', error)
-      // エラーが発生した場合でも、フォールバックデータを設定
-      setProjects([])
-      setCategories([
-        // プロジェクト原価関連
-        { id: '1', name: 'プロジェクト直接費', parent_id: null, level: 1, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-        { id: '2', name: 'プロジェクト間接費', parent_id: null, level: 1, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-        { id: '3', name: '人件費', parent_id: '1', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-        { id: '4', name: '外注費', parent_id: '1', level: 2, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-        { id: '5', name: '材料費', parent_id: '1', level: 2, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-        { id: '6', name: '機械費', parent_id: '1', level: 2, sort_order: 4, created_at: '2024-01-01T00:00:00Z' },
-        { id: '7', name: '現場管理費', parent_id: '2', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-        
-        // 一般管理費関連
-        { id: '8', name: '一般管理費', parent_id: null, level: 1, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-        { id: '9', name: '開発費', parent_id: '8', level: 2, sort_order: 1, created_at: '2024-01-01T00:00:00Z' },
-        { id: '10', name: '一般事務給与', parent_id: '8', level: 2, sort_order: 2, created_at: '2024-01-01T00:00:00Z' },
-        { id: '11', name: 'オフィス経費', parent_id: '8', level: 2, sort_order: 3, created_at: '2024-01-01T00:00:00Z' },
-        { id: '12', name: '通信費', parent_id: '8', level: 2, sort_order: 4, created_at: '2024-01-01T00:00:00Z' },
-        { id: '13', name: '光熱費', parent_id: '8', level: 2, sort_order: 5, created_at: '2024-01-01T00:00:00Z' },
-        { id: '14', name: 'その他経費', parent_id: '8', level: 2, sort_order: 6, created_at: '2024-01-01T00:00:00Z' },
-      ])
-      setCostEntries([])
+      console.error('データ再取得エラー:', error)
     } finally {
       setLoading(false)
     }
@@ -249,8 +120,8 @@ export default function CostEntryForm() {
         entry_type: 'direct',
       })
 
-      // 最近のエントリーを再取得
-      fetchInitialData()
+      // データを再取得
+      await refreshData()
 
       alert('プロジェクト原価データを保存しました')
     } catch (error) {
@@ -270,7 +141,7 @@ export default function CostEntryForm() {
       const entryData = {
         project_id: null, // 一般管理費はプロジェクトに紐づかない
         category_id: generalFormData.category_id,
-        company_name: generalFormData.company_name || null, // 会社名を追加
+        company_name: generalFormData.company_name || null,
         entry_date: generalFormData.entry_date,
         amount: parseFloat(generalFormData.amount),
         description: generalFormData.description || null,
@@ -295,8 +166,8 @@ export default function CostEntryForm() {
         entry_type: 'general_admin',
       })
 
-      // 最近のエントリーを再取得
-      fetchInitialData()
+      // データを再取得
+      await refreshData()
 
       alert('一般管理費データを保存しました')
     } catch (error) {
@@ -333,18 +204,54 @@ export default function CostEntryForm() {
   const getProjectName = (projectId: string) => {
     if (!projectId) return '一般管理費'
     const project = projects.find(p => p.id === projectId)
-    return project ? project.name : '不明'
+    if (!project) return '不明'
+    
+    // 業務番号がある場合は「業務番号 - プロジェクト名」の形式で表示
+    return project.business_number 
+      ? `${project.business_number} - ${project.name}`
+      : project.name
   }
 
   // プロジェクト原価用のカテゴリを取得
   const getProjectCategories = () => {
-    return categories.filter(c => c.parent_id === '1' || c.parent_id === '2' || c.id === '1' || c.id === '2')
+    return categories.filter(c => 
+      // 直接費、間接費、人件費、現場管理費、外注費、材料費、機械費を含める
+      c.name.includes('直接費') || 
+      c.name.includes('間接費') ||
+      c.name.includes('人件費') ||
+      c.name.includes('現場管理費') ||
+      c.name.includes('外注費') ||
+      c.name.includes('材料費') ||
+      c.name.includes('機械費') ||
+      // レベル1の主要カテゴリ
+      (c.level === 1 && (c.name.includes('プロジェクト') || c.name.includes('直接') || c.name.includes('間接')))
+    )
   }
 
   // 一般管理費用のカテゴリを取得
   const getGeneralCategories = () => {
-    return categories.filter(c => c.parent_id === '8' || c.id === '8')
+    return categories.filter(c => 
+      // 一般管理費のみを含める
+      c.name.includes('一般管理費')
+    )
   }
+
+  // デバッグ用：プロジェクトデータの詳細を表示
+  useEffect(() => {
+    console.log('=== プロジェクトデータ詳細 ===')
+    projects.forEach((project, index) => {
+      console.log(`プロジェクト ${index + 1}:`, {
+        id: project.id,
+        name: project.name,
+        business_number: project.business_number,
+        status: project.status,
+        hasBusinessNumber: !!project.business_number
+      })
+    })
+    console.log('========================')
+  }, [projects])
+
+
 
   if (loading) {
     return (
@@ -389,7 +296,7 @@ export default function CostEntryForm() {
                 <option value="">プロジェクトを選択してください</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
-                    {project.name}
+                    {project.business_number ? `${project.business_number} - ${project.name}` : project.name}
                   </option>
                 ))}
               </select>
@@ -412,6 +319,8 @@ export default function CostEntryForm() {
                   {projects.length}件のプロジェクトが読み込まれています
                 </p>
               )}
+              
+
             </div>
 
             {/* 原価科目選択 */}
@@ -434,6 +343,8 @@ export default function CostEntryForm() {
                   </option>
                 ))}
               </select>
+              
+
             </div>
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -692,9 +603,3 @@ export default function CostEntryForm() {
     </div>
   )
 }
-
-
-
-
-
-

@@ -25,15 +25,15 @@ interface Project {
   contract_amount: number
   start_date: string
   end_date: string
-  status: 'planning' | 'active' | 'completed' | 'suspended' | 'cancelled'
+  status: 'planning' | 'in_progress' | 'completed' | 'on_hold' | 'cancelled'
   created_at: string
 }
 
 const statusConfig = {
   planning: { label: '計画中', color: 'bg-yellow-100 text-yellow-800' },
-  active: { label: '進行中', color: 'bg-blue-100 text-blue-800' },
+  in_progress: { label: '進行中', color: 'bg-blue-100 text-blue-800' },
   completed: { label: '完了', color: 'bg-green-100 text-green-800' },
-  suspended: { label: '保留中', color: 'bg-gray-100 text-gray-800' },
+  on_hold: { label: '保留中', color: 'bg-gray-100 text-gray-800' },
   cancelled: { label: '中止', color: 'bg-red-100 text-red-800' }
 }
 
@@ -253,8 +253,15 @@ export default function ProjectList() {
                         </span>
                       </h3>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig[project.status].color}`}>
-                      {statusConfig[project.status].label}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      project.status && statusConfig[project.status] 
+                        ? statusConfig[project.status].color 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {project.status && statusConfig[project.status] 
+                        ? statusConfig[project.status].label 
+                        : (project.status || '未設定')
+                      }
                     </span>
                   </div>
                   <div className="mb-4 text-sm text-gray-600">
@@ -336,7 +343,7 @@ export default function ProjectList() {
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">進行中</p>
               <p className="text-2xl font-bold text-gray-900">
-                {projects.filter(p => p.status === 'active').length}
+                {projects.filter(p => p.status === 'in_progress').length}
               </p>
             </div>
           </div>
@@ -348,9 +355,9 @@ export default function ProjectList() {
               <Building2 className="h-6 w-6 text-purple-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">完了</p>
+              <p className="text-sm font-medium text-gray-600">計画中</p>
               <p className="text-2xl font-bold text-gray-900">
-                {projects.filter(p => p.status === 'completed').length}
+                {projects.filter(p => p.status === 'planning').length}
               </p>
             </div>
           </div>
