@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Calendar, Clock, FileText, Plus, Trash2, Save, Download } from 'lucide-react'
+import DailyReportCalendar from './DailyReportCalendar'
 
 interface DailyReportEntry {
   id?: string
@@ -43,8 +44,10 @@ export default function DailyReportPage() {
   const [showNewEntryForm, setShowNewEntryForm] = useState(false)
   const [deletedEntries, setDeletedEntries] = useState<string[]>([])
   const [workManagementType, setWorkManagementType] = useState<'hours' | 'time'>('hours')
+  const [showCalendar, setShowCalendar] = useState(true)
+  const [monthlyEntries, setMonthlyEntries] = useState<DailyReportEntry[]>([])
   const [newEntry, setNewEntry] = useState<DailyReportEntry>({
-    date: new Date().toISOString().slice(0, 10),
+    date: selectedDate,
     project_id: '',
     work_content: '',
     work_hours: 0,
@@ -175,7 +178,35 @@ export default function DailyReportPage() {
   useEffect(() => {
     fetchWorkManagementType()
     fetchProjects()
+    
+    // 新規エントリー追加フォームが表示されている場合、日付を同期
+    if (showNewEntryForm) {
+      setNewEntry(prev => ({
+        ...prev,
+        date: selectedDate
+      }))
+    }
+    
+    // 月間データが既に存在する場合は、該当する日付のデータを即座に表示
+    if (monthlyEntries.length > 0) {
+      const entriesFromMonthly = monthlyEntries.filter(entry => entry.date === selectedDate)
+      console.log('選択された日付の月間データ検索結果:', {
+        selectedDate,
+        monthlyEntriesCount: monthlyEntries.length,
+        foundEntries: entriesFromMonthly,
+        allDates: monthlyEntries.map(e => e.date)
+      })
+      
+      if (entriesFromMonthly.length > 0) {
+        console.log('月間データから該当日付のエントリーを即座に表示:', entriesFromMonthly)
+        setEntries(entriesFromMonthly)
+        return
+      }
+    }
+    
+    // 月間データがない場合や該当する日付のデータがない場合は、通常の取得処理
     fetchDailyReports()
+    fetchMonthlyEntries() // カレンダー用の月間データも取得
   }, [selectedDate])
 
   useEffect(() => {
@@ -243,6 +274,25 @@ export default function DailyReportPage() {
       console.log('作業日報取得開始...')
       console.log('選択された日付:', selectedDate)
 
+      // まずmonthlyEntriesから該当する日付のデータを探す
+      if (monthlyEntries.length > 0) {
+        const entriesFromMonthly = monthlyEntries.filter(entry => entry.date === selectedDate)
+        console.log('選択された日付の月間データ検索結果:', {
+          selectedDate,
+          monthlyEntriesCount: monthlyEntries.length,
+          foundEntries: entriesFromMonthly,
+          allDates: monthlyEntries.map(e => e.date),
+          sampleEntries: monthlyEntries.slice(0, 3).map(e => ({ date: e.date, id: e.id }))
+        })
+        
+        if (entriesFromMonthly.length > 0) {
+          console.log('月間データから該当日付のエントリーを取得:', entriesFromMonthly)
+          setEntries(entriesFromMonthly)
+          return
+        }
+      }
+
+      // monthlyEntriesにない場合は、データベースから直接取得
       const { data, error } = await supabase
         .from('daily_reports')
         .select('*, work_type')
@@ -310,6 +360,80 @@ export default function DailyReportPage() {
       setEntries([])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // 月間の作業日報を取得（カレンダー表示用）
+  const fetchMonthlyEntries = async () => {
+    try {
+      console.log('月間作業日報取得開始（カレンダー用）...')
+      
+      // 現在表示中の月の日付範囲を計算
+      const currentDate = new Date(selectedDate)
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth()
+      const startDate = new Date(year, month, 1).toISOString().slice(0, 10)
+      const endDate = new Date(year, month + 1, 0).toISOString().slice(0, 10)
+      
+      console.log('カレンダー用日付範囲:', startDate, '〜', endDate)
+
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .select('*, work_type')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+
+      if (error) {
+        console.error('月間作業日報取得エラー（カレンダー用）:', error)
+        setMonthlyEntries([])
+        return
+      }
+
+      console.log('カレンダー用月間データ:', data)
+
+      if (!data || data.length === 0) {
+        console.log('月間データがありません')
+        setMonthlyEntries([])
+        return
+      }
+
+      // 各エントリーのユーザー情報を取得
+      const entriesWithUserInfo = await Promise.all(
+        data.map(async (entry: any) => {
+          let userName = '不明'
+          let userEmail = ''
+          
+          if (entry.user_id) {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('name, email')
+                .eq('id', entry.user_id)
+                .single()
+              
+              if (!userError && userData) {
+                userName = userData.name || userData.email || '不明'
+                userEmail = userData.email || ''
+              }
+            } catch (userErr) {
+              console.warn('ユーザー情報取得例外:', userErr)
+            }
+          }
+
+          return {
+            ...entry,
+            user_name: userName,
+            user_email: userEmail
+          }
+        })
+      )
+
+      console.log('カレンダー用エントリー情報:', entriesWithUserInfo)
+      setMonthlyEntries(entriesWithUserInfo)
+    } catch (error) {
+      console.error('月間作業日報取得エラー（カレンダー用）:', error)
+      setMonthlyEntries([])
     }
   }
 
@@ -672,7 +796,7 @@ export default function DailyReportPage() {
         ['', '', '', '', ''],
         // 日別詳細
         ['=== 日別詳細 ==='],
-        ['日付', '業務番号', 'プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者', '作成日時'],
+        ['日付', '業務番号', 'プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者'],
         ...monthlyReports.flatMap(monthData => 
           monthData.entries.map((entry: any) => [
             monthData.date,
@@ -681,8 +805,7 @@ export default function DailyReportPage() {
             entry.work_content || '',
             (entry.work_hours || 0).toString(),
             entry.notes || '',
-            entry.user_name || '不明',
-            entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : ''
+            entry.user_name || '不明'
           ])
         )
       ]
@@ -703,18 +826,17 @@ export default function DailyReportPage() {
     } else {
       // 日次表示の場合は従来のCSV出力
       const csvContent = [
-        ['日付', '業務番号 - プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者', '作成日時'],
+        ['日付', '業務番号 - プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者'],
         ...entries.map(entry => {
           const project = projects.find(p => p.id === entry.project_id)
-          return [
-            entry.date,
-            project ? `${project.business_number} - ${project.name}` : '',
-            entry.work_content,
-            entry.work_hours.toString(),
-            entry.notes || '',
-            entry.user_name || '不明',
-            entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : ''
-          ]
+                      return [
+              entry.date,
+              project ? `${project.business_number} - ${project.name}` : '',
+              entry.work_content,
+              entry.work_hours.toString(),
+              entry.notes || '',
+              entry.user_name || '不明'
+            ]
         })
       ]
       
@@ -781,17 +903,14 @@ export default function DailyReportPage() {
           </p>
         </div>
 
-      {/* 日付選択とアクションボタン */}
+      {/* アクションボタン */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <span className="text-sm text-gray-600">
+              作業日報管理
+            </span>
           </div>
 
           <div className="flex gap-3">
@@ -805,19 +924,22 @@ export default function DailyReportPage() {
             >
               {showMonthlyView ? `${workManagementType === 'hours' ? '日次' : '日次時間'}表示` : `${workManagementType === 'hours' ? '月次' : '月次時間'}表示`}
             </button>
-            <button
-              onClick={() => setShowNewEntryForm(!showNewEntryForm)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" />
-              {showNewEntryForm ? 'フォームを隠す' : '新規エントリー追加'}
-            </button>
+
             <button
               onClick={exportToCSV}
               className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
             >
               <Download className="h-4 w-4" />
               CSV出力
+            </button>
+            <button
+              onClick={() => setShowCalendar(!showCalendar)}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                showCalendar ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-600 text-white hover:bg-gray-700'
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              {showCalendar ? 'カレンダー非表示' : 'カレンダー表示'}
             </button>
           </div>
         </div>
@@ -842,6 +964,30 @@ export default function DailyReportPage() {
             </div>
           )}
         </div>
+
+        {/* カレンダー表示 */}
+        {showCalendar && (
+          <div className="mt-4">
+            <DailyReportCalendar
+              entries={monthlyEntries} // 月間データを使用
+              currentDate={new Date(selectedDate)}
+              selectedDate={selectedDate} // 選択された日付を渡す
+              onDateClick={(date) => {
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const dateString = `${year}-${month}-${day}`
+          console.log('カレンダーから日付選択:', {
+            originalDate: date,
+            dateString,
+            isoString: date.toISOString().slice(0, 10)
+          })
+          setSelectedDate(dateString)
+        }}
+              onClose={() => setShowCalendar(false)}
+            />
+          </div>
+        )}
 
         {/* 月次表示切り替え */}
         {showMonthlyView && (
@@ -871,6 +1017,24 @@ export default function DailyReportPage() {
               <p className="text-gray-500 mb-4">
                 選択した日付の{workManagementType === 'hours' ? '作業日報' : '作業時間'}がまだ作成されていません
               </p>
+              
+              {/* 新規エントリー追加ボタン */}
+              <div className="mt-6">
+                <button
+                  onClick={() => {
+                    // 新規エントリー追加時に選択された日付を設定
+                    setNewEntry({
+                      ...newEntry,
+                      date: selectedDate
+                    })
+                    setShowNewEntryForm(!showNewEntryForm)
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                  {showNewEntryForm ? 'フォームを隠す' : '新規エントリー追加'}
+                </button>
+              </div>
             </div>
           ) : (
             entries.map((entry, index) => (
@@ -883,11 +1047,6 @@ export default function DailyReportPage() {
                       <span>{entry.user_name}</span>
                       {entry.user_email && entry.user_email !== entry.user_name && (
                         <span className="text-blue-600">({entry.user_email})</span>
-                      )}
-                      {entry.created_at && (
-                        <span className="ml-4 text-blue-600">
-                          作成日時: {new Date(entry.created_at).toLocaleString('ja-JP')}
-                        </span>
                       )}
                     </div>
                   </div>
