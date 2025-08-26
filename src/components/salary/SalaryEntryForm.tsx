@@ -1,11 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
-import { Tables, SalaryEntry, SalaryAllocation } from '@/lib/supabase'
-import { Plus, Save, Calculator, Users, AlertCircle, TrendingUp, Calendar, DollarSign } from 'lucide-react'
+import { Tables } from '@/lib/supabase'
+import { Save, Calculator, Users, AlertCircle, TrendingUp } from 'lucide-react'
 
-type Project = Tables<'projects'>
+interface Project {
+  id: string
+  name: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 type BudgetCategory = Tables<'budget_categories'>
 
 interface SalaryEntryForm {
@@ -24,18 +31,45 @@ interface ProjectAllocation {
   labor_cost: number
 }
 
+interface User {
+  id: string
+  name: string
+  department_id: string | null
+  departments: {
+    name: string
+  } | null
+}
+
+interface Department {
+  id: string
+  name: string
+}
+
 interface SalaryEntryFormProps {
+  initialUsers: User[]
+  initialDepartments: Department[]
   initialProjects: Project[]
   initialCategories: BudgetCategory[]
 }
 
 export default function SalaryEntryForm({
+  initialUsers,
+  initialDepartments,
   initialProjects,
   initialCategories
 }: SalaryEntryFormProps) {
-  const [projects, setProjects] = useState<Project[]>(initialProjects)
-  const [categories, setCategories] = useState<BudgetCategory[]>(initialCategories)
-  const [loading, setLoading] = useState(false)
+  // デバッグ用ログ
+  console.log('SalaryEntryForm - 受け取ったprops:', {
+    initialUsers,
+    initialDepartments,
+    initialProjects,
+    initialCategories
+  })
+
+  const [users] = useState<User[]>(initialUsers)
+  const [departments] = useState<Department[]>(initialDepartments)
+  const [projects] = useState<Project[]>(initialProjects)
+  const [categories] = useState<BudgetCategory[]>(initialCategories)
   const [saving, setSaving] = useState(false)
   const [calculating, setCalculating] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState({
@@ -53,9 +87,16 @@ export default function SalaryEntryForm({
     notes: ''
   })
 
-  // プロジェクト配分
-  const [projectAllocations, setProjectAllocations] = useState<ProjectAllocation[]>([])
-  const [laborCosts, setLaborCosts] = useState<any[]>([])
+
+  const [laborCosts, setLaborCosts] = useState<{
+    project_id: string
+    project_name: string
+    business_number: string
+    work_hours: number
+    hourly_rate: number
+    labor_cost: number
+    category_id: string
+  }[]>([])
 
   const supabase = createClientComponentClient()
 
@@ -73,7 +114,7 @@ export default function SalaryEntryForm({
         .from('daily_reports')
         .select(`
           *,
-          projects:project_id(name, business_number),
+          projects:project_id(name),
           users:user_id(name, email)
         `)
         .gte('date', selectedPeriod.start)
@@ -82,13 +123,13 @@ export default function SalaryEntryForm({
       if (error) throw error
 
       // プロジェクト毎の工数集計
-      const projectHours: { [key: string]: { project: any, totalHours: number } } = {}
+      const projectHours: { [key: string]: { project: { name: string }, totalHours: number } } = {}
 
       dailyReports?.forEach(report => {
         const projectKey = report.project_id
         if (!projectHours[projectKey]) {
           projectHours[projectKey] = {
-            project: report.projects,
+            project: report.projects as { name: string },
             totalHours: 0
           }
         }
@@ -114,7 +155,7 @@ export default function SalaryEntryForm({
         labor_cost: data.totalHours * hourlyRate
       }))
 
-      setProjectAllocations(allocations)
+
 
       // プロジェクト毎の人件費データを生成
       const costs = allocations.map(allocation => {
@@ -122,7 +163,7 @@ export default function SalaryEntryForm({
         return {
           project_id: allocation.project_id,
           project_name: project?.name || '不明',
-          business_number: project?.business_number || '',
+          business_number: project?.name || '',
           work_hours: allocation.work_hours,
           hourly_rate: allocation.hourly_rate,
           labor_cost: allocation.labor_cost,
@@ -207,7 +248,6 @@ export default function SalaryEntryForm({
       alert('給与データとプロジェクト人件費データを保存しました')
 
       // フォームをリセット
-      setProjectAllocations([])
       setLaborCosts([])
       setSalaryForm({
         employee_name: '',
@@ -268,14 +308,27 @@ export default function SalaryEntryForm({
                 <label htmlFor="employee_name" className="block text-sm font-medium text-gray-700">
                   社員名 <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   id="employee_name"
                   value={salaryForm.employee_name}
-                  onChange={(e) => setSalaryForm({...salaryForm, employee_name: e.target.value})}
+                  onChange={(e) => {
+                    const selectedUser = users.find(user => user.name === e.target.value)
+                    setSalaryForm({ 
+                      ...salaryForm, 
+                      employee_name: e.target.value,
+                      employee_department: selectedUser?.departments?.name || ''
+                    })
+                  }}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="例：山田太郎"
-                />
+                  required
+                >
+                  <option value="">社員を選択してください</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.name}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -288,7 +341,8 @@ export default function SalaryEntryForm({
                   value={salaryForm.employee_department}
                   onChange={(e) => setSalaryForm({...salaryForm, employee_department: e.target.value})}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="例：技術部"
+                  placeholder="部署が自動入力されます"
+                  readOnly
                 />
               </div>
             </div>
@@ -417,7 +471,7 @@ export default function SalaryEntryForm({
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900">
-                          {cost.business_number} - {cost.project_name}
+                          {cost.project_name}
                         </p>
                         <p className="text-xs text-gray-500">
                           工数: {cost.work_hours.toFixed(1)}時間 × 時給: {formatCurrency(cost.hourly_rate)}

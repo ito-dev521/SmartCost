@@ -44,7 +44,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS update_salary_entries_updated_at
+-- トリガーが既に存在する場合は削除してから作成
+DROP TRIGGER IF EXISTS update_salary_entries_updated_at ON salary_entries;
+CREATE TRIGGER update_salary_entries_updated_at
     BEFORE UPDATE ON salary_entries
     FOR EACH ROW
     EXECUTE FUNCTION update_salary_entries_updated_at();
@@ -146,3 +148,4 @@ COMMENT ON COLUMN salary_allocations.work_hours IS '工数';
 COMMENT ON COLUMN salary_allocations.hourly_rate IS '時給単価';
 COMMENT ON COLUMN salary_allocations.labor_cost IS '人件費';
 COMMENT ON COLUMN salary_allocations.created_at IS '作成日時';
+

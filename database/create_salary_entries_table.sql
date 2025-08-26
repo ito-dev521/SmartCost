@@ -143,3 +143,4 @@ COMMENT ON COLUMN salary_allocations.work_hours IS '工数';
 COMMENT ON COLUMN salary_allocations.hourly_rate IS '時給単価';
 COMMENT ON COLUMN salary_allocations.labor_cost IS '人件費';
 COMMENT ON COLUMN salary_allocations.created_at IS '作成日時';
+

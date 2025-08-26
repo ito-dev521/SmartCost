@@ -160,3 +160,4 @@ SELECT
   MIN(created_at)
 FROM users;
 
+

@@ -21,3 +21,4 @@ SELECT
 FROM budget_categories 
 ORDER BY level, sort_order, name;
 
+

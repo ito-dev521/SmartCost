@@ -152,3 +152,4 @@ SELECT
     ELSE 'Check RLS policies and user permissions'
   END as action_required;
 
+
