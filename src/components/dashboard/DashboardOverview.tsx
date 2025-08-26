@@ -19,6 +19,10 @@ interface DashboardStats {
   totalCost: number
   completedProjects: number
   activeProjects: number
+  totalContractAmount: number
+  monthlyReports: number
+  totalUsers: number
+  adminUsers: number
 }
 
 export default function DashboardOverview() {
@@ -32,16 +36,96 @@ export default function DashboardOverview() {
 
   const fetchDashboardStats = async () => {
     try {
-      // 仮のデータを使用（実際のデータベース実装時に変更）
-      // TODO: 実際のデータベースから統計情報を取得
+      setLoading(true)
+      
+      // 1. プロジェクト統計を取得
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, status, contract_amount')
+        .neq('business_number', 'IP')  // 一般管理費プロジェクトは除外
+        .not('name', 'ilike', '%一般管理費%')
+
+      if (projectsError) {
+        console.error('プロジェクト取得エラー:', projectsError)
+        throw projectsError
+      }
+
+      // 2. 原価データを取得
+      const { data: costEntries, error: costError } = await supabase
+        .from('cost_entries')
+        .select('amount, entry_type')
+
+      if (costError) {
+        console.error('原価データ取得エラー:', costError)
+        throw costError
+      }
+
+      // 3. 作業日報データを取得（今月分）
+      const currentDate = new Date()
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+      
+      const { data: dailyReports, error: reportsError } = await supabase
+        .from('daily_reports')
+        .select('id, date')
+        .gte('date', startOfMonth.toISOString().slice(0, 10))
+        .lte('date', endOfMonth.toISOString().slice(0, 10))
+
+      if (reportsError) {
+        console.error('作業日報取得エラー:', reportsError)
+        throw reportsError
+      }
+
+      // 4. ユーザーデータを取得
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, role')
+
+      if (usersError) {
+        console.error('ユーザーデータ取得エラー:', usersError)
+        throw usersError
+      }
+
+      // 統計情報を計算
+      const totalProjects = projects?.length || 0
+      const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
+      const activeProjects = projects?.filter(p => p.status === 'in_progress').length || 0
+      const totalContractAmount = projects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
+      
+      // 原価合計を計算
+      const totalCost = costEntries?.reduce((sum, entry) => sum + (entry.amount || 0), 0) || 0
+      
+      // 今月の作業日報数
+      const monthlyReports = dailyReports?.length || 0
+      
+      // ユーザー統計
+      const totalUsers = users?.length || 0
+      const adminUsers = users?.filter(u => u.role === 'admin').length || 0
+
       setStats({
-        totalProjects: 12,
-        totalCost: 125000000,
-        completedProjects: 8,
-        activeProjects: 4
+        totalProjects,
+        totalCost,
+        completedProjects,
+        activeProjects,
+        totalContractAmount,
+        monthlyReports,
+        totalUsers,
+        adminUsers
       })
+
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
+      console.error('ダッシュボード統計取得エラー:', error)
+      // エラー時はデフォルト値を設定
+      setStats({
+        totalProjects: 0,
+        totalCost: 0,
+        completedProjects: 0,
+        activeProjects: 0,
+        totalContractAmount: 0,
+        monthlyReports: 0,
+        totalUsers: 0,
+        adminUsers: 0
+      })
     } finally {
       setLoading(false)
     }
@@ -84,28 +168,32 @@ export default function DashboardOverview() {
       value: stats?.totalProjects || 0,
       icon: Building2,
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-blue-50',
+      description: '一般管理費を除く'
     },
     {
-      title: '総原価',
-      value: `${(stats?.totalCost || 0).toLocaleString()}円`,
-      icon: Calculator,
+      title: '総契約金額',
+      value: `${(stats?.totalContractAmount || 0).toLocaleString()}円`,
+      icon: DollarSign,
       color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      bgColor: 'bg-green-50',
+      description: 'プロジェクト合計'
     },
     {
-      title: '完了プロジェクト',
-      value: stats?.completedProjects || 0,
+      title: '今月の作業日報',
+      value: stats?.monthlyReports || 0,
       icon: FileText,
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-purple-50',
+      description: '件数'
     },
     {
-      title: '進行中プロジェクト',
-      value: stats?.activeProjects || 0,
-      icon: TrendingUp,
+      title: '登録ユーザー数',
+      value: stats?.totalUsers || 0,
+      icon: Users,
       color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      bgColor: 'bg-orange-50',
+      description: `管理者: ${stats?.adminUsers || 0}名`
     }
   ]
 
@@ -151,6 +239,9 @@ export default function DashboardOverview() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                  {stat.description && (
+                    <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                  )}
                 </div>
                 <div className={`p-3 rounded-full ${stat.bgColor}`}>
                   <stat.icon className={`h-6 w-6 ${stat.color}`} />
@@ -158,6 +249,65 @@ export default function DashboardOverview() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* 追加統計情報 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* プロジェクト詳細 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Building2 className="h-5 w-5 text-blue-600 mr-2" />
+            プロジェクト詳細
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">総プロジェクト数</span>
+              <span className="font-medium">{stats?.totalProjects || 0}件</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">完了プロジェクト</span>
+              <span className="font-medium text-green-600">{stats?.completedProjects || 0}件</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">進行中プロジェクト</span>
+              <span className="font-medium text-blue-600">{stats?.activeProjects || 0}件</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">総契約金額</span>
+              <span className="font-medium text-green-600">
+                {stats?.totalContractAmount ? `${(stats.totalContractAmount / 1000000).toFixed(1)}百万円` : '0円'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* システム情報 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Users className="h-5 w-5 text-purple-600 mr-2" />
+            システム情報
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">登録ユーザー数</span>
+              <span className="font-medium">{stats?.totalUsers || 0}名</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">管理者ユーザー</span>
+              <span className="font-medium text-purple-600">{stats?.adminUsers || 0}名</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">今月の作業日報</span>
+              <span className="font-medium text-blue-600">{stats?.monthlyReports || 0}件</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">総原価</span>
+              <span className="font-medium text-green-600">
+                {stats?.totalCost ? `${(stats.totalCost / 1000000).toFixed(1)}百万円` : '0円'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -185,13 +335,70 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* 最近のアクティビティ（プレースホルダー） */}
+      {/* 最近のアクティビティ */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">最近のアクティビティ</h2>
-        <div className="text-center py-8 text-gray-500">
-          <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <p>最近のアクティビティはありません</p>
-          <p className="text-sm mt-2">プロジェクトを作成して開始しましょう</p>
+        <div className="space-y-4">
+          {/* プロジェクト状況 */}
+          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Building2 className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">プロジェクト状況</p>
+                <p className="text-xs text-gray-600">
+                  完了: {stats?.completedProjects || 0}件 / 進行中: {stats?.activeProjects || 0}件
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-medium text-blue-600">
+                {stats?.completedProjects && stats?.activeProjects 
+                  ? Math.round((stats.completedProjects / (stats.completedProjects + stats.activeProjects)) * 100)
+                  : 0}%
+              </p>
+              <p className="text-xs text-gray-500">完了率</p>
+            </div>
+          </div>
+
+          {/* 今月の作業状況 */}
+          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <FileText className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">今月の作業日報</p>
+                <p className="text-xs text-gray-600">
+                  {stats?.monthlyReports || 0}件の日報が作成されています
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-medium text-green-600">
+                {new Date().getDate()}日
+              </p>
+              <p className="text-xs text-gray-500">今日の日付</p>
+            </div>
+          </div>
+
+          {/* システム利用状況 */}
+          <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Users className="h-5 w-5 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">システム利用状況</p>
+                <p className="text-xs text-gray-600">
+                  総ユーザー: {stats?.totalUsers || 0}名 / 管理者: {stats?.adminUsers || 0}名
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-medium text-purple-600">
+                {stats?.totalUsers && stats?.adminUsers 
+                  ? Math.round((stats.adminUsers / stats.totalUsers) * 100)
+                  : 0}%
+              </p>
+              <p className="text-xs text-gray-500">管理者比率</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import PermissionGuard from '@/components/auth/PermissionGuard'
+import ProgressManagement from '@/components/progress/ProgressManagement'
 import { TrendingUp, Calendar, CheckCircle, Clock } from 'lucide-react'
 
 export default async function Progress() {
@@ -36,6 +37,13 @@ export default async function Progress() {
               <p className="text-sm text-gray-600">プロジェクトの進捗管理と完了基準の設定</p>
             </div>
           </div>
+
+
+
+        <ProgressManagement 
+          initialProjects={projects || []} 
+          initialProgressData={progressData || []} 
+        />
 
         {/* 進捗統計 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
