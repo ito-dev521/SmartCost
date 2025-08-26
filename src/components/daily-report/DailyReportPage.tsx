@@ -75,6 +75,58 @@ export default function DailyReportPage() {
     }
   }
 
+  // 一般管理費プロジェクトの識別子
+  const OVERHEAD_PROJECT_NAME = '一般管理費'
+  const OVERHEAD_PROJECT_BUSINESS_NUMBER = 'IP'
+
+  // 一般管理費プロジェクトのIDを取得（なければ作成）
+  const getOrCreateOverheadProjectId = async (): Promise<string | null> => {
+    try {
+      // 1) 既存のプロジェクト一覧から検索（クライアント側キャッシュ）
+      const foundLocal = projects.find(
+        (p) => p.business_number === OVERHEAD_PROJECT_BUSINESS_NUMBER || p.name === OVERHEAD_PROJECT_NAME
+      )
+      if (foundLocal) {
+        return foundLocal.id
+      }
+
+      // 2) DBから直接検索
+      const { data: existList, error: existErr } = await supabase
+        .from('projects')
+        .select('id, name, business_number')
+        .in('business_number', [OVERHEAD_PROJECT_BUSINESS_NUMBER])
+        .limit(1)
+
+      if (!existErr && existList && existList.length > 0) {
+        // ステートにも反映
+        setProjects((prev) => {
+          const already = prev.some((p) => p.id === existList[0].id)
+          return already ? prev : [...prev, existList[0] as Project]
+        })
+        return existList[0].id
+      }
+
+      // 3) なければ作成
+      const { data: created, error: createErr } = await supabase
+        .from('projects')
+        .insert({ name: OVERHEAD_PROJECT_NAME, business_number: OVERHEAD_PROJECT_BUSINESS_NUMBER })
+        .select('id, name, business_number')
+        .single()
+
+      if (createErr || !created) {
+        console.warn('一般管理費プロジェクト作成に失敗:', createErr)
+        return null
+      }
+
+      // ステートに追加
+      setProjects((prev) => [...prev, created as Project])
+      return created.id as string
+    } catch (e) {
+      console.warn('一般管理費プロジェクト取得/作成エラー:', e)
+      return null
+    }
+  }
+
   // プロジェクト毎の工数集計を計算
   const calculateProjectSummary = (reports: any[]) => {
     const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number } } = {}
@@ -215,9 +267,10 @@ export default function DailyReportPage() {
     }
   }, [selectedMonth, showMonthlyView])
 
+  // 作業日報専用のプロジェクト取得（一般管理費を含む）
   const fetchProjects = async () => {
     try {
-      console.log('プロジェクト取得開始...')
+      console.log('プロジェクト取得開始（作業日報用）...')
 
       // 現在のユーザーの認証情報を確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -233,6 +286,7 @@ export default function DailyReportPage() {
       if (sessionError) console.error('セッション取得エラー:', sessionError)
 
       // プロジェクト取得（必要なフィールドのみ）
+      // プロジェクト一覧を取得（作業日報用なので一般管理費プロジェクトも含む）
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, business_number')
@@ -1018,22 +1072,49 @@ export default function DailyReportPage() {
                 選択した日付の{workManagementType === 'hours' ? '作業日報' : '作業時間'}がまだ作成されていません
               </p>
               
-              {/* 新規エントリー追加ボタン */}
-              <div className="mt-6">
+              {/* 一般管理費として登録 / 新規エントリー追加ボタン */}
+              <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
+                {/* 当初の新規エントリー追加（左） */}
                 <button
                   onClick={() => {
-                    // 新規エントリー追加時に選択された日付を設定
                     setNewEntry({
                       ...newEntry,
-                      date: selectedDate
+                      date: selectedDate,
+                      project_id: ''
                     })
-                    setShowNewEntryForm(!showNewEntryForm)
+                    setShowNewEntryForm(true)
                   }}
-                  className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 bg-gray-600 text-white hover:bg-gray-700 transition-colors"
                 >
                   <Plus className="h-5 w-5" />
-                  {showNewEntryForm ? 'フォームを隠す' : '新規エントリー追加'}
+                  新規エントリー追加
                 </button>
+
+                {/* 一般管理費として登録（右） */}
+                <button
+                  onClick={() => {
+                    // まず一般管理費プロジェクトIDを取得（なければ作成）
+                    getOrCreateOverheadProjectId().then((overheadId) => {
+                      // 新規エントリー追加時に選択された日付を設定
+                      // 工数管理タイプに応じて初期値を設定
+                      const initialWorkHours = workManagementType === 'hours' ? 1.0 : 8.0
+                      setNewEntry({
+                        ...newEntry,
+                        date: selectedDate,
+                        project_id: overheadId || '',
+                        work_hours: initialWorkHours
+                      })
+                      setShowNewEntryForm(true)
+                    })
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                  一般管理費として登録
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                「新規エントリー追加」は自由入力、「一般管理費として登録」はプロジェクトが自動で一般管理費に設定されます。
               </div>
             </div>
           ) : (

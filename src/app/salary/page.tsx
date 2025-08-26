@@ -46,10 +46,12 @@ export default async function SalaryEntry() {
   console.log('変換後のユーザーデータ:', users)
   console.log('ユーザー取得エラー:', usersError)
 
-  // プロジェクトデータを取得
+  // プロジェクトデータを取得（一般管理費プロジェクトは除外）
   const { data: projectsData } = await supabase
     .from('projects')
     .select('id, name, status, created_at, updated_at')
+    .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
+    .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('name')
 
   // プロジェクトデータを正しい形式に変換

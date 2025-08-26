@@ -19,11 +19,13 @@ export async function GET(request: NextRequest) {
     // リクエストヘッダーをログ出力
     console.log('📋 /api/projects: リクエストヘッダー:', Object.fromEntries(request.headers.entries()))
 
-    // プロジェクト一覧を取得
+    // プロジェクト一覧を取得（一般管理費プロジェクトは除外）
     console.log('🔍 /api/projects: プロジェクト一覧取得開始')
     const { data: projects, error } = await supabase
       .from('projects')
       .select('*')
+      .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
+      .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
       .order('created_at', { ascending: false })
 
     if (error) {
