@@ -57,33 +57,55 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
     setIsSubmitting(true)
     setSubmitMessage(null)
 
-    // 一時的にAPIコールを無効化してテスト
     try {
-      // モックデータでテスト
-      const mockProgress = {
-        id: 'mock-' + Date.now(),
+      console.log('進捗記録開始:', {
         project_id: selectedProjectId,
         progress_rate: progressRate,
         progress_date: progressDate,
-        notes: notes.trim() || null,
-        created_at: new Date().toISOString()
+        notes: notes.trim() || null
+      })
+
+      const response = await fetch('/api/progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_id: selectedProjectId,
+          progress_rate: progressRate,
+          progress_date: progressDate,
+          notes: notes.trim() || null
+        })
+      })
+
+      console.log('APIレスポンス:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('APIエラー詳細:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
-      setSubmitMessage({ type: 'success', message: '進捗が正常に記録されました（テストモード）' })
-      
-      // フォームをリセット
-      setSelectedProjectId('')
-      setProgressRate(0)
-      setNotes('')
-      
-      // 進捗データを更新
-      setProgressData(prev => [mockProgress, ...prev])
-      
-      // 3秒後にメッセージを消す
-      setTimeout(() => setSubmitMessage(null), 3000)
-      
-      console.log('モック進捗データ:', mockProgress)
-      
+      const result = await response.json()
+      console.log('API結果:', result)
+
+      if (result.success) {
+        setSubmitMessage({ type: 'success', message: result.message })
+        
+        // フォームをリセット
+        setSelectedProjectId('')
+        setProgressRate(0)
+        setNotes('')
+        
+        // 進捗データを更新
+        const newProgress = result.data
+        setProgressData(prev => [newProgress, ...prev])
+        
+        // 3秒後にメッセージを消す
+        setTimeout(() => setSubmitMessage(null), 3000)
+      } else {
+        setSubmitMessage({ type: 'error', message: result.error || '進捗の記録に失敗しました' })
+      }
     } catch (error) {
       console.error('進捗記録エラー:', error)
       const errorMessage = error instanceof Error ? error.message : 'サーバーエラーが発生しました'
