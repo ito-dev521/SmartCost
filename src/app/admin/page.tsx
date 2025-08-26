@@ -1,8 +1,9 @@
 import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DepartmentManagement from '@/components/admin/DepartmentManagement'
+import WorkManagementSettings from '@/components/admin/WorkManagementSettings'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { Shield, Building } from 'lucide-react'
+import { Shield, Building, Settings } from 'lucide-react'
 
 export default async function AdminPage() {
   console.log('🔍 Adminページ: 認証チェック開始')
@@ -83,6 +84,11 @@ export default async function AdminPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+          {/* 工数管理設定 */}
+          <div>
+            <WorkManagementSettings />
+          </div>
+
           {/* 部署管理 */}
           <div>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">

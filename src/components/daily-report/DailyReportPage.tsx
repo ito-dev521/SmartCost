@@ -10,6 +10,7 @@ interface DailyReportEntry {
   project_id: string
   work_content: string
   work_hours: number
+  work_type?: 'hours' | 'time'
   notes: string
   created_at?: string
   updated_at?: string
@@ -38,23 +39,43 @@ export default function DailyReportPage() {
   const [monthlyReports, setMonthlyReports] = useState<any[]>([])
   const [showMonthlyView, setShowMonthlyView] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM形式
+  const [laborCostData, setLaborCostData] = useState<{ hourlyRate: number; projects: any[] } | null>(null)
   const [showNewEntryForm, setShowNewEntryForm] = useState(false)
   const [deletedEntries, setDeletedEntries] = useState<string[]>([])
+  const [workManagementType, setWorkManagementType] = useState<'hours' | 'time'>('hours')
   const [newEntry, setNewEntry] = useState<DailyReportEntry>({
     date: new Date().toISOString().slice(0, 10),
     project_id: '',
     work_content: '',
     work_hours: 0,
+    work_type: 'hours',
     notes: ''
   })
   
 
   const supabase = createClientComponentClient()
 
+  // 工数管理タイプを取得
+  const fetchWorkManagementType = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'work_management_type')
+        .single()
+
+      if (!error && data) {
+        setWorkManagementType(data.setting_value as 'hours' | 'time')
+      }
+    } catch (error) {
+      console.error('工数管理タイプ取得エラー:', error)
+    }
+  }
+
   // プロジェクト毎の工数集計を計算
   const calculateProjectSummary = (reports: any[]) => {
     const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number } } = {}
-    
+
     reports.forEach(monthData => {
       monthData.entries.forEach((entry: any) => {
         const projectKey = entry.project_id || `${entry.business_number}-${entry.project_name}`
@@ -70,11 +91,89 @@ export default function DailyReportPage() {
         projectSummary[projectKey].days += 1
       })
     })
-    
+
     return Object.values(projectSummary).sort((a, b) => b.totalHours - a.totalHours)
   }
 
+  // 時給単価を計算（給与総額 ÷ 総時間）
+  const calculateHourlyRate = async (userId: string, periodStart: string, periodEnd: string) => {
+    try {
+      // salary_entriesから給与データを取得
+      const { data: salaryData, error } = await supabase
+        .from('salary_entries')
+        .select('salary_amount, total_work_hours, hourly_rate')
+        .eq('created_by', userId)
+        .gte('salary_period_start', periodStart)
+        .lte('salary_period_end', periodEnd)
+        .order('salary_period_end', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error || !salaryData) {
+        console.warn('給与データが見つからない:', error)
+        return null
+      }
+
+      // hourly_rateが既に計算済みの場合
+      if (salaryData.hourly_rate) {
+        return salaryData.hourly_rate
+      }
+
+      // 総時間がない場合は計算できない
+      if (!salaryData.total_work_hours || salaryData.total_work_hours <= 0) {
+        console.warn('総時間が設定されていない')
+        return null
+      }
+
+      // 時給単価を計算
+      const hourlyRate = salaryData.salary_amount / salaryData.total_work_hours
+      return hourlyRate
+    } catch (error) {
+      console.error('時給単価計算エラー:', error)
+      return null
+    }
+  }
+
+  // プロジェクト毎の人件費を計算
+  const calculateLaborCost = async (reports: any[], userId: string, periodStart: string, periodEnd: string) => {
+    const hourlyRate = await calculateHourlyRate(userId, periodStart, periodEnd)
+
+    if (!hourlyRate) {
+      return null
+    }
+
+    const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number; laborCost: number } } = {}
+
+    reports.forEach(monthData => {
+      monthData.entries.forEach((entry: any) => {
+        // 時間管理のエントリーのみ計算
+        if (entry.work_type === 'time') {
+          const projectKey = entry.project_id || `${entry.business_number}-${entry.project_name}`
+          if (!projectSummary[projectKey]) {
+            projectSummary[projectKey] = {
+              name: entry.project_name || '不明',
+              business_number: entry.business_number || '不明',
+              totalHours: 0,
+              days: 0,
+              laborCost: 0
+            }
+          }
+          const workHours = entry.work_hours || 0
+          projectSummary[projectKey].totalHours += workHours
+          projectSummary[projectKey].days += 1
+          projectSummary[projectKey].laborCost += workHours * hourlyRate
+        }
+      })
+    })
+
+    return {
+      hourlyRate,
+      projects: Object.values(projectSummary).sort((a, b) => b.laborCost - a.laborCost)
+    }
+  }
+
   useEffect(() => {
+    fetchWorkManagementType()
     fetchProjects()
     fetchDailyReports()
   }, [selectedDate])
@@ -146,7 +245,7 @@ export default function DailyReportPage() {
 
       const { data, error } = await supabase
         .from('daily_reports')
-        .select('*')
+        .select('*, work_type')
         .eq('date', selectedDate)
         .order('created_at', { ascending: false })
 
@@ -218,19 +317,27 @@ export default function DailyReportPage() {
     try {
       console.log('月次作業日報取得開始...')
       console.log('選択された月:', selectedMonth)
-      
+
       // 日付範囲の計算
       const startDate = `${selectedMonth}-01`
       const nextMonth = new Date(selectedMonth + '-01')
       nextMonth.setMonth(nextMonth.getMonth() + 1)
       const endDate = nextMonth.toISOString().slice(0, 10)
-      
+
       console.log('日付範囲:', startDate, '〜', endDate)
+
+      // 現在のユーザー情報を取得
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('ユーザー情報が取得できません')
+        return
+      }
       
       const { data, error } = await supabase
         .from('daily_reports')
         .select(`
           *,
+          work_type,
           projects (
             id,
             name,
@@ -299,6 +406,7 @@ export default function DailyReportPage() {
           project_id: report.project_id,
           work_content: report.work_content,
           work_hours: report.work_hours,
+          work_type: report.work_type || 'hours',
           notes: report.notes,
           created_at: report.created_at,
           updated_at: report.updated_at,
@@ -320,6 +428,19 @@ export default function DailyReportPage() {
 
       console.log('月次データ:', monthlyData)
       setMonthlyReports(monthlyData)
+
+      // 時間管理の場合、人件費計算を行う
+      if (workManagementType === 'time' && monthlyData.length > 0) {
+        try {
+          const laborCostResult = await calculateLaborCost(monthlyData, user.id, startDate, endDate)
+          setLaborCostData(laborCostResult)
+        } catch (laborError) {
+          console.error('人件費計算エラー:', laborError)
+          setLaborCostData(null)
+        }
+      } else {
+        setLaborCostData(null)
+      }
     } catch (error) {
       console.error('月次作業日報取得エラー:', error)
       console.error('エラーの詳細:', {
@@ -329,30 +450,39 @@ export default function DailyReportPage() {
         code: (error as any)?.code || '不明'
       })
       setMonthlyReports([])
+      setLaborCostData(null)
     }
   }
 
     const addNewEntry = () => {
-    const totalHours = getTotalHours()
-    const newTotal = totalHours + newEntry.work_hours
-    // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
-    if (newTotal > 1.01) {
-      alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、入力値: ${newEntry.work_hours}人工、最大追加可能: ${(1.0 - totalHours).toFixed(1)}人工`)
-      return
+    // 時間管理の場合、1.0人工の制限を適用しない
+    if (workManagementType === 'hours') {
+      const totalHours = getTotalHours()
+      const newTotal = totalHours + newEntry.work_hours
+      // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
+      if (newTotal > 1.01) {
+        alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、入力値: ${newEntry.work_hours}人工、最大追加可能: ${(1.0 - totalHours).toFixed(1)}人工`)
+        return
+      }
     }
+
     if (!newEntry.project_id || newEntry.work_hours <= 0) {
-      alert('プロジェクトと工数を入力してください。')
+      const fieldName = workManagementType === 'hours' ? '工数' : '時間'
+      alert(`プロジェクトと${fieldName}を入力してください。`)
       return
     }
+
     // 新規エントリーを追加
-    setEntries([newEntry, ...entries])
-    
+    const entryToAdd = { ...newEntry, work_type: workManagementType }
+    setEntries([entryToAdd, ...entries])
+
     // 新規エントリーの状態をリセット
     setNewEntry({
       date: selectedDate,
       project_id: '',
       work_content: '',
       work_hours: 0,
+      work_type: workManagementType,
       notes: ''
     })
     
@@ -368,14 +498,18 @@ export default function DailyReportPage() {
 
     if (field === 'work_hours') {
       const newHours = parseFloat(value) || 0
-      const otherEntriesTotal = entries.reduce((total, entry, i) => {
-        return i === index ? total : total + (entry.work_hours || 0)
-      }, 0)
-      const maxAllowed = 1.01 - otherEntriesTotal
 
-      if (newHours > maxAllowed) {
-        alert(`工数の合計が1.0人工を超えます。最大 ${maxAllowed.toFixed(1)}人工まで入力可能です。`)
-        return
+      // 工数管理の場合のみ、1.0人工の制限を適用
+      if (workManagementType === 'hours') {
+        const otherEntriesTotal = entries.reduce((total, entry, i) => {
+          return i === index ? total : total + (entry.work_hours || 0)
+        }, 0)
+        const maxAllowed = 1.01 - otherEntriesTotal
+
+        if (newHours > maxAllowed) {
+          alert(`工数の合計が1.0人工を超えます。最大 ${maxAllowed.toFixed(1)}人工まで入力可能です。`)
+          return
+        }
       }
     }
 
@@ -399,12 +533,14 @@ export default function DailyReportPage() {
   }
 
   const saveEntries = async () => {
-    // 保存前の工数チェック
-    const totalHours = getTotalHours()
-    // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
-    if (totalHours > 1.01) {
-      alert(`工数の合計が1.0人工を超えています。現在の合計: ${totalHours.toFixed(1)}人工です。工数を調整してから保存してください。`)
-      return
+    // 保存前の工数チェック（工数管理の場合のみ）
+    if (workManagementType === 'hours') {
+      const totalHours = getTotalHours()
+      // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
+      if (totalHours > 1.01) {
+        alert(`工数の合計が1.0人工を超えています。現在の合計: ${totalHours.toFixed(1)}人工です。工数を調整してから保存してください。`)
+        return
+      }
     }
     
     setIsSaving(true)
@@ -451,6 +587,7 @@ export default function DailyReportPage() {
               project_id: entry.project_id,
               work_content: entry.work_content,
               work_hours: entry.work_hours,
+              work_type: entry.work_type || workManagementType,
               notes: entry.notes,
               updated_at: new Date().toISOString()
             })
@@ -471,6 +608,7 @@ export default function DailyReportPage() {
             project_id: entry.project_id,
             work_content: entry.work_content,
             work_hours: entry.work_hours,
+            work_type: entry.work_type || workManagementType,
             notes: entry.notes,
             user_id: user?.id // ユーザーIDを明示的に追加
           }
@@ -516,8 +654,8 @@ export default function DailyReportPage() {
       // 月次表示の場合は月次データをCSV出力
       const csvContent = [
         // プロジェクト毎工数集計
-        ['=== プロジェクト毎工数集計 ==='],
-        ['業務番号', 'プロジェクト名', '総工数（人工）', '作業日数', '平均工数/日'],
+        [`=== プロジェクト毎${workManagementType === 'hours' ? '工数' : '時間'}集計 ===`],
+        ['業務番号', 'プロジェクト名', `総${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '作業日数', `平均${workManagementType === 'hours' ? '工数' : '時間'}/日`],
         ...calculateProjectSummary(monthlyReports).map(project => [
           project.business_number,
           project.name,
@@ -526,7 +664,7 @@ export default function DailyReportPage() {
           (project.totalHours / project.days).toFixed(1)
         ]),
         ['', '', '', '', ''],
-        ['合計', `${calculateProjectSummary(monthlyReports).length}件`, 
+        ['合計', `${calculateProjectSummary(monthlyReports).length}件`,
          monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(1),
          monthlyReports.reduce((total, monthData) => total + monthData.entries.length, 0).toString(),
          ''],
@@ -534,7 +672,7 @@ export default function DailyReportPage() {
         ['', '', '', '', ''],
         // 日別詳細
         ['=== 日別詳細 ==='],
-        ['日付', '業務番号', 'プロジェクト名', '作業内容', '工数（人工）', '備考', '入力者', '作成日時'],
+        ['日付', '業務番号', 'プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者', '作成日時'],
         ...monthlyReports.flatMap(monthData => 
           monthData.entries.map((entry: any) => [
             monthData.date,
@@ -557,7 +695,7 @@ export default function DailyReportPage() {
       const link = document.createElement('a')
       const url = URL.createObjectURL(blob)
       link.setAttribute('href', url)
-      link.setAttribute('download', `作業日報_月次_${selectedMonth}.csv`)
+      link.setAttribute('download', `${workManagementType === 'hours' ? '作業日報' : '作業時間'}_月次_${selectedMonth}.csv`)
       link.style.visibility = 'hidden'
       document.body.appendChild(link)
       link.click()
@@ -565,7 +703,7 @@ export default function DailyReportPage() {
     } else {
       // 日次表示の場合は従来のCSV出力
       const csvContent = [
-        ['日付', '業務番号 - プロジェクト名', '作業内容', '工数（人工）', '備考', '入力者', '作成日時'],
+        ['日付', '業務番号 - プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者', '作成日時'],
         ...entries.map(entry => {
           const project = projects.find(p => p.id === entry.project_id)
           return [
@@ -588,7 +726,7 @@ export default function DailyReportPage() {
       const link = document.createElement('a')
       const url = URL.createObjectURL(blob)
       link.setAttribute('href', url)
-      link.setAttribute('download', `作業日報_日次_${selectedDate}.csv`)
+      link.setAttribute('download', `${workManagementType === 'hours' ? '作業日報' : '作業時間'}_日次_${selectedDate}.csv`)
       link.style.visibility = 'hidden'
       document.body.appendChild(link)
       link.click()
@@ -602,6 +740,14 @@ export default function DailyReportPage() {
 
   const getTotalHoursString = () => {
     return getTotalHours().toFixed(1)
+  }
+
+  const getTotalHoursLabel = () => {
+    return workManagementType === 'hours' ? '合計工数' : '合計時間'
+  }
+
+  const getTotalHoursUnit = () => {
+    return workManagementType === 'hours' ? '人工' : '時間'
   }
 
   const getRemainingHours = () => {
@@ -623,10 +769,17 @@ export default function DailyReportPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">作業日報</h1>
-        <p className="text-gray-600">日々の作業内容と工数を記録・管理します</p>
-      </div>
+              <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {workManagementType === 'hours' ? '作業日報' : '作業時間管理'}
+          </h1>
+          <p className="text-gray-600">
+            {workManagementType === 'hours'
+              ? '日々の作業内容と工数を記録・管理します'
+              : '日々の作業内容と時間を記録・管理します'
+            }
+          </p>
+        </div>
 
       {/* 日付選択とアクションボタン */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -650,7 +803,7 @@ export default function DailyReportPage() {
                   : 'bg-gray-600 text-white hover:bg-gray-700'
               }`}
             >
-              {showMonthlyView ? '日次表示' : '月次表示'}
+              {showMonthlyView ? `${workManagementType === 'hours' ? '日次' : '日次時間'}表示` : `${workManagementType === 'hours' ? '月次' : '月次時間'}表示`}
             </button>
             <button
               onClick={() => setShowNewEntryForm(!showNewEntryForm)}
@@ -669,19 +822,21 @@ export default function DailyReportPage() {
           </div>
         </div>
 
-        {/* 合計工数表示 */}
+        {/* 合計工数/時間表示 */}
         <div className="mt-4 p-4 bg-blue-50 rounded-md">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-blue-800">
               <Clock className="h-5 w-5" />
-              <span className="font-semibold">合計工数: {getTotalHoursString()}人工</span>
+              <span className="font-semibold">{getTotalHoursLabel()}: {getTotalHoursString()}{getTotalHoursUnit()}</span>
             </div>
-            <div className="text-blue-600 text-sm">
-              残り: {getRemainingHours()}人工
-            </div>
+            {workManagementType === 'hours' && (
+              <div className="text-blue-600 text-sm">
+                残り: {getRemainingHours()}人工
+              </div>
+            )}
           </div>
 
-          {getTotalHours() >= 1.0 && (
+          {workManagementType === 'hours' && getTotalHours() >= 1.0 && (
             <div className="mt-2 text-green-600 text-sm">
               ✅ 工数の合計が1.0人工に達しました
             </div>
@@ -710,8 +865,12 @@ export default function DailyReportPage() {
           {entries.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">作業日報がありません</h3>
-              <p className="text-gray-500 mb-4">選択した日付の作業日報がまだ作成されていません</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {workManagementType === 'hours' ? '作業日報がありません' : '作業時間がありません'}
+              </h3>
+              <p className="text-gray-500 mb-4">
+                選択した日付の{workManagementType === 'hours' ? '作業日報' : '作業時間'}がまだ作成されていません
+              </p>
             </div>
           ) : (
             entries.map((entry, index) => (
@@ -765,27 +924,27 @@ export default function DailyReportPage() {
                     )}
                   </div>
 
-                  {/* 工数入力 */}
+                  {/* 工数/時間入力 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      工数（人工）
+                      {workManagementType === 'hours' ? '工数（人工）' : '時間（時間）'}
                     </label>
                     <input
                       type="number"
                       min="0"
-                      max={(() => {
+                      max={workManagementType === 'hours' ? (() => {
                         const otherEntriesTotal = entries.reduce((total, e, i) => {
                           return i === index ? total : total + (e.work_hours || 0)
                         }, 0)
                         return 1.0 - otherEntriesTotal
-                      })()}
+                      })() : undefined}
                       step="0.1"
                       value={entry.work_hours}
                       onChange={(e) => updateEntry(index, 'work_hours', parseFloat(e.target.value) || 0)}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0.0"
                     />
-                    {(() => {
+                    {workManagementType === 'hours' && (() => {
                       const otherEntriesTotal = entries.reduce((total, e, i) => {
                         return i === index ? total : total + (e.work_hours || 0)
                       }, 0)
@@ -881,35 +1040,38 @@ export default function DailyReportPage() {
               )}
             </div>
 
-            {/* 工数入力 */}
+            {/* 工数/時間入力 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                工数（人工）
+                {workManagementType === 'hours' ? '工数（人工）' : '時間（時間）'}
               </label>
               <input
                 type="number"
                 min="0"
-                max={1.01 - getTotalHours()}
+                max={workManagementType === 'hours' ? 1.01 - getTotalHours() : undefined}
                 step="0.1"
                 value={newEntry.work_hours}
                 onChange={(e) => {
                   const value = parseFloat(e.target.value) || 0
-                  const totalHours = getTotalHours()
-                  const newTotal = totalHours + value
-                  
-                  // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
-                  if (newTotal > 1.01) {
-                    alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、入力値: ${value}人工、最大追加可能: ${(1.0 - totalHours).toFixed(1)}人工`)
-                    return
+
+                  if (workManagementType === 'hours') {
+                    const totalHours = getTotalHours()
+                    const newTotal = totalHours + value
+
+                    // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
+                    if (newTotal > 1.01) {
+                      alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、入力値: ${value}人工、最大追加可能: ${(1.0 - totalHours).toFixed(1)}人工`)
+                      return
+                    }
                   }
-                  
+
                   setNewEntry({...newEntry, work_hours: value})
                 }}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="0.0"
               />
 
-              {getTotalHours() + newEntry.work_hours > 1.01 && (
+              {workManagementType === 'hours' && getTotalHours() + newEntry.work_hours > 1.01 && (
                 <div className="mt-1 text-xs text-red-500">
                   ⚠️ 工数の合計が1.0人工を超えてしまいます
                 </div>
@@ -967,16 +1129,52 @@ export default function DailyReportPage() {
       {showMonthlyView && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
-            {selectedMonth} の作業日報一覧
+            {selectedMonth} の{workManagementType === 'hours' ? '作業日報' : '作業時間'}一覧
           </h3>
           
-          {/* プロジェクト毎の工数集計 */}
+          {/* プロジェクト毎の工数/時間集計 */}
           {monthlyReports.length > 0 && (
             <div className="mb-6">
               <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                プロジェクト毎工数集計
+                プロジェクト毎{workManagementType === 'hours' ? '工数' : '時間'}集計
               </h4>
+
+              {/* 時間管理の場合、時給単価を表示 */}
+              {workManagementType === 'time' && laborCostData && (
+                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <span className="font-medium">時給単価:</span>
+                    <span className="text-lg font-bold">{laborCostData.hourlyRate.toLocaleString()}円/時間</span>
+                    <span className="text-sm text-green-600">
+                      （給与総額を総時間で割った値）
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* 時間管理の場合、給与データが見つからない場合の警告 */}
+              {workManagementType === 'time' && !laborCostData && monthlyReports.length > 0 && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <AlertCircle className="h-5 w-5 text-yellow-400" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        人件費計算に必要な給与データが見つかりません
+                      </h3>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        <p>
+                          時間管理モードでは、給与入力で設定された給与総額と総時間から時給単価を計算し、
+                          各プロジェクトの人件費を算出します。給与データを入力してください。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
                   <thead className="bg-gray-50">
@@ -988,36 +1186,53 @@ export default function DailyReportPage() {
                         プロジェクト名
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                        総工数（人工）
+                        総{workManagementType === 'hours' ? '工数（人工）' : '時間（時間）'}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                         作業日数
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                        平均工数/日
+                        平均{workManagementType === 'hours' ? '工数' : '時間'}/日
                       </th>
+                      {workManagementType === 'time' && laborCostData && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                          人件費（円）
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {calculateProjectSummary(monthlyReports).map((project, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900 border-b border-gray-200">
-                          {project.business_number}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
-                          {project.name}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-blue-600 border-b border-gray-200">
-                          {project.totalHours.toFixed(1)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
-                          {project.days}日
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
-                          {(project.totalHours / project.days).toFixed(1)}
-                        </td>
-                      </tr>
-                    ))}
+                    {calculateProjectSummary(monthlyReports).map((project, index) => {
+                      // 時間管理の場合、人件費データを探す
+                      const laborCostProject = workManagementType === 'time' && laborCostData
+                        ? laborCostData.projects.find(p => p.business_number === project.business_number && p.name === project.name)
+                        : null
+
+                      return (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 border-b border-gray-200">
+                            {project.business_number}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
+                            {project.name}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-blue-600 border-b border-gray-200">
+                            {project.totalHours.toFixed(1)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
+                            {project.days}日
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
+                            {(project.totalHours / project.days).toFixed(1)}
+                          </td>
+                          {workManagementType === 'time' && laborCostData && (
+                            <td className="px-4 py-3 text-sm font-medium text-green-600 border-b border-gray-200">
+                              {laborCostProject ? laborCostProject.laborCost.toLocaleString() : '-'}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot className="bg-gray-50">
                     <tr>
@@ -1028,18 +1243,23 @@ export default function DailyReportPage() {
                         {calculateProjectSummary(monthlyReports).length}件
                       </td>
                       <td className="px-4 py-3 text-sm font-bold text-blue-600 border-t border-gray-200">
-                        {monthlyReports.reduce((total, monthData) => 
+                        {monthlyReports.reduce((total, monthData) =>
                           total + monthData.totalHours, 0
                         ).toFixed(1)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
-                        {monthlyReports.reduce((total, monthData) => 
+                        {monthlyReports.reduce((total, monthData) =>
                           total + monthData.entries.length, 0
                         )}日
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
                         -
                       </td>
+                      {workManagementType === 'time' && laborCostData && (
+                        <td className="px-4 py-3 text-sm font-bold text-green-600 border-t border-gray-200">
+                          {laborCostData.projects.reduce((total, project) => total + project.laborCost, 0).toLocaleString()}
+                        </td>
+                      )}
                     </tr>
                   </tfoot>
                 </table>
@@ -1048,7 +1268,7 @@ export default function DailyReportPage() {
           )}
           {monthlyReports.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              選択した月の作業日報がありません
+              選択した月の{workManagementType === 'hours' ? '作業日報' : '作業時間'}がありません
             </div>
           ) : (
             <div className="space-y-6">
@@ -1063,7 +1283,7 @@ export default function DailyReportPage() {
                       })}
                     </h4>
                     <span className="text-sm font-medium text-blue-600">
-                      合計: {monthData.totalHours.toFixed(1)}人工
+                      合計: {monthData.totalHours.toFixed(1)}{getTotalHoursUnit()}
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -1074,7 +1294,7 @@ export default function DailyReportPage() {
                             {entry.business_number} - {entry.project_name}
                           </span>
                           <span className="text-sm text-gray-500">
-                            {entry.work_hours}人工
+                            {entry.work_hours}{getTotalHoursUnit()}
                           </span>
                         </div>
                         <div className="text-sm text-gray-600 mb-1">
@@ -1114,7 +1334,7 @@ export default function DailyReportPage() {
             className="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 text-white text-lg font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="h-5 w-5" />
-            {isSaving ? '保存中...' : '作業日報を保存'}
+            {isSaving ? '保存中...' : `${workManagementType === 'hours' ? '作業日報' : '作業時間'}を保存`}
           </button>
         </div>
       )}
