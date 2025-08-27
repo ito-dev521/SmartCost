@@ -53,3 +53,4 @@ FROM auth.users
 WHERE email = 'admin@example.com'  -- 管理者のメールアドレスを適切に設定
 ON CONFLICT (user_id, permission_name) DO NOTHING;
 
+

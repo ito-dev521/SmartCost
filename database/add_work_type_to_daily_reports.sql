@@ -11,3 +11,4 @@ COMMENT ON COLUMN daily_reports.work_type IS '工数タイプ: hours（工数管
 -- インデックスの作成
 CREATE INDEX IF NOT EXISTS idx_daily_reports_work_type ON daily_reports(work_type);
 
+

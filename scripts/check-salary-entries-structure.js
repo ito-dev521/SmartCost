@@ -62,3 +62,4 @@ async function checkTableStructure() {
 if (require.main === module) {
   checkTableStructure()
 }
+

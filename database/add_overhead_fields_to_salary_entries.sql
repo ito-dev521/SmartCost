@@ -16,3 +16,4 @@ WHERE overhead_hours IS NULL OR overhead_labor_cost IS NULL;
 -- コメントを追加
 COMMENT ON COLUMN salary_entries.overhead_hours IS '一般管理費として計上される工数';
 COMMENT ON COLUMN salary_entries.overhead_labor_cost IS '一般管理費として計上される人件費';
+

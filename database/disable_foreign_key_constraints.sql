@@ -31,3 +31,4 @@ FROM
     information_schema.table_constraints AS tc 
 WHERE tc.table_name='project_progress';
 
+
