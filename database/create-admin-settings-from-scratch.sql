@@ -45,3 +45,4 @@ COMMENT ON COLUMN admin_settings.setting_value IS '設定値';
 COMMENT ON COLUMN admin_settings.description IS '設定説明';
 COMMENT ON COLUMN admin_settings.created_at IS '作成日時';
 COMMENT ON COLUMN admin_settings.updated_at IS '更新日時';
+

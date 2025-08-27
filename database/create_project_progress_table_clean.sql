@@ -54,3 +54,4 @@ CREATE TRIGGER update_project_progress_updated_at
   BEFORE UPDATE ON project_progress 
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column();
+

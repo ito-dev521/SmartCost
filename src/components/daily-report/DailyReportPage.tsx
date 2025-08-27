@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
-import { Calendar, Clock, FileText, Plus, Trash2, Save, Download } from 'lucide-react'
+import { Calendar, Clock, FileText, Plus, Trash2, Save, Download, AlertCircle } from 'lucide-react'
 import DailyReportCalendar from './DailyReportCalendar'
 
 interface DailyReportEntry {
@@ -865,7 +865,7 @@ export default function DailyReportPage() {
       ]
       
       const csvString = csvContent.map(row => 
-        row.map(cell => `"${cell}"`).join(',')
+        row.map((cell: any) => `"${cell}"`).join(',')
       ).join('\n')
       
       const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
@@ -883,19 +883,19 @@ export default function DailyReportPage() {
         ['日付', '業務番号 - プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者'],
         ...entries.map(entry => {
           const project = projects.find(p => p.id === entry.project_id)
-                      return [
-              entry.date,
-              project ? `${project.business_number} - ${project.name}` : '',
-              entry.work_content,
-              entry.work_hours.toString(),
-              entry.notes || '',
-              entry.user_name || '不明'
-            ]
+        return [
+          entry.date,
+          project ? `${project.business_number} - ${project.name}` : '',
+          entry.work_content,
+          entry.work_hours.toString(),
+          entry.notes || '',
+          entry.user_name || '不明'
+        ]
         })
       ]
       
       const csvString = csvContent.map(row => 
-        row.map(field => `"${field}"`).join(',')
+        row.map((field: any) => `"${field}"`).join(',')
       ).join('\n')
       
       const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
@@ -945,7 +945,7 @@ export default function DailyReportPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-              <div className="mb-8">
+      <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {workManagementType === 'hours' ? '作業日報' : '作業時間管理'}
           </h1>

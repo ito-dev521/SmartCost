@@ -11,3 +11,4 @@ DROP POLICY IF EXISTS "Super admins can delete admin settings" ON admin_settings
 
 -- コメントの追加
 COMMENT ON TABLE admin_settings IS '管理者設定テーブル（RLS無効化中）';
+

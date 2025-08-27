@@ -333,6 +333,41 @@ export interface Database {
           created_at?: string
         }
       }
+      fiscal_info: {
+        Row: {
+          id: string
+          company_id: string
+          fiscal_year: number
+          settlement_month: number
+          current_period: number
+          bank_balance: number
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          fiscal_year: number
+          settlement_month: number
+          current_period?: number
+          bank_balance?: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          fiscal_year?: number
+          settlement_month?: number
+          current_period?: number
+          bank_balance?: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
@@ -347,3 +382,6 @@ export type SuperAdmin = Database['public']['Tables']['super_admins']['Row']
 export type CompanyAdmin = Database['public']['Tables']['company_admins']['Row']
 export type SalaryEntry = Database['public']['Tables']['salary_entries']['Row']
 export type SalaryAllocation = Database['public']['Tables']['salary_allocations']['Row']
+export type FiscalInfo = Database['public']['Tables']['fiscal_info']['Row']
+export type FiscalInfoInsert = Database['public']['Tables']['fiscal_info']['Insert']
+export type FiscalInfoUpdate = Database['public']['Tables']['fiscal_info']['Update']

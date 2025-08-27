@@ -43,15 +43,26 @@ interface PaymentData {
   negotiable: boolean
 }
 
+interface FiscalInfo {
+  id: string
+  fiscal_year: number
+  settlement_month: number
+  current_period: number
+  bank_balance: number
+  notes: string | null
+}
+
 export default function CashFlowDashboard() {
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([])
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
   const [aiPredictions, setAiPredictions] = useState<Record<string, unknown>[]>([])
+  const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
     fetchCashFlowData()
+    fetchFiscalInfo()
   }, [])
 
   const fetchCashFlowData = async () => {
@@ -80,15 +91,16 @@ export default function CashFlowDashboard() {
       if (!predictions?.length) {
         const sampleCashFlow: CashFlowData[] = []
         const today = new Date()
-        
+        const initialBalance = fiscalInfo?.bank_balance || 5000000
+
         for (let i = 0; i < 12; i++) {
           const date = new Date(today)
           date.setMonth(date.getMonth() + i)
-          
+
           const baseInflow = 15000000 + Math.random() * 10000000
           const baseOutflow = 12000000 + Math.random() * 8000000
-          const balance = baseInflow - baseOutflow + (i > 0 ? sampleCashFlow[i-1].balance : 5000000)
-          
+          const balance = baseInflow - baseOutflow + (i > 0 ? sampleCashFlow[i-1].balance : initialBalance)
+
           sampleCashFlow.push({
             date: date.toISOString().split('T')[0],
             inflow: baseInflow,
@@ -165,6 +177,20 @@ export default function CashFlowDashboard() {
     }
   }
 
+  const fetchFiscalInfo = async () => {
+    try {
+      const response = await fetch('/api/fiscal-info')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.fiscalInfo) {
+          setFiscalInfo(data.fiscalInfo)
+        }
+      }
+    } catch (error) {
+      console.error('決算情報取得エラー:', error)
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
@@ -216,6 +242,32 @@ export default function CashFlowDashboard() {
 
       {/* 統計カード */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 銀行残高 */}
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <DollarSign className="h-6 w-6 text-green-400" />
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">
+                    銀行残高
+                  </dt>
+                  <dd className="text-lg font-medium text-gray-900">
+                    {fiscalInfo ? formatCurrency(fiscalInfo.bank_balance) : '未設定'}
+                  </dd>
+                  {fiscalInfo && (
+                    <dd className="text-xs text-gray-500 mt-1">
+                      {fiscalInfo.fiscal_year}年度 第{fiscalInfo.current_period}期
+                    </dd>
+                  )}
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">

@@ -19,3 +19,4 @@ CREATE POLICY "Admins can manage admin settings" ON admin_settings
 COMMENT ON TABLE admin_settings IS '管理者設定テーブル（適切なRLS設定済み）';
 COMMENT ON POLICY "Everyone can read admin settings" ON admin_settings IS '全員が管理者設定を参照できる';
 COMMENT ON POLICY "Admins can manage admin settings" ON admin_settings IS '管理者権限を持つユーザーのみが管理者設定を管理できる';
+

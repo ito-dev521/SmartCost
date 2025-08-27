@@ -28,3 +28,4 @@ SELECT
 FROM information_schema.columns 
 WHERE table_name = 'project_progress'
 ORDER BY ordinal_position;
+

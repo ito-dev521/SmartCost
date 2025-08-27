@@ -29,3 +29,4 @@ CREATE INDEX idx_project_progress_date ON project_progress(progress_date);
 --   (SELECT id FROM auth.users LIMIT 1)
 -- FROM projects p
 -- LIMIT 5;
+

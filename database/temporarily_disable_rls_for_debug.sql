@@ -10,3 +10,4 @@ ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
 -- 完了メッセージ
 SELECT 'RLSが一時的に無効化されました（デバッグ用）' as message;
 
+

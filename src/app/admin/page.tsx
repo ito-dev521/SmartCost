@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DepartmentManagement from '@/components/admin/DepartmentManagement'
 import WorkManagementSettings from '@/components/admin/WorkManagementSettings'
+import FiscalInfoSettings from '@/components/admin/FiscalInfoSettings'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Shield, Building, Settings } from 'lucide-react'
 
@@ -84,6 +85,11 @@ export default async function AdminPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+          {/* 決算情報設定 */}
+          <div>
+            <FiscalInfoSettings />
+          </div>
+
           {/* 工数管理設定 */}
           <div>
             <WorkManagementSettings />
