@@ -697,14 +697,27 @@ export default function SalaryEntryForm({
                 給与総額（円） <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 id="salary_amount"
-                min="0"
-                step="1"
-                value={salaryForm.salary_amount}
-                onChange={(e) => setSalaryForm({...salaryForm, salary_amount: parseInt(e.target.value) || 0})}
+                value={salaryForm.salary_amount === 0 ? '' : salaryForm.salary_amount.toLocaleString()}
+                onChange={(e) => {
+                  const numericValue = e.target.value.replace(/[,\s]/g, '')
+                  const parsedValue = parseInt(numericValue) || 0
+                  setSalaryForm({...salaryForm, salary_amount: parsedValue})
+                }}
+                onBlur={(e) => {
+                  if (salaryForm.salary_amount > 0) {
+                    e.target.value = salaryForm.salary_amount.toLocaleString()
+                  }
+                }}
+                onFocus={(e) => {
+                  if (salaryForm.salary_amount > 0) {
+                    e.target.value = salaryForm.salary_amount.toString()
+                  }
+                }}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="1000000"
+                placeholder="1,000,000"
               />
             </div>
 

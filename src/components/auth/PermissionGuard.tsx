@@ -71,6 +71,9 @@ export default function PermissionGuard({
             case 'canManageSystem':
               permission = await permissionChecker.canManageSystem(user.id)
               break
+            case 'canManageCaddon':
+              permission = await permissionChecker.canManageCaddon(user.id)
+              break
             default:
               permission = false
           }

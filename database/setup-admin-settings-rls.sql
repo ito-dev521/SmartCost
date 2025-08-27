@@ -21,3 +21,4 @@ COMMENT ON POLICY "Everyone can read admin settings" ON admin_settings IS '全�
 COMMENT ON POLICY "Admins can manage admin settings" ON admin_settings IS '管理者権限を持つユーザーのみが管理者設定を管理できる';
 
 
+

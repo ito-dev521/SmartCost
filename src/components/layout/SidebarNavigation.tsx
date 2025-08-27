@@ -11,7 +11,8 @@ import {
   TrendingUp,
   Users,
   Settings,
-  Shield
+  Shield,
+  Monitor
 } from 'lucide-react'
 
 interface NavigationItem {
@@ -37,6 +38,7 @@ const defaultNavigationItems: NavigationItem[] = [
   { href: '/progress', label: '工事進行基準', icon: TrendingUp },
   { href: '/clients', label: 'クライアント管理', icon: Building2 },
   { href: '/users', label: 'ユーザー管理', icon: Users },
+  { href: '/caddon', label: 'CADDON管理', icon: Monitor },
   { href: '/admin', label: '管理者パネル', icon: Settings },
   { href: '/super-admin', label: 'スーパー管理者パネル', icon: Shield },
 ]

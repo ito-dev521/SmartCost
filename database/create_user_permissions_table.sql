@@ -54,3 +54,4 @@ WHERE email = 'admin@example.com'  -- 管理者のメールアドレスを適切
 ON CONFLICT (user_id, permission_name) DO NOTHING;
 
 
+

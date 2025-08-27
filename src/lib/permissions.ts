@@ -259,6 +259,11 @@ export class PermissionChecker {
   async canDeleteClients(userId: string): Promise<boolean> {
     return await this.isAdmin(userId)
   }
+
+  // CADDON管理権限チェック
+  async canManageCaddon(userId: string): Promise<boolean> {
+    return await this.isAdmin(userId)
+  }
 }
 
 // 権限チェックのインスタンス

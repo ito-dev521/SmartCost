@@ -493,16 +493,30 @@ export default function CostEntryForm({
                   金額（円） <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   name="amount"
                   id="project_amount"
                   required
-                  min="0"
-                  step="1"
-                  value={projectFormData.amount}
-                  onChange={handleProjectChange}
+                  value={projectFormData.amount === '' ? '' : (parseFloat(projectFormData.amount) || 0).toLocaleString()}
+                  onChange={(e) => {
+                    const numericValue = e.target.value.replace(/[,\s]/g, '')
+                    setProjectFormData(prev => ({ ...prev, amount: numericValue }))
+                  }}
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value.replace(/[,\s]/g, '')) || 0
+                    if (value > 0) {
+                      e.target.value = value.toLocaleString()
+                    }
+                  }}
+                  onFocus={(e) => {
+                    const value = parseFloat(e.target.value.replace(/[,\s]/g, '')) || 0
+                    if (value > 0) {
+                      e.target.value = value.toString()
+                    }
+                  }}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="1000000"
+                  placeholder="1,000,000"
                 />
               </div>
             </div>
@@ -636,16 +650,30 @@ export default function CostEntryForm({
                   金額（円） <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   name="amount"
                   id="general_amount"
                   required
-                  min="0"
-                  step="1"
-                  value={generalFormData.amount}
-                  onChange={handleGeneralChange}
+                  value={generalFormData.amount === '' ? '' : (parseFloat(generalFormData.amount) || 0).toLocaleString()}
+                  onChange={(e) => {
+                    const numericValue = e.target.value.replace(/[,\s]/g, '')
+                    setGeneralFormData(prev => ({ ...prev, amount: numericValue }))
+                  }}
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value.replace(/[,\s]/g, '')) || 0
+                    if (value > 0) {
+                      e.target.value = value.toLocaleString()
+                    }
+                  }}
+                  onFocus={(e) => {
+                    const value = parseFloat(e.target.value.replace(/[,\s]/g, '')) || 0
+                    if (value > 0) {
+                      e.target.value = value.toString()
+                    }
+                  }}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
-                  placeholder="1000000"
+                  placeholder="1,000,000"
                 />
               </div>
             </div>

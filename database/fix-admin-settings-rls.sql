@@ -26,3 +26,4 @@ COMMENT ON POLICY "Super admins can manage admin settings" ON admin_settings IS 
 COMMENT ON POLICY "Anyone can read admin settings" ON admin_settings IS 'すべてのユーザーが管理者設定を参照できる（読み取り専用）';
 
 
+
