@@ -235,6 +235,8 @@ export default function AnalyticsDashboard() {
   const [editingMonth, setEditingMonth] = useState<{projectId: string, month: string} | null>(null)
   const [editValues, setEditValues] = useState<{[key: string]: string}>({})
   const [splitBillingLoaded, setSplitBillingLoaded] = useState(false)
+  const [selectedProjectDetail, setSelectedProjectDetail] = useState<any>(null)
+  const [showProjectModal, setShowProjectModal] = useState(false)
 
   const supabase = createClientComponentClient()
 
@@ -1452,7 +1454,14 @@ export default function AnalyticsDashboard() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {projectBreakdown.map((item) => (
-                    <tr key={item.project.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={item.project.id} 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedProjectDetail(item)
+                        setShowProjectModal(true)
+                      }}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {item.project.name}
                         {item.project.client_name && (
@@ -1992,6 +2001,167 @@ export default function AnalyticsDashboard() {
           </div>
         </div>
       </div>
+
+      {/* プロジェクト詳細ポップアップ */}
+      {showProjectModal && selectedProjectDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                プロジェクト詳細: {selectedProjectDetail.project.name}
+              </h3>
+              <button
+                onClick={() => setShowProjectModal(false)}
+                className="text-gray-400 hover:text-gray-600 focus:outline-none"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* 基本情報 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">基本情報</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">プロジェクト名:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">業務番号:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.business_number}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">ステータス:</span>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        selectedProjectDetail.project.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        selectedProjectDetail.project.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        selectedProjectDetail.project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                        selectedProjectDetail.project.status === 'on_hold' ? 'bg-gray-100 text-gray-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedProjectDetail.project.status === 'completed' ? '完了' :
+                         selectedProjectDetail.project.status === 'in_progress' ? '進行中' :
+                         selectedProjectDetail.project.status === 'planning' ? '計画中' :
+                         selectedProjectDetail.project.status === 'on_hold' ? '保留中' : '中止'}
+                      </span>
+                    </div>
+                    {selectedProjectDetail.project.client_name && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">クライアント:</span>
+                        <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.client_name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">収益性指標</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">契約金額:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {selectedProjectDetail.contractAmount > 0 ? formatCurrency(selectedProjectDetail.contractAmount) : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">原価合計:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {formatCurrency(selectedProjectDetail.total)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">利益:</span>
+                      <span className={`text-sm font-medium ${selectedProjectDetail.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {selectedProjectDetail.contractAmount > 0 ? formatCurrency(selectedProjectDetail.profit) : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">利益率:</span>
+                      <span className={`text-sm font-medium ${selectedProjectDetail.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {selectedProjectDetail.contractAmount > 0 ? `${selectedProjectDetail.profitMargin.toFixed(1)}%` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* カテゴリ別原価内訳 */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">カテゴリ別原価内訳</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">カテゴリ</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">金額</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">割合</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedProjectDetail.categoryBreakdown?.map((category: any, index: number) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-sm text-gray-900">{category.name}</td>
+                          <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                            {formatCurrency(category.amount)}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-600">
+                            {selectedProjectDetail.total > 0 ? ((category.amount / selectedProjectDetail.total) * 100).toFixed(1) : 0}%
+                          </td>
+                        </tr>
+                      )) || (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-2 text-sm text-gray-500 text-center">
+                            カテゴリ別内訳データがありません
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 月別原価推移 */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">月別原価推移</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">月</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">金額</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">累計</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedProjectDetail.monthlyBreakdown?.map((month: any, index: number) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-sm text-gray-900">{month.month}</td>
+                          <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                            {formatCurrency(month.amount)}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-600">
+                            {formatCurrency(month.cumulative)}
+                          </td>
+                        </tr>
+                      )) || (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-2 text-sm text-gray-500 text-center">
+                            月別推移データがありません
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
