@@ -47,7 +47,176 @@ interface BudgetCategory {
   parent_id: string | null
 }
 
+interface Client {
+  id: string
+  name: string
+  payment_cycle_type: string | null
+  payment_cycle_closing_day: number | null
+  payment_cycle_payment_month_offset: number | null
+  payment_cycle_payment_day: number | null
+  payment_cycle_description: string | null
+}
+
+interface CaddonBilling {
+  id: string
+  project_id: string
+  client_id: string
+  billing_month: string
+  caddon_usage_fee: number
+  initial_setup_fee: number
+  support_fee: number
+  total_amount: number
+  billing_status: string
+}
+
+interface MonthlyRevenue {
+  projectId: string
+  projectName: string
+  clientName: string
+  businessNumber: string
+  startDate: string | null
+  endDate: string | null
+  contractAmount: number | null
+  monthlyAmounts: { [month: string]: number }
+  totalRevenue: number
+  isSplitBilling: boolean
+  splitBillingAmounts: { [month: string]: number }
+}
+
+interface FiscalInfo {
+  id: string
+  fiscal_year: number
+  settlement_month: number
+  current_period: number
+  bank_balance: number
+  notes: string
+}
+
 export default function AnalyticsDashboard() {
+  // PDF印刷用のスタイル
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      @media print {
+        @page {
+          size: A3 landscape;
+          margin: 15mm;
+        }
+        
+        body {
+          font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+          font-size: 8px;
+          margin: 0;
+          padding: 0;
+        }
+        
+        .no-print {
+          display: none !important;
+        }
+        
+        /* 年間入金予定表の印刷最適化 */
+        .annual-revenue-table {
+          table-layout: fixed;
+          width: 100%;
+          border-collapse: collapse;
+          page-break-inside: auto;
+        }
+        
+        .annual-revenue-table th,
+        .annual-revenue-table td {
+          padding: 2px 4px;
+          font-size: 8px;
+          border: 1px solid #ddd;
+          vertical-align: middle;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        
+        /* 列幅設定 */
+        .annual-revenue-table th:nth-child(1), /* 業務番号 */
+        .annual-revenue-table td:nth-child(1) {
+          width: 60px;
+          min-width: 60px;
+        }
+        
+        .annual-revenue-table th:nth-child(2), /* プロジェクト名 */
+        .annual-revenue-table td:nth-child(2) {
+          width: 120px;
+          min-width: 120px;
+        }
+        
+        .annual-revenue-table th:nth-child(3), /* クライアント名 */
+        .annual-revenue-table td:nth-child(3) {
+          width: 80px;
+          min-width: 80px;
+        }
+        
+        .annual-revenue-table th:nth-child(4), /* 開始日 */
+        .annual-revenue-table td:nth-child(4),
+        .annual-revenue-table th:nth-child(5), /* 終了日 */
+        .annual-revenue-table td:nth-child(5) {
+          width: 50px;
+          min-width: 50px;
+        }
+        
+        .annual-revenue-table th:nth-child(6), /* 契約金額 */
+        .annual-revenue-table td:nth-child(6) {
+          width: 70px;
+          min-width: 70px;
+          text-align: right;
+        }
+        
+        /* 月次列（7-18列目） */
+        .annual-revenue-table th:nth-child(n+7):nth-child(-n+18),
+        .annual-revenue-table td:nth-child(n+7):nth-child(-n+18) {
+          width: 45px;
+          min-width: 45px;
+          text-align: right;
+        }
+        
+        .annual-revenue-table th:nth-child(19), /* 年間合計 */
+        .annual-revenue-table td:nth-child(19) {
+          width: 70px;
+          min-width: 70px;
+          text-align: right;
+        }
+        
+        .annual-revenue-table th:nth-child(20), /* 操作 */
+        .annual-revenue-table td:nth-child(20) {
+          width: 60px;
+          min-width: 60px;
+        }
+        
+        /* ヘッダー固定 */
+        .annual-revenue-table thead {
+          page-break-after: avoid;
+        }
+        
+        /* 合計行の強調 */
+        .annual-revenue-table tr:last-child {
+          background-color: #f3f4f6 !important;
+          font-weight: bold;
+        }
+        
+        /* 金額列の右寄せ */
+        .annual-revenue-table td[data-amount="true"] {
+          text-align: right;
+        }
+        
+        /* 印刷時のページ分割 */
+        .annual-revenue-table tr {
+          page-break-inside: avoid;
+        }
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      if (document.head.contains(style)) {
+        document.head.removeChild(style)
+      }
+    }
+  }, [])
   const [projects, setProjects] = useState<Project[]>([])
   const [costEntries, setCostEntries] = useState<CostEntry[]>([])
   const [categories, setCategories] = useState<BudgetCategory[]>([])
@@ -55,7 +224,14 @@ export default function AnalyticsDashboard() {
   const [selectedDateRange, setSelectedDateRange] = useState('month')
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'total-performance']))
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'total-performance', 'annual-revenue']))
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [clients, setClients] = useState<Client[]>([])
+  const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([])
+  const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
+  const [editingSplitBilling, setEditingSplitBilling] = useState<string | null>(null)
+  const [editingMonth, setEditingMonth] = useState<{projectId: string, month: string} | null>(null)
 
   const supabase = createClientComponentClient()
 
@@ -85,9 +261,66 @@ export default function AnalyticsDashboard() {
         .select('*')
         .order('level, sort_order')
 
+      // クライアントデータを取得
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name')
+
+      // CADDON請求データを取得
+      const { data: caddonBillingsData } = await supabase
+        .from('caddon_billing')
+        .select('*')
+        .order('billing_month')
+
+      // 決算情報を取得
+      const { data: fiscalInfoData } = await supabase
+        .from('fiscal_info')
+        .select('*')
+        .order('fiscal_year', { ascending: false })
+        .limit(1)
+
+      // 決算情報が取得できない場合はデフォルト値を設定
+      if (!fiscalInfoData || fiscalInfoData.length === 0) {
+        console.log('決算情報が取得できません。デフォルト値（3月決算）を使用します。')
+        const defaultFiscalInfo: FiscalInfo = {
+          id: 'default',
+          fiscal_year: new Date().getFullYear(),
+          settlement_month: 3,
+          current_period: 1,
+          bank_balance: 0,
+          notes: 'デフォルト設定'
+        }
+        setFiscalInfo(defaultFiscalInfo)
+      }
+
+      console.log('データ取得結果:', {
+        projects: projectsData?.length || 0,
+        costEntries: costEntriesData?.length || 0,
+        categories: categoriesData?.length || 0,
+        clients: clientsData?.length || 0,
+        caddonBillings: caddonBillingsData?.length || 0,
+        fiscalInfo: fiscalInfoData?.length || 0
+      })
+
       if (projectsData) setProjects(projectsData)
       if (costEntriesData) setCostEntries(costEntriesData)
       if (categoriesData) setCategories(categoriesData)
+      if (clientsData) setClients(clientsData)
+      if (caddonBillingsData) setCaddonBillings(caddonBillingsData)
+      if (fiscalInfoData && fiscalInfoData.length > 0) setFiscalInfo(fiscalInfoData[0])
+
+      // 月次収益を計算
+      if (fiscalInfoData && fiscalInfoData.length > 0) {
+        console.log('決算情報:', fiscalInfoData[0])
+        setFiscalInfo(fiscalInfoData[0])
+        // 少し遅延させてから計算を実行
+        setTimeout(() => calculateMonthlyRevenue(), 100)
+      } else {
+        console.log('決算情報が取得できませんでした。デフォルト値で計算を実行します。')
+        // デフォルト値が設定された後に計算を実行
+        setTimeout(() => calculateMonthlyRevenue(), 100)
+      }
     } catch (error) {
       console.error('データ取得エラー:', error)
     } finally {
@@ -221,6 +454,209 @@ export default function AnalyticsDashboard() {
     }).filter(item => item.total > 0)
     
     return breakdown.sort((a, b) => b.total - a.total)
+  }
+
+  // 入金予定日を計算
+  const calculatePaymentDate = (endDate: string, client: Client): Date => {
+    if (!endDate || !client.payment_cycle_type) {
+      return new Date(endDate || new Date())
+    }
+
+    const end = new Date(endDate)
+    let paymentDate = new Date(end)
+
+    if (client.payment_cycle_type === 'month_end') {
+      // 月末締めの場合
+      paymentDate.setMonth(paymentDate.getMonth() + 1)
+      paymentDate.setDate(0) // 月末
+    } else if (client.payment_cycle_type === 'specific_date') {
+      // 特定日締めの場合
+      const closingDay = client.payment_cycle_closing_day || 25
+      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+      const paymentDay = client.payment_cycle_payment_day || 15
+
+      if (end.getDate() <= closingDay) {
+        // 締め日以前の場合は当月締め
+        paymentDate.setMonth(paymentDate.getMonth() + paymentMonthOffset)
+        paymentDate.setDate(paymentDay)
+      } else {
+        // 締め日以降の場合は翌月締め
+        paymentDate.setMonth(paymentDate.getMonth() + paymentMonthOffset + 1)
+        paymentDate.setDate(paymentDay)
+      }
+    }
+
+    return paymentDate
+  }
+
+  // 月次収益を計算
+  const calculateMonthlyRevenue = () => {
+    console.log('calculateMonthlyRevenue開始:', {
+      fiscalInfo,
+      projectsCount: projects.length,
+      clientsCount: clients.length,
+      caddonBillingsCount: caddonBillings.length
+    })
+
+    if (!fiscalInfo) {
+      console.log('決算情報がありません')
+      return
+    }
+
+    const fiscalYearStart = fiscalInfo.settlement_month + 1
+    console.log('年度開始月:', fiscalYearStart)
+    const monthlyData: MonthlyRevenue[] = []
+
+    // 一般管理費を除外したプロジェクトを取得
+    const filteredProjects = projects.filter(project => 
+      !project.name.includes('一般管理費') && 
+      !project.name.includes('その他経費')
+    )
+    
+    console.log('フィルタリング後のプロジェクト:', {
+      total: projects.length,
+      filtered: filteredProjects.length,
+      projects: filteredProjects.map(p => ({ id: p.id, name: p.name, client: p.client_name }))
+    })
+
+    filteredProjects.forEach(project => {
+      const client = clients.find(c => c.name === project.client_name)
+      const monthlyAmounts: { [month: string]: number } = {}
+      let totalRevenue = 0
+
+      if (project.name.includes('CADDON')) {
+        // CADDONプロジェクトの場合
+        const projectBillings = caddonBillings.filter(billing => billing.project_id === project.id)
+        projectBillings.forEach(billing => {
+          const month = billing.billing_month
+          monthlyAmounts[month] = (monthlyAmounts[month] || 0) + billing.total_amount
+          totalRevenue += billing.total_amount
+        })
+      } else {
+        // 通常プロジェクトの場合
+        if (project.end_date && project.contract_amount && client) {
+          const paymentDate = calculatePaymentDate(project.end_date, client)
+          const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`
+          monthlyAmounts[monthKey] = project.contract_amount
+          totalRevenue = project.contract_amount
+        }
+      }
+
+      monthlyData.push({
+        projectId: project.id,
+        projectName: project.name,
+        clientName: project.name.includes('CADDON') ? '-' : (project.client_name || ''),
+        businessNumber: project.business_number,
+        startDate: project.start_date,
+        endDate: project.end_date,
+        contractAmount: project.contract_amount,
+        monthlyAmounts,
+        totalRevenue,
+        isSplitBilling: false,
+        splitBillingAmounts: {}
+      })
+    })
+
+    console.log('生成された月次データ:', monthlyData)
+    setMonthlyRevenue(monthlyData)
+  }
+
+  // 月次編集を開始
+  const startMonthEdit = (projectId: string, month: string) => {
+    setEditingMonth({ projectId, month })
+  }
+
+  // 月次編集を保存
+  const saveMonthEdit = (projectId: string, month: string, amount: number) => {
+    console.log('saveMonthEdit呼び出し:', { projectId, month, amount })
+    
+    setMonthlyRevenue(prev => {
+      console.log('更新前のmonthlyRevenue:', prev)
+      
+      const updated = prev.map(item => {
+        if (item.projectId === projectId) {
+          const newSplitBillingAmounts = { ...item.splitBillingAmounts }
+          newSplitBillingAmounts[month] = amount
+          
+          // 合計を再計算
+          const total = Object.values(newSplitBillingAmounts).reduce((sum, val) => sum + val, 0)
+          
+          console.log('更新されるアイテム:', {
+            projectId: item.projectId,
+            month,
+            amount,
+            newSplitBillingAmounts,
+            total
+          })
+          
+          return {
+            ...item,
+            splitBillingAmounts: newSplitBillingAmounts,
+            isSplitBilling: true,
+            totalRevenue: total
+          }
+        }
+        return item
+      })
+      
+      console.log('更新後のmonthlyRevenue:', updated)
+      return updated
+    })
+    
+    setEditingMonth(null)
+  }
+
+  // 月次編集をキャンセル
+  const cancelMonthEdit = () => {
+    setEditingMonth(null)
+  }
+
+  // CSVエクスポート
+  const exportToCSV = () => {
+    if (!monthlyRevenue.length) return
+
+    const fiscalYearStart = fiscalInfo ? fiscalInfo.settlement_month + 1 : 4
+    const months: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const month = (fiscalYearStart + i) % 12 + 1
+      const year = month <= fiscalYearStart ? selectedYear + 1 : selectedYear
+      months.push(`${year}-${String(month).padStart(2, '0')}`)
+    }
+
+    const headers = ['業務番号', 'プロジェクト名', 'クライアント名', '開始日', '終了日', '契約金額', ...months, '年間合計']
+    const csvData = monthlyRevenue.map(item => {
+      const row = [
+        item.businessNumber,
+        item.projectName,
+        item.clientName,
+        item.startDate || '',
+        item.endDate || '',
+        item.contractAmount || 0
+      ]
+      
+      months.forEach(month => {
+        const amount = item.splitBillingAmounts[month] || item.monthlyAmounts[month] || 0
+        row.push(amount)
+      })
+      
+      row.push(item.totalRevenue)
+      return row
+    })
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `年間入金予定表_${selectedYear}年度.csv`
+    link.click()
+  }
+
+  // PDFエクスポート
+  const exportToPDF = () => {
+    window.print()
   }
 
   // 月別原価推移
@@ -584,62 +1020,233 @@ export default function AnalyticsDashboard() {
         )}
       </div>
 
-      {/* 月別原価推移 */}
+      {/* 年間入金予定表 */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
         <div 
           className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('monthly-trend')}
+          onClick={() => toggleSection('annual-revenue')}
         >
-          <h3 className="text-lg font-semibold">月別原価推移</h3>
-          {expandedSections.has('monthly-trend') ? (
+          <h3 className="text-lg font-semibold">年間入金予定表</h3>
+          {expandedSections.has('annual-revenue') ? (
             <ChevronUp className="h-5 w-5 text-gray-600" />
           ) : (
             <ChevronDown className="h-5 w-5 text-gray-600" />
           )}
         </div>
         
-        {expandedSections.has('monthly-trend') && (
+        {expandedSections.has('annual-revenue') && (
           <div className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* テーブル表示 */}
-              <div>
-                <h4 className="text-md font-medium mb-3">月別データ</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          年月
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          原価合計
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {monthlyTrend.map((item) => (
-                        <tr key={item.month} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.month}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {formatCurrency(item.total)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            {/* 年度選択とエクスポートボタン */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-4">
+                <label className="text-sm font-medium text-gray-700">年度:</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+                    <option key={year} value={year}>{year}年度</option>
+                  ))}
+                </select>
               </div>
-
-              {/* グラフ表示（プレースホルダー） */}
-              <div>
-                <h4 className="text-md font-medium mb-3">推移グラフ</h4>
-                <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <p className="text-gray-500">折れ線グラフ実装予定</p>
-                </div>
+              <div className="flex space-x-2 no-print">
+                <button
+                  onClick={exportToCSV}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>CSV</span>
+                </button>
+                <button
+                  onClick={exportToPDF}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>PDF</span>
+                </button>
               </div>
             </div>
+
+            {/* 年間入金予定表 */}
+            {monthlyRevenue.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-2">データが取得できませんでした</p>
+                <div className="text-sm text-gray-400 space-y-1">
+                  <p>• プロジェクトデータ: {projects.length}件</p>
+                  <p>• クライアントデータ: {clients.length}件</p>
+                  <p>• CADDON請求データ: {caddonBillings.length}件</p>
+                  <p>• 決算情報: {fiscalInfo ? '設定済み' : '未設定'}</p>
+                </div>
+                <button
+                  onClick={() => fetchData()}
+                  className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm"
+                >
+                  データを再取得
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 annual-revenue-table">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="sticky left-0 bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                      業務番号
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                      プロジェクト名
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                      クライアント名
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                      開始日
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px]">
+                      終了日
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                      契約金額
+                    </th>
+                    {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                      const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                      const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                      return (
+                        <th key={month} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[45px]">
+                          {month}月
+                        </th>
+                      )
+                    })}
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px]">
+                      年間合計
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {monthlyRevenue.map((item) => (
+                    <tr key={item.projectId} className="hover:bg-gray-50">
+                      <td className="sticky left-0 bg-white px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.businessNumber}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-blue-600">
+                        {item.projectName}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.clientName}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.startDate ? new Date(item.startDate).toLocaleDateString('ja-JP') : ''}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : ''}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-green-600" data-amount="true">
+                        {item.contractAmount ? formatCurrency(item.contractAmount) : ''}
+                      </td>
+                      {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                        const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                        const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                        const monthKey = `${year}-${String(month).padStart(2, '0')}`
+                        const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
+                        
+                        return (
+                          <td key={month} className="px-3 py-2 whitespace-nowrap text-sm text-gray-900" data-amount="true">
+                            {editingMonth?.projectId === item.projectId && editingMonth?.month === monthKey ? (
+                              <div className="flex items-center space-x-1 no-print">
+                                <input
+                                  type="text"
+                                  value={amount}
+                                  data-month={monthKey}
+                                  data-project={item.projectId}
+                                  className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const value = e.currentTarget.value.replace(/[,\s]/g, '')
+                                      saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
+                                    }
+                                  }}
+                                  onChange={(e) => {
+                                    // カンマとスペースを除去
+                                    const value = e.target.value.replace(/[,\s]/g, '')
+                                    e.target.value = value
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const input = document.querySelector(`input[data-month="${monthKey}"][data-project="${item.projectId}"]`) as HTMLInputElement
+                                    if (input) {
+                                      const value = input.value.replace(/[,\s]/g, '')
+                                      const numValue = Number(value) || 0
+                                      console.log('保存する値:', { projectId: item.projectId, month: monthKey, amount: numValue })
+                                      saveMonthEdit(item.projectId, monthKey, numValue)
+                                    }
+                                  }}
+                                  className="text-green-600 hover:text-green-800"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={cancelMonthEdit}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                className="cursor-pointer hover:text-blue-600"
+                                onClick={() => startMonthEdit(item.projectId, monthKey)}
+                                title="分割請求を開始"
+                              >
+                                {amount > 0 ? formatCurrency(amount) : '-'}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })}
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-gray-900" data-amount="true">
+                        {formatCurrency(item.totalRevenue)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                        -
+                      </td>
+                    </tr>
+                  ))}
+                  {/* 合計行 */}
+                  <tr className="bg-gray-100 font-bold">
+                    <td className="sticky left-0 bg-gray-100 px-3 py-2 text-sm text-gray-900">合計</td>
+                    <td className="px-3 py-2 text-sm text-gray-900" colSpan={4}></td>
+                    <td className="px-3 py-2 text-sm text-gray-900">
+                      {formatCurrency(monthlyRevenue.reduce((sum, item) => sum + (item.contractAmount || 0), 0))}
+                    </td>
+                    {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                      const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                      const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                      const monthKey = `${year}-${String(month).padStart(2, '0')}`
+                      const total = monthlyRevenue.reduce((sum, item) => {
+                        const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
+                        return sum + amount
+                      }, 0)
+                      
+                                              return (
+                          <td key={month} className="px-3 py-2 text-sm text-gray-900" data-amount="true">
+                            {formatCurrency(total)}
+                          </td>
+                        )
+                    })}
+                    <td className="px-3 py-2 text-sm text-gray-900" data-amount="true">
+                      {formatCurrency(monthlyRevenue.reduce((sum, item) => sum + item.totalRevenue, 0))}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-900"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            )}
           </div>
         )}
       </div>
