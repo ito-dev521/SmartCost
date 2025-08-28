@@ -508,23 +508,32 @@ export default function AnalyticsDashboard() {
       if (process.env.NODE_ENV === 'development') {
         console.log('月末締め翌月末払い計算')
       }
-      // 完了月の翌月末を入金予定日とする
-      const targetYear = end.getMonth() === 11 ? end.getFullYear() + 1 : end.getFullYear()
-      const targetMonth = end.getMonth() === 11 ? 0 : end.getMonth() + 1
+      
+      // 支払い月オフセットを考慮して計算
+      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+      
+      // 完了月から支払い月オフセット分を加算
+      const targetYear = end.getFullYear()
+      const targetMonth = end.getMonth() + paymentMonthOffset
+      
+      // 年をまたぐ場合の処理
+      const finalYear = targetMonth >= 12 ? targetYear + Math.floor(targetMonth / 12) : targetYear
+      const finalMonth = targetMonth >= 12 ? targetMonth % 12 : targetMonth
       
       if (process.env.NODE_ENV === 'development') {
         console.log('計算過程:', {
           endMonth: end.getMonth(),
           endYear: end.getFullYear(),
-          targetYear,
+          paymentMonthOffset,
           targetMonth,
-          isDecember: end.getMonth() === 11
+          finalYear,
+          finalMonth
         })
       }
       
-      paymentDate.setFullYear(targetYear)
-      paymentDate.setMonth(targetMonth)
-      paymentDate.setDate(new Date(targetYear, targetMonth + 1, 0).getDate()) // その月の末日
+      paymentDate.setFullYear(finalYear)
+      paymentDate.setMonth(finalMonth)
+      paymentDate.setDate(new Date(finalYear, finalMonth + 1, 0).getDate()) // その月の末日
       
       if (process.env.NODE_ENV === 'development') {
         console.log('設定後の日付:', {
@@ -535,20 +544,20 @@ export default function AnalyticsDashboard() {
         })
       }
     } else if (client.payment_cycle_type === 'specific_date') {
-              // 特定日締めの場合
-        const closingDay = client.payment_cycle_closing_day || 25
-        const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
-        const paymentDay = client.payment_cycle_payment_day || 15
+      // 特定日締めの場合
+      const closingDay = client.payment_cycle_closing_day || 25
+      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+      const paymentDay = client.payment_cycle_payment_day || 15
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log('特定日締め計算:', {
-            closingDay,
-            paymentMonthOffset,
-            paymentDay,
-            endDay: end.getDate(),
-            isBeforeClosing: end.getDate() <= closingDay
-          })
-        }
+      if (process.env.NODE_ENV === 'development') {
+        console.log('特定日締め計算:', {
+          closingDay,
+          paymentMonthOffset,
+          paymentDay,
+          endDay: end.getDate(),
+          isBeforeClosing: end.getDate() <= closingDay
+        })
+      }
 
       if (end.getDate() <= closingDay) {
         // 締め日以前の場合は当月締め
@@ -716,8 +725,8 @@ export default function AnalyticsDashboard() {
     const fiscalYearStart = (fiscalInfo?.settlement_month || 3) + 1
     let yearlyTotal = 0
     for (let i = 0; i < 12; i++) {
-      const month = (fiscalYearStart + i) % 12 + 1
-      const year = month <= fiscalYearStart ? selectedYear + 1 : selectedYear
+      const month = (fiscalYearStart + i - 1) % 12 + 1
+      const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
       const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
       yearlyTotal += amount
@@ -861,8 +870,8 @@ export default function AnalyticsDashboard() {
     const fiscalYearStart = fiscalInfo ? fiscalInfo.settlement_month + 1 : 4
     const months: string[] = []
     for (let i = 0; i < 12; i++) {
-      const month = (fiscalYearStart + i) % 12 + 1
-      const year = month <= fiscalYearStart ? selectedYear + 1 : selectedYear
+      const month = (fiscalYearStart + i - 1) % 12 + 1
+      const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
       months.push(`${year}-${String(month).padStart(2, '0')}`)
     }
 
@@ -918,7 +927,8 @@ export default function AnalyticsDashboard() {
               <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 50px;">終了日</th>
               <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 70px;">契約金額</th>
               ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                const fiscalYearStart = fiscalInfo.settlement_month + 1
+                const month = (fiscalYearStart + i - 1) % 12 + 1
                 return `<th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 45px;">${month}月</th>`
               }).join('')}
               <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 70px;">年間合計</th>
@@ -939,8 +949,9 @@ export default function AnalyticsDashboard() {
                   return item.contractAmount ? formatCurrency(item.contractAmount) : ''
                 })()}</td>
                 ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                  const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
-                  const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                  const fiscalYearStart = fiscalInfo.settlement_month + 1
+                  const month = (fiscalYearStart + i - 1) % 12 + 1
+                  const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
                   const monthKey = `${year}-${String(month).padStart(2, '0')}`
                   const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
                   const project = projects.find(p => p.id === item.projectId)
@@ -972,18 +983,29 @@ export default function AnalyticsDashboard() {
             <tr style="background-color: #f3f4f6; font-weight: bold;">
               <td style="border: 1px solid #ddd; padding: 6px;">合計</td>
               <td colspan="4" style="border: 1px solid #ddd; padding: 6px;"></td>
-              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => sum + (item.contractAmount || 0), 0))}</td>
+              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => {
+                const project = projects.find(p => p.id === item.projectId)
+                if (project?.status === 'cancelled') return sum
+                return sum + (item.contractAmount || 0)
+              }, 0))}</td>
               ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
-                const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                const fiscalYearStart = fiscalInfo.settlement_month + 1
+                const month = (fiscalYearStart + i - 1) % 12 + 1
+                const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
                 const monthKey = `${year}-${String(month).padStart(2, '0')}`
                 const total = monthlyRevenue.reduce((sum, item) => {
+                  const project = projects.find(p => p.id === item.projectId)
+                  if (project?.status === 'cancelled') return sum
                   const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
                   return sum + amount
                 }, 0)
                 return `<td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(total)}</td>`
               }).join('')}
-              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => sum + item.totalRevenue, 0))}</td>
+              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => {
+                const project = projects.find(p => p.id === item.projectId)
+                if (project?.status === 'cancelled') return sum
+                return sum + item.totalRevenue
+              }, 0))}</td>
               <td style="border: 1px solid #ddd; padding: 6px;"></td>
             </tr>
           </tbody>
@@ -1577,8 +1599,9 @@ export default function AnalyticsDashboard() {
                       契約金額
                     </th>
                     {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                      const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
-                      const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                      const fiscalYearStart = fiscalInfo.settlement_month + 1
+                      const month = (fiscalYearStart + i - 1) % 12 + 1
+                      const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
                       return (
                         <th key={month} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[45px]">
                           {month}月
@@ -1615,8 +1638,9 @@ export default function AnalyticsDashboard() {
                         {isProjectCancelled(item.projectId) ? '-' : (item.contractAmount ? formatCurrency(item.contractAmount) : '')}
                       </td>
                       {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                        const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
-                        const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                        const fiscalYearStart = fiscalInfo.settlement_month + 1
+                        const month = (fiscalYearStart + i - 1) % 12 + 1
+                        const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
                         const monthKey = `${year}-${String(month).padStart(2, '0')}`
                         const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
                         
@@ -1722,25 +1746,36 @@ export default function AnalyticsDashboard() {
                     <td className="sticky left-0 bg-gray-100 px-3 py-2 text-sm text-gray-900">合計</td>
                     <td className="px-3 py-2 text-sm text-gray-900" colSpan={4}></td>
                     <td className="px-3 py-2 text-sm text-gray-900">
-                      {formatCurrency(monthlyRevenue.reduce((sum, item) => sum + (item.contractAmount || 0), 0))}
+                      {formatCurrency(monthlyRevenue.reduce((sum, item) => {
+                        // 中止プロジェクトは除外
+                        if (isProjectCancelled(item.projectId)) return sum
+                        return sum + (item.contractAmount || 0)
+                      }, 0))}
                     </td>
                     {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
-                      const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
-                      const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                      const fiscalYearStart = fiscalInfo.settlement_month + 1
+                      const month = (fiscalYearStart + i - 1) % 12 + 1
+                      const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
                       const monthKey = `${year}-${String(month).padStart(2, '0')}`
                       const total = monthlyRevenue.reduce((sum, item) => {
+                        // 中止プロジェクトは除外
+                        if (isProjectCancelled(item.projectId)) return sum
                         const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
                         return sum + amount
                       }, 0)
                       
-                                              return (
+                      return (
                           <td key={month} className="px-3 py-2 text-sm text-gray-900" data-amount="true">
                             {formatCurrency(total)}
                           </td>
                         )
                     })}
                     <td className="px-3 py-2 text-sm text-gray-900" data-amount="true">
-                      {formatCurrency(monthlyRevenue.reduce((sum, item) => sum + item.totalRevenue, 0))}
+                      {formatCurrency(monthlyRevenue.reduce((sum, item) => {
+                        // 中止プロジェクトは除外
+                        if (isProjectCancelled(item.projectId)) return sum
+                        return sum + item.totalRevenue
+                      }, 0))}
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-900"></td>
                   </tr>

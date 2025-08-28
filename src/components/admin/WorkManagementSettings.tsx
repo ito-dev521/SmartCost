@@ -25,13 +25,11 @@ export default function WorkManagementSettings() {
 
   const fetchSetting = async () => {
     try {
-      // まず現在のユーザーを確認
+      console.log('工数管理設定: 設定取得開始...')
+      
+      // 現在のユーザーを確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (process.env.NODE_ENV === 'development') {
-        console.log('現在のユーザー:', user)
-        console.log('ユーザーエラー:', userError)
-      }
-
+      
       if (userError || !user) {
         console.error('ユーザー認証エラー:', userError)
         setMessage({ type: 'error', text: 'ユーザーが認証されていません。再度ログインしてください。' })
@@ -39,82 +37,66 @@ export default function WorkManagementSettings() {
         return
       }
 
-      // 設定を取得（スーパー管理者権限の確認はポリシーで自動的に行われる）
-      if (process.env.NODE_ENV === 'development') {
-        console.log('設定取得開始...')
-      }
+      // 設定を取得
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')
         .eq('setting_key', 'work_management_type')
         .limit(1)
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Supabaseレスポンス:', { data, error })
-      }
-
       if (error) {
         console.error('設定取得エラー:', error)
-        console.error('エラーコード:', error.code)
-        console.error('エラーメッセージ:', error.message)
-
-        // RLSポリシーによるアクセス拒否の場合
-        if (error.code === 'PGRST116' || error.message?.includes('permission')) {
-          setMessage({
-            type: 'error',
-            text: 'スーパー管理者権限が必要です。この機能を使用するにはスーパー管理者権限が必要です。'
-          })
-        } else {
-          setMessage({ type: 'error', text: '設定の取得に失敗しました' })
-        }
+        setMessage({ type: 'error', text: '設定の取得に失敗しました' })
         setIsLoading(false)
         return
       }
 
-      // データが空の場合
+      // データが存在しない場合はデフォルト設定を作成
       if (!data || data.length === 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('設定データが見つからないため、エラーメッセージを表示')
+        console.log('設定データが存在しないため、デフォルト設定を作成')
+        const { data: newSetting, error: createError } = await supabase
+          .from('admin_settings')
+          .insert([{
+            setting_key: 'work_management_type',
+            setting_value: 'hours', // デフォルトは工数管理
+            description: '作業時間の管理方法（hours: 工数管理, time: 時間管理）'
+          }])
+          .select()
+          .single()
+
+        if (createError) {
+          console.error('デフォルト設定作成エラー:', createError)
+          setMessage({ type: 'error', text: 'デフォルト設定の作成に失敗しました' })
+          setIsLoading(false)
+          return
         }
-        setSetting(null) // 明示的にnullに設定
-        setMessage({
-          type: 'error',
-          text: '設定データが見つからないため、デフォルト設定を使用します。'
-        })
-        setIsLoading(false)
-        return
+
+        setSetting(newSetting)
+        setMessage({ type: 'success', text: 'デフォルト設定を作成しました' })
+      } else {
+        setSetting(data[0])
+        setMessage(null)
       }
 
-      // 最初のレコードを使用
-      const settingData = data[0]
-      if (process.env.NODE_ENV === 'development') {
-        console.log('設定取得成功:', settingData)
-      }
-      setSetting(settingData)
-      setMessage(null) // エラーが解決されたらメッセージをクリア
+      setIsLoading(false)
     } catch (error) {
-      console.error('設定取得例外:', error)
+      console.error('工数管理設定: エラー', error)
       setMessage({ type: 'error', text: '設定の取得に失敗しました' })
-    } finally {
       setIsLoading(false)
     }
   }
 
-  const saveSetting = async () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('saveSetting開始 - 現在のsetting状態:', setting)
+  const handleSettingChange = (value: string) => {
+    console.log('工数管理設定: 設定変更', value)
+    if (setting) {
+      setSetting({ ...setting, setting_value: value })
+      setMessage(null) // エラーメッセージをクリア
     }
-    
-    if (!setting) {
-      console.error('設定がnullです')
-      setMessage({ type: 'error', text: '設定が読み込まれていません。ページを再読み込みしてください。' })
-      return
-    }
+  }
 
-    // IDが有効なUUIDかチェック
-    if (!setting.id || setting.id === 'default' || typeof setting.id !== 'string' || setting.id.length < 30) {
-      console.error('無効な設定ID:', setting.id)
-      setMessage({ type: 'error', text: '設定IDが無効です。ページを再読み込みしてください。' })
+  const saveSetting = async () => {
+    if (!setting) {
+      setMessage({ type: 'error', text: '設定が読み込まれていません' })
       return
     }
 
@@ -122,193 +104,70 @@ export default function WorkManagementSettings() {
     setMessage(null)
 
     try {
-      // 現在のユーザーを再度確認
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      console.log('工数管理設定: 保存開始', setting)
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('現在のユーザー情報:', {
-          user: user ? { id: user.id, email: user.email } : null,
-          userError
-        })
-      }
-
-      if (userError || !user) {
-        setMessage({ type: 'error', text: 'ユーザーが認証されていません。再度ログインしてください。' })
-        return
-      }
-
-      // 設定の保存（既存レコードを更新）
-      if (process.env.NODE_ENV === 'development') {
-        console.log('設定保存開始:', {
-          setting,
-          settingId: setting.id,
-        newValue: setting.setting_value
-      })
-
-      // まず現在のデータを確認
-      if (process.env.NODE_ENV === 'development') {
-        console.log('現在のデータを確認...')
-      }
-      const { data: currentData, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from('admin_settings')
-        .select('*')
-        .eq('id', setting.id)
-        .single()
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('現在のデータ確認結果:', {
-          currentData,
-          fetchError
-      })
-
-      // 既存設定の場合、更新
-      if (process.env.NODE_ENV === 'development') {
-        console.log('既存設定更新開始...', setting.id)
-      }
-      const updateData = {
-        setting_value: setting.setting_value,
-        updated_at: new Date().toISOString()
-      }
-      if (process.env.NODE_ENV === 'development') {
-        console.log('更新データ:', updateData)
-      }
-
-      const result = await supabase
-        .from('admin_settings')
-        .update(updateData)
-        .eq('id', setting.id)
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Supabase update result:', {
-          data: result.data,
-          error: result.error,
-          status: result.status,
-          statusText: result.statusText
+        .update({
+          setting_value: setting.setting_value,
+          updated_at: new Date().toISOString()
         })
-      }
-
-      const { error } = result
+        .eq('id', setting.id)
+        .select()
 
       if (error) {
         console.error('設定保存エラー:', error)
-        console.error('エラーコード:', error.code)
-        console.error('エラーメッセージ:', error.message)
-
-        // RLSポリシーによるアクセス拒否の場合
-        if (error.code === 'PGRST116' || error.message?.includes('permission')) {
-          setMessage({
-            type: 'error',
-            text: 'スーパー管理者権限が必要です。この機能を使用するにはスーパー管理者権限が必要です。'
-          })
-        } else {
-          setMessage({ type: 'error', text: '設定の保存に失敗しました' })
-        }
+        setMessage({ type: 'error', text: '設定の保存に失敗しました' })
         return
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('設定保存成功:', result.data)
-      }
-
-      // 保存成功後、ローカルの状態を更新
-      setSetting({
-        ...setting,
-        setting_value: setting.setting_value,
-        updated_at: new Date().toISOString()
-      })
-
-      setMessage({ type: 'success', text: '設定が保存されました' })
+      console.log('工数管理設定: 保存成功', data)
+      setSetting(data[0])
+      setMessage({ type: 'success', text: '設定を保存しました' })
     } catch (error) {
-      console.error('設定保存例外:', error)
+      console.error('工数管理設定: 保存エラー', error)
       setMessage({ type: 'error', text: '設定の保存に失敗しました' })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleSettingChange = (value: string) => {
-    if (setting) {
-      setSetting({ ...setting, setting_value: value })
-    }
-  }
-
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    )
-  }
-
-  // 設定が読み込まれていない場合
-  if (!setting) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Settings className="h-6 w-6 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">工数管理設定</h2>
-        </div>
-        
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
+      <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="p-6">
+          <div className="flex items-center">
             <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-red-400" />
+              <Settings className="h-6 w-6 text-gray-400" />
             </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                設定の読み込みに失敗しました
-              </h3>
-              <p className="mt-2 text-sm text-red-700">
-                設定データが読み込まれていません。ページを再読み込みするか、管理者に連絡してください。
-              </p>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">工数管理設定</h3>
+              <p className="text-sm text-gray-500">読み込み中...</p>
             </div>
           </div>
         </div>
-
-        {/* メッセージ表示 */}
-        {message && (
-          <div className={`rounded-md p-4 mt-4 ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200'
-              : 'bg-red-50 border border-red-200'
-          }`}>
-            <div className="flex">
-              <div className="flex-shrink-0">
-                {message.type === 'success' ? (
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                )}
-              </div>
-              <div className="ml-3">
-                <p className={`text-sm font-medium ${
-                  message.type === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
-                  {message.text}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Settings className="h-6 w-6 text-blue-600" />
-        <h2 className="text-xl font-semibold text-gray-900">工数管理設定</h2>
-      </div>
+    <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <Settings className="h-6 w-6 text-gray-400" />
+          </div>
+          <div className="ml-4">
+            <h3 className="text-lg font-medium text-gray-900">工数管理設定</h3>
+            <p className="text-sm text-gray-500">
+              作業時間の管理方法を設定します
+            </p>
+          </div>
+        </div>
 
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            工数管理タイプ
-          </label>
-          <div className="space-y-3">
+        <div className="mt-6 space-y-4">
+          {/* 設定オプション */}
+          <div className="space-y-4">
             <div className="flex items-center">
               <input
                 type="radio"
@@ -345,70 +204,70 @@ export default function WorkManagementSettings() {
               </label>
             </div>
           </div>
-        </div>
 
-        {/* 現在の設定の説明 */}
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-blue-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">
-                現在の設定: {setting?.setting_value === 'hours' ? '工数管理' : '時間管理'}
-              </h3>
-              <div className="mt-2 text-sm text-blue-700">
-                {setting?.setting_value === 'hours' ? (
-                  <p>
-                    作業日報では1.0人工の固定工数を入力します。プロジェクト毎の工数集計が行われます。
-                  </p>
-                ) : (
-                  <p>
-                    作業日報では実際の労働時間を入力します。給与総額を総時間で割った時給単価を計算し、
-                    各プロジェクトの人件費を算出します。
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* メッセージ表示 */}
-        {message && (
-          <div className={`rounded-md p-4 ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200'
-              : 'bg-red-50 border border-red-200'
-          }`}>
+          {/* 現在の設定の説明 */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
-                {message.type === 'success' ? (
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                )}
+                <AlertCircle className="h-5 w-5 text-blue-400" />
               </div>
               <div className="ml-3">
-                <p className={`text-sm font-medium ${
-                  message.type === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
-                  {message.text}
-                </p>
+                <h3 className="text-sm font-medium text-blue-800">
+                  現在の設定: {setting?.setting_value === 'hours' ? '工数管理' : '時間管理'}
+                </h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  {setting?.setting_value === 'hours' ? (
+                    <p>
+                      作業日報では1.0人工の固定工数を入力します。プロジェクト毎の工数集計が行われます。
+                    </p>
+                  ) : (
+                    <p>
+                      作業日報では実際の労働時間を入力します。給与総額を総時間で割った時給単価を計算し、
+                      各プロジェクトの人件費を算出します。
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* 保存ボタン */}
-        <div className="flex justify-end">
-          <button
-            onClick={saveSetting}
-            disabled={isSaving || !setting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? '保存中...' : '設定を保存'}
-          </button>
+          {/* メッセージ表示 */}
+          {message && (
+            <div className={`rounded-md p-4 ${
+              message.type === 'success'
+                ? 'bg-green-50 border border-green-200'
+                : 'bg-red-50 border border-red-200'
+            }`}>
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  {message.type === 'success' ? (
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  )}
+                </div>
+                <div className="ml-3">
+                  <p className={`text-sm font-medium ${
+                    message.type === 'success' ? 'text-green-800' : 'text-red-800'
+                  }`}>
+                    {message.text}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 保存ボタン */}
+          <div className="flex justify-end">
+            <button
+              onClick={saveSetting}
+              disabled={isSaving || !setting}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="h-4 w-4" />
+              {isSaving ? '保存中...' : '設定を保存'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
