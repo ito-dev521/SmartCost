@@ -221,10 +221,11 @@ export default function AnalyticsDashboard() {
   const [costEntries, setCostEntries] = useState<CostEntry[]>([])
   const [categories, setCategories] = useState<BudgetCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingSplitBilling, setLoadingSplitBilling] = useState(false)
   const [selectedDateRange, setSelectedDateRange] = useState('month')
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'total-performance', 'annual-revenue']))
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'total-performance']))
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [clients, setClients] = useState<Client[]>([])
   const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
@@ -233,12 +234,32 @@ export default function AnalyticsDashboard() {
   const [editingSplitBilling, setEditingSplitBilling] = useState<string | null>(null)
   const [editingMonth, setEditingMonth] = useState<{projectId: string, month: string} | null>(null)
   const [editValues, setEditValues] = useState<{[key: string]: string}>({})
+  const [splitBillingLoaded, setSplitBillingLoaded] = useState(false)
 
   const supabase = createClientComponentClient()
 
   useEffect(() => {
+    checkAuth()
+  }, [])
+
+  useEffect(() => {
     fetchData()
   }, [])
+
+  // 認証状況を確認
+  const checkAuth = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      if (process.env.NODE_ENV === 'development') {
+        console.log('認証状況:', { user: !!user, error, userId: user?.id })
+      }
+      if (error) {
+        console.error('認証エラー:', error)
+      }
+    } catch (error) {
+      console.error('認証チェックエラー:', error)
+    }
+  }
 
   // プロジェクト、クライアント、決算情報が取得された後に月次収益を計算
   useEffect(() => {
@@ -608,8 +629,16 @@ export default function AnalyticsDashboard() {
         })
       }
 
-      if (project.name.includes('CADDON')) {
-        // CADDONプロジェクトの場合
+      if (project.business_number?.startsWith('C') || project.name.includes('CADDON')) {
+        // CADDONプロジェクトの場合（業務番号がCで始まる場合、またはプロジェクト名にCADDONが含まれる場合）
+        if (process.env.NODE_ENV === 'development') {
+          console.log('CADDONプロジェクト処理:', {
+            businessNumber: project.business_number,
+            projectName: project.name,
+            isBusinessNumberC: project.business_number?.startsWith('C'),
+            isNameContainsCADDON: project.name.includes('CADDON')
+          })
+        }
         const projectBillings = caddonBillings.filter(billing => billing.project_id === project.id)
         projectBillings.forEach(billing => {
           const month = billing.billing_month
@@ -649,10 +678,10 @@ export default function AnalyticsDashboard() {
       monthlyData.push({
         projectId: project.id,
         projectName: project.name,
-        clientName: project.name.includes('CADDON') ? '-' : (project.client_name || ''),
+        clientName: (project.business_number?.startsWith('C') || project.name.includes('CADDON')) ? '-' : (project.client_name || ''),
         businessNumber: project.business_number,
-        startDate: project.start_date,
-        endDate: project.end_date,
+        startDate: (project.business_number?.startsWith('C') || project.name.includes('CADDON')) ? null : project.start_date,
+        endDate: (project.business_number?.startsWith('C') || project.name.includes('CADDON')) ? null : project.end_date,
         contractAmount: project.contract_amount,
         monthlyAmounts,
         totalRevenue,
@@ -693,7 +722,7 @@ export default function AnalyticsDashboard() {
   }
 
   // 月次編集を保存
-  const saveMonthEdit = (projectId: string, month: string, amount: number) => {
+  const saveMonthEdit = async (projectId: string, month: string, amount: number) => {
     console.log('saveMonthEdit呼び出し:', { projectId, month, amount })
     
     setMonthlyRevenue(prev => {
@@ -728,6 +757,60 @@ export default function AnalyticsDashboard() {
       console.log('更新後のmonthlyRevenue:', updated)
       return updated
     })
+    
+    // 分割入金データをAPIに保存
+    try {
+      const currentItem = monthlyRevenue.find(item => item.projectId === projectId)
+      if (currentItem) {
+        const newSplitBillingAmounts = { ...currentItem.splitBillingAmounts, [month]: amount }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('APIリクエスト送信:', {
+            url: '/api/split-billing',
+            method: 'POST',
+            projectId,
+            monthlyData: newSplitBillingAmounts
+          })
+        }
+        
+        // セッショントークンを取得
+        const { data: { session } } = await supabase.auth.getSession()
+        const accessToken = session?.access_token
+        
+        if (!accessToken) {
+          throw new Error('認証トークンが取得できません')
+        }
+        
+        const response = await fetch('/api/split-billing', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            projectId,
+            monthlyData: newSplitBillingAmounts
+          })
+        })
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('APIレスポンスエラー:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorText
+          })
+          throw new Error(`分割入金データの保存に失敗しました (${response.status}: ${response.statusText})`)
+        }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('分割入金データ保存成功:', { projectId, month, amount })
+        }
+      }
+    } catch (error) {
+      console.error('分割入金データ保存エラー:', error)
+      alert('分割入金データの保存に失敗しました')
+    }
     
     setEditingMonth(null)
     // 編集値をクリア
@@ -813,7 +896,7 @@ export default function AnalyticsDashboard() {
       .map(([month, total]) => ({ month, total }))
   }
 
-  const toggleSection = (section: string) => {
+  const toggleSection = async (section: string) => {
     const newExpanded = new Set(expandedSections)
     if (newExpanded.has(section)) {
       newExpanded.delete(section)
@@ -821,6 +904,64 @@ export default function AnalyticsDashboard() {
       newExpanded.add(section)
     }
     setExpandedSections(newExpanded)
+    
+    // 年間入金予定表が初めて開かれた時に分割入金データを読み込み
+    if (section === 'annual-revenue' && newExpanded.has(section) && !splitBillingLoaded && monthlyRevenue.length > 0) {
+      setSplitBillingLoaded(true)
+      await loadSplitBillingDataOnDemand()
+    }
+  }
+
+  // オンデマンドで分割入金データを読み込み
+  const loadSplitBillingDataOnDemand = async () => {
+    setLoadingSplitBilling(true)
+    try {
+      // セッショントークンを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+      
+      if (!accessToken) {
+        console.warn('認証トークンが取得できません。分割入金データの読み込みをスキップします。')
+        return
+      }
+      
+      // 全プロジェクトの分割入金データを一括取得
+      const response = await fetch('/api/split-billing?allProjects=true', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      })
+      
+      if (response.ok) {
+        const { projectData } = await response.json()
+        
+        // 各プロジェクトに分割入金データを設定
+        setMonthlyRevenue(prev => prev.map(item => {
+          if (projectData[item.projectId]) {
+            const splitBillingAmounts = projectData[item.projectId]
+            const total = Object.values(splitBillingAmounts).reduce((sum: number, val: any) => sum + val, 0)
+            
+            return {
+              ...item,
+              splitBillingAmounts,
+              isSplitBilling: true,
+              totalRevenue: total
+            }
+          }
+          return item
+        }))
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('分割入金データオンデマンド読み込み完了')
+        }
+      } else {
+        console.warn('分割入金データの一括取得に失敗しました。')
+      }
+    } catch (error) {
+      console.error('分割入金データオンデマンド読み込みエラー:', error)
+    } finally {
+      setLoadingSplitBilling(false)
+    }
   }
 
   const formatCurrency = (amount: number) => {
@@ -1236,6 +1377,13 @@ export default function AnalyticsDashboard() {
                   データを再取得
                 </button>
               </div>
+            ) : loadingSplitBilling ? (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <p className="text-gray-500">分割入金データを読み込み中...</p>
+                </div>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 annual-revenue-table">
@@ -1289,10 +1437,10 @@ export default function AnalyticsDashboard() {
                         {item.clientName}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
-                        {item.startDate ? new Date(item.startDate).toLocaleDateString('ja-JP') : ''}
+                        {item.startDate ? new Date(item.startDate).toLocaleDateString('ja-JP') : '-'}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
-                        {item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : ''}
+                        {item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : '-'}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-green-600" data-amount="true">
                         {item.contractAmount ? formatCurrency(item.contractAmount) : ''}
@@ -1353,9 +1501,9 @@ export default function AnalyticsDashboard() {
                               </div>
                             ) : (
                               <span
-                                className="cursor-pointer hover:text-blue-600"
-                                onClick={() => startMonthEdit(item.projectId, monthKey)}
-                                title="分割請求を開始"
+                                className={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? '' : 'cursor-pointer hover:text-blue-600'}
+                                onClick={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? undefined : () => startMonthEdit(item.projectId, monthKey)}
+                                title={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? 'CADDONシステムのため編集できません' : '分割請求を開始'}
                               >
                                 {amount > 0 ? formatCurrency(amount) : '-'}
                               </span>
@@ -1364,7 +1512,10 @@ export default function AnalyticsDashboard() {
                         )
                       })}
                       <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-gray-900" data-amount="true">
-                        <span className={calculateYearlyTotal(item) !== (item.contractAmount || 0) ? 'text-red-600' : ''}>
+                        <span className={
+                          (item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? 'text-black' : 
+                          (calculateYearlyTotal(item) !== (item.contractAmount || 0) ? 'text-red-600' : '')
+                        }>
                           {formatCurrency(calculateYearlyTotal(item))}
                         </span>
                       </td>
