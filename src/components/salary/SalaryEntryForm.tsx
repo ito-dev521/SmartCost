@@ -9,6 +9,7 @@ interface Project {
   id: string
   name: string
   status: string
+  business_number?: string
   created_at: string
   updated_at: string
 }
@@ -59,12 +60,14 @@ export default function SalaryEntryForm({
   initialCategories
 }: SalaryEntryFormProps) {
   // デバッグ用ログ
-  console.log('SalaryEntryForm - 受け取ったprops:', {
-    initialUsers,
+  if (process.env.NODE_ENV === 'development') {
+    console.log('SalaryEntryForm - 受け取ったprops:', {
+      initialUsers,
     initialDepartments,
     initialProjects,
     initialCategories
   })
+  }
 
   const [users] = useState<User[]>(initialUsers)
   const [departments] = useState<Department[]>(initialDepartments)
@@ -95,19 +98,21 @@ export default function SalaryEntryForm({
     const end = `${endYear}-${endMonth}-${endDay}`
     
     // デバッグ用ログ
-    console.log('期間計算:', {
-      yearMonth,
-      year,
-      month,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      startDateLocal: startDate.toLocaleDateString('ja-JP'),
-      endDateLocal: endDate.toLocaleDateString('ja-JP'),
-      startDay: startDate.getDate(),
-      endDay: endDate.getDate(),
-      calculatedStart: start,
-      calculatedEnd: end
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.log('期間計算:', {
+        yearMonth,
+        year,
+        month,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        startDateLocal: startDate.toLocaleDateString('ja-JP'),
+        endDateLocal: endDate.toLocaleDateString('ja-JP'),
+        startDay: startDate.getDate(),
+        endDay: endDate.getDate(),
+        calculatedStart: start,
+        calculatedEnd: end
+      })
+    }
     
     return { start, end }
   }
@@ -177,7 +182,9 @@ export default function SalaryEntryForm({
       }
 
       setSalaryEntries(data || [])
-      console.log('給与データ取得完了:', data)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('給与データ取得完了:', data)
+      }
     } catch (error) {
       console.error('給与データ取得エラー:', error)
     } finally {
@@ -268,11 +275,13 @@ export default function SalaryEntryForm({
 
     setCalculating(true)
     try {
-      console.log('計算開始:', {
-        employee: salaryForm.employee_name,
-        period: selectedPeriod,
-        workManagementType
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('計算開始:', {
+          employee: salaryForm.employee_name,
+          period: selectedPeriod,
+          workManagementType
+        })
+      }
 
       // 指定期間の作業日報データを取得
       let dailyReports: any[] = []
@@ -289,16 +298,20 @@ export default function SalaryEntryForm({
         dailyReports = result.data || []
         error = result.error
 
-        console.log('daily_reports取得結果:', {
-          count: dailyReports.length,
-          sampleData: dailyReports[0],
-          error: error?.message
-        })
+        if (process.env.NODE_ENV === 'development') {
+          console.log('daily_reports取得結果:', {
+            count: dailyReports.length,
+            sampleData: dailyReports[0],
+            error: error?.message
+          })
+        }
 
         // プロジェクト情報を個別に取得
         if (dailyReports.length > 0) {
           const projectIds = [...new Set(dailyReports.map(report => report.project_id).filter(Boolean))]
-          console.log('取得するプロジェクトID:', projectIds)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('取得するプロジェクトID:', projectIds)
+          }
 
           const { data: projectData, error: projectError } = await supabase
             .from('projects')
@@ -463,13 +476,16 @@ export default function SalaryEntryForm({
 
     } catch (error) {
       console.error('プロジェクト配分計算エラー:', error)
-      console.error('エラーの詳細:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      })
-      alert(`プロジェクト配分の計算に失敗しました: ${error.message}`)
+      if (error instanceof Error) {
+        console.error('エラーの詳細:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+        alert(`プロジェクト配分の計算に失敗しました: ${error.message}`)
+      } else {
+        alert('プロジェクト配分の計算に失敗しました')
+      }
     } finally {
       setCalculating(false)
     }

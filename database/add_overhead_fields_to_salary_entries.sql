@@ -18,3 +18,4 @@ COMMENT ON COLUMN salary_entries.overhead_hours IS '一般管理費として計�
 COMMENT ON COLUMN salary_entries.overhead_labor_cost IS '一般管理費として計上される人件費';
 
 
+

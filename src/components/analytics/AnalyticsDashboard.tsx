@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { 
   BarChart3, 
@@ -232,12 +232,25 @@ export default function AnalyticsDashboard() {
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [editingSplitBilling, setEditingSplitBilling] = useState<string | null>(null)
   const [editingMonth, setEditingMonth] = useState<{projectId: string, month: string} | null>(null)
+  const [editValues, setEditValues] = useState<{[key: string]: string}>({})
 
   const supabase = createClientComponentClient()
 
   useEffect(() => {
     fetchData()
   }, [])
+
+  // プロジェクト、クライアント、決算情報が取得された後に月次収益を計算
+  useEffect(() => {
+    if (projects.length > 0 && fiscalInfo) {
+      console.log('データが揃ったため月次収益を計算します:', {
+        projects: projects.length,
+        clients: clients.length,
+        fiscalInfo
+      })
+      calculateMonthlyRevenue()
+    }
+  }, [projects, clients, fiscalInfo])
 
   const fetchData = async () => {
     try {
@@ -280,8 +293,10 @@ export default function AnalyticsDashboard() {
         .order('fiscal_year', { ascending: false })
         .limit(1)
 
-      // 決算情報が取得できない場合はデフォルト値を設定
-      if (!fiscalInfoData || fiscalInfoData.length === 0) {
+      // 決算情報を設定
+      if (fiscalInfoData && fiscalInfoData.length > 0) {
+        setFiscalInfo(fiscalInfoData[0])
+      } else {
         console.log('決算情報が取得できません。デフォルト値（3月決算）を使用します。')
         const defaultFiscalInfo: FiscalInfo = {
           id: 'default',
@@ -309,18 +324,6 @@ export default function AnalyticsDashboard() {
       if (clientsData) setClients(clientsData)
       if (caddonBillingsData) setCaddonBillings(caddonBillingsData)
       if (fiscalInfoData && fiscalInfoData.length > 0) setFiscalInfo(fiscalInfoData[0])
-
-      // 月次収益を計算
-      if (fiscalInfoData && fiscalInfoData.length > 0) {
-        console.log('決算情報:', fiscalInfoData[0])
-        setFiscalInfo(fiscalInfoData[0])
-        // 少し遅延させてから計算を実行
-        setTimeout(() => calculateMonthlyRevenue(), 100)
-      } else {
-        console.log('決算情報が取得できませんでした。デフォルト値で計算を実行します。')
-        // デフォルト値が設定された後に計算を実行
-        setTimeout(() => calculateMonthlyRevenue(), 100)
-      }
     } catch (error) {
       console.error('データ取得エラー:', error)
     } finally {
@@ -458,39 +461,99 @@ export default function AnalyticsDashboard() {
 
   // 入金予定日を計算
   const calculatePaymentDate = (endDate: string, client: Client): Date => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('calculatePaymentDate開始:', {
+        endDate,
+        clientName: client.name,
+        payment_cycle_type: client.payment_cycle_type,
+        payment_cycle_closing_day: client.payment_cycle_closing_day,
+        payment_cycle_payment_month_offset: client.payment_cycle_payment_month_offset,
+        payment_cycle_payment_day: client.payment_cycle_payment_day
+      })
+    }
+
     if (!endDate || !client.payment_cycle_type) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('デフォルト計算（入金サイクルなし）')
+      }
       return new Date(endDate || new Date())
     }
 
     const end = new Date(endDate)
-    let paymentDate = new Date(end)
+    let paymentDate = new Date()
 
     if (client.payment_cycle_type === 'month_end') {
-      // 月末締めの場合
-      paymentDate.setMonth(paymentDate.getMonth() + 1)
-      paymentDate.setDate(0) // 月末
+      // 月末締め翌月末払いの場合
+      if (process.env.NODE_ENV === 'development') {
+        console.log('月末締め翌月末払い計算')
+      }
+      // 完了月の翌月末を入金予定日とする
+      const targetYear = end.getMonth() === 11 ? end.getFullYear() + 1 : end.getFullYear()
+      const targetMonth = end.getMonth() === 11 ? 0 : end.getMonth() + 1
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('計算過程:', {
+          endMonth: end.getMonth(),
+          endYear: end.getFullYear(),
+          targetYear,
+          targetMonth,
+          isDecember: end.getMonth() === 11
+        })
+      }
+      
+      paymentDate.setFullYear(targetYear)
+      paymentDate.setMonth(targetMonth)
+      paymentDate.setDate(new Date(targetYear, targetMonth + 1, 0).getDate()) // その月の末日
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('設定後の日付:', {
+          year: paymentDate.getFullYear(),
+          month: paymentDate.getMonth(),
+          date: paymentDate.getDate(),
+          fullDate: paymentDate.toISOString()
+        })
+      }
     } else if (client.payment_cycle_type === 'specific_date') {
-      // 特定日締めの場合
-      const closingDay = client.payment_cycle_closing_day || 25
-      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
-      const paymentDay = client.payment_cycle_payment_day || 15
+              // 特定日締めの場合
+        const closingDay = client.payment_cycle_closing_day || 25
+        const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+        const paymentDay = client.payment_cycle_payment_day || 15
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('特定日締め計算:', {
+            closingDay,
+            paymentMonthOffset,
+            paymentDay,
+            endDay: end.getDate(),
+            isBeforeClosing: end.getDate() <= closingDay
+          })
+        }
 
       if (end.getDate() <= closingDay) {
         // 締め日以前の場合は当月締め
-        paymentDate.setMonth(paymentDate.getMonth() + paymentMonthOffset)
+        paymentDate.setFullYear(end.getFullYear())
+        paymentDate.setMonth(end.getMonth() + paymentMonthOffset)
         paymentDate.setDate(paymentDay)
       } else {
         // 締め日以降の場合は翌月締め
-        paymentDate.setMonth(paymentDate.getMonth() + paymentMonthOffset + 1)
+        paymentDate.setFullYear(end.getFullYear())
+        paymentDate.setMonth(end.getMonth() + paymentMonthOffset + 1)
         paymentDate.setDate(paymentDay)
       }
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('計算結果:', {
+        originalDate: end.toISOString(),
+        calculatedDate: paymentDate.toISOString()
+      })
     }
 
     return paymentDate
   }
 
   // 月次収益を計算
-  const calculateMonthlyRevenue = () => {
+  const calculateMonthlyRevenue = useCallback(() => {
     console.log('calculateMonthlyRevenue開始:', {
       fiscalInfo,
       projectsCount: projects.length,
@@ -498,12 +561,17 @@ export default function AnalyticsDashboard() {
       caddonBillingsCount: caddonBillings.length
     })
 
-    if (!fiscalInfo) {
-      console.log('決算情報がありません')
-      return
+    // 決算情報がない場合はデフォルト値を使用
+    const currentFiscalInfo = fiscalInfo || {
+      id: 'default',
+      fiscal_year: new Date().getFullYear(),
+      settlement_month: 3,
+      current_period: 1,
+      bank_balance: 0,
+      notes: 'デフォルト設定'
     }
 
-    const fiscalYearStart = fiscalInfo.settlement_month + 1
+    const fiscalYearStart = currentFiscalInfo.settlement_month + 1
     console.log('年度開始月:', fiscalYearStart)
     const monthlyData: MonthlyRevenue[] = []
 
@@ -524,6 +592,22 @@ export default function AnalyticsDashboard() {
       const monthlyAmounts: { [month: string]: number } = {}
       let totalRevenue = 0
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('プロジェクト処理:', {
+          businessNumber: project.business_number,
+          projectName: project.name,
+          clientName: project.client_name,
+          clientFound: !!client,
+          endDate: project.end_date,
+          clientData: client ? {
+            payment_cycle_type: client.payment_cycle_type,
+            payment_cycle_closing_day: client.payment_cycle_closing_day,
+            payment_cycle_payment_month_offset: client.payment_cycle_payment_month_offset,
+            payment_cycle_payment_day: client.payment_cycle_payment_day
+          } : null
+        })
+      }
+
       if (project.name.includes('CADDON')) {
         // CADDONプロジェクトの場合
         const projectBillings = caddonBillings.filter(billing => billing.project_id === project.id)
@@ -537,8 +621,28 @@ export default function AnalyticsDashboard() {
         if (project.end_date && project.contract_amount && client) {
           const paymentDate = calculatePaymentDate(project.end_date, client)
           const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log('入金予定日計算:', {
+              projectName: project.name,
+              endDate: project.end_date,
+              paymentDate: paymentDate.toISOString(),
+              monthKey,
+              contractAmount: project.contract_amount
+            })
+          }
+          
           monthlyAmounts[monthKey] = project.contract_amount
           totalRevenue = project.contract_amount
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('プロジェクトスキップ:', {
+              projectName: project.name,
+              endDate: project.end_date,
+              contractAmount: project.contract_amount,
+              hasClient: !!client
+            })
+          }
         }
       }
 
@@ -559,10 +663,32 @@ export default function AnalyticsDashboard() {
 
     console.log('生成された月次データ:', monthlyData)
     setMonthlyRevenue(monthlyData)
+  }, [fiscalInfo, projects, clients, caddonBillings, selectedYear])
+
+  // 年間合計を計算
+  const calculateYearlyTotal = (item: MonthlyRevenue) => {
+    const fiscalYearStart = (fiscalInfo?.settlement_month || 3) + 1
+    let yearlyTotal = 0
+    for (let i = 0; i < 12; i++) {
+      const month = (fiscalYearStart + i) % 12 + 1
+      const year = month <= fiscalYearStart ? selectedYear + 1 : selectedYear
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`
+      const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
+      yearlyTotal += amount
+    }
+    return yearlyTotal
   }
 
   // 月次編集を開始
   const startMonthEdit = (projectId: string, month: string) => {
+    // 現在の値を取得して編集値として設定
+    const currentItem = monthlyRevenue.find(item => item.projectId === projectId)
+    const currentAmount = currentItem ? (currentItem.splitBillingAmounts[month] || currentItem.monthlyAmounts[month] || 0) : 0
+    
+    setEditValues(prev => ({
+      ...prev,
+      [`${projectId}-${month}`]: currentAmount.toLocaleString('ja-JP')
+    }))
     setEditingMonth({ projectId, month })
   }
 
@@ -604,11 +730,23 @@ export default function AnalyticsDashboard() {
     })
     
     setEditingMonth(null)
+    // 編集値をクリア
+    setEditValues(prev => {
+      const newValues = { ...prev }
+      delete newValues[`${projectId}-${month}`]
+      return newValues
+    })
   }
 
   // 月次編集をキャンセル
   const cancelMonthEdit = () => {
     setEditingMonth(null)
+    // 編集値をクリア
+    setEditValues(prev => {
+      const newValues = { ...prev }
+      delete newValues[`${editingMonth?.projectId}-${editingMonth?.month}`]
+      return newValues
+    })
   }
 
   // CSVエクスポート
@@ -639,7 +777,7 @@ export default function AnalyticsDashboard() {
         row.push(amount)
       })
       
-      row.push(item.totalRevenue)
+      row.push(calculateYearlyTotal(item))
       return row
     })
 
@@ -1069,9 +1207,22 @@ export default function AnalyticsDashboard() {
             </div>
 
             {/* 年間入金予定表 */}
-            {monthlyRevenue.length === 0 ? (
+            {projects.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-2">データが取得できませんでした</p>
+                <p className="text-gray-500 mb-2">プロジェクトデータがありません</p>
+                <p className="text-sm text-gray-400 mb-4">
+                  プロジェクト管理画面でプロジェクトを作成してください。
+                </p>
+                <button
+                  onClick={() => fetchData()}
+                  className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm"
+                >
+                  データを再取得
+                </button>
+              </div>
+            ) : monthlyRevenue.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-2">月次収益データを計算中...</p>
                 <div className="text-sm text-gray-400 space-y-1">
                   <p>• プロジェクトデータ: {projects.length}件</p>
                   <p>• クライアントデータ: {clients.length}件</p>
@@ -1158,32 +1309,36 @@ export default function AnalyticsDashboard() {
                               <div className="flex items-center space-x-1 no-print">
                                 <input
                                   type="text"
-                                  value={amount}
+                                  value={editValues[`${item.projectId}-${monthKey}`] || ''}
                                   data-month={monthKey}
                                   data-project={item.projectId}
-                                  className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                                  className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
                                   autoFocus
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       const value = e.currentTarget.value.replace(/[,\s]/g, '')
                                       saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
+                                    } else if (e.key === 'Escape') {
+                                      cancelMonthEdit()
                                     }
                                   }}
                                   onChange={(e) => {
-                                    // カンマとスペースを除去
-                                    const value = e.target.value.replace(/[,\s]/g, '')
-                                    e.target.value = value
+                                    const value = e.target.value.replace(/[^\d]/g, '')
+                                    const numValue = value ? parseInt(value, 10) : 0
+                                    setEditValues(prev => ({
+                                      ...prev,
+                                      [`${item.projectId}-${monthKey}`]: numValue.toLocaleString('ja-JP')
+                                    }))
+                                  }}
+                                  onBlur={() => {
+                                    const value = editValues[`${item.projectId}-${monthKey}`]?.replace(/[,\s]/g, '') || '0'
+                                    saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
                                   }}
                                 />
                                 <button
                                   onClick={() => {
-                                    const input = document.querySelector(`input[data-month="${monthKey}"][data-project="${item.projectId}"]`) as HTMLInputElement
-                                    if (input) {
-                                      const value = input.value.replace(/[,\s]/g, '')
-                                      const numValue = Number(value) || 0
-                                      console.log('保存する値:', { projectId: item.projectId, month: monthKey, amount: numValue })
-                                      saveMonthEdit(item.projectId, monthKey, numValue)
-                                    }
+                                    const value = editValues[`${item.projectId}-${monthKey}`]?.replace(/[,\s]/g, '') || '0'
+                                    saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
                                   }}
                                   className="text-green-600 hover:text-green-800"
                                 >
@@ -1209,7 +1364,9 @@ export default function AnalyticsDashboard() {
                         )
                       })}
                       <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-gray-900" data-amount="true">
-                        {formatCurrency(item.totalRevenue)}
+                        <span className={calculateYearlyTotal(item) !== (item.contractAmount || 0) ? 'text-red-600' : ''}>
+                          {formatCurrency(calculateYearlyTotal(item))}
+                        </span>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
                         -

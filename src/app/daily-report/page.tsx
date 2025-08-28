@@ -2,8 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import DailyReportPage from '@/components/daily-report'
-import PermissionGuard from '@/components/auth/PermissionGuard'
+import DailyReportPage from '@/components/daily-report/DailyReportPage'
 
 export default async function DailyReport() {
   try {
@@ -26,11 +25,10 @@ export default async function DailyReport() {
     }
 
     console.log('セッション確認完了、作業日報ページ表示')
+    
     return (
       <DashboardLayout>
-        <PermissionGuard requiredPermission="canViewDailyReports">
-          <DailyReportPage />
-        </PermissionGuard>
+        <DailyReportPage />
       </DashboardLayout>
     )
   } catch (error) {

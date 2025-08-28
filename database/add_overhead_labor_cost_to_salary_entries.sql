@@ -11,3 +11,4 @@ WHERE overhead_labor_cost IS NULL;
 COMMENT ON COLUMN salary_entries.overhead_labor_cost IS '一般管理費として計上される人件費';
 
 
+

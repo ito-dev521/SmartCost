@@ -935,7 +935,7 @@ export default function DailyReportPage() {
 
 
   if (isLoading) {
-    return (
+  return (
       <div className="flex flex-col items-center justify-center min-h-64 space-y-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <div className="text-gray-600">データを読み込み中...</div>
@@ -948,8 +948,8 @@ export default function DailyReportPage() {
       <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {workManagementType === 'hours' ? '作業日報' : '作業時間管理'}
-          </h1>
-          <p className="text-gray-600">
+      </h1>
+      <p className="text-gray-600">
             {workManagementType === 'hours'
               ? '日々の作業内容と工数を記録・管理します'
               : '日々の作業内容と時間を記録・管理します'

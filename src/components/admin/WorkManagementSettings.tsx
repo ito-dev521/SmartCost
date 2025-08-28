@@ -27,8 +27,10 @@ export default function WorkManagementSettings() {
     try {
       // まず現在のユーザーを確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      console.log('現在のユーザー:', user)
-      console.log('ユーザーエラー:', userError)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('現在のユーザー:', user)
+        console.log('ユーザーエラー:', userError)
+      }
 
       if (userError || !user) {
         console.error('ユーザー認証エラー:', userError)
@@ -38,14 +40,18 @@ export default function WorkManagementSettings() {
       }
 
       // 設定を取得（スーパー管理者権限の確認はポリシーで自動的に行われる）
-      console.log('設定取得開始...')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('設定取得開始...')
+      }
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')
         .eq('setting_key', 'work_management_type')
         .limit(1)
 
-      console.log('Supabaseレスポンス:', { data, error })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Supabaseレスポンス:', { data, error })
+      }
 
       if (error) {
         console.error('設定取得エラー:', error)
@@ -67,7 +73,9 @@ export default function WorkManagementSettings() {
 
       // データが空の場合
       if (!data || data.length === 0) {
-        console.log('設定データが見つからないため、エラーメッセージを表示')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('設定データが見つからないため、エラーメッセージを表示')
+        }
         setSetting(null) // 明示的にnullに設定
         setMessage({
           type: 'error',
@@ -79,7 +87,9 @@ export default function WorkManagementSettings() {
 
       // 最初のレコードを使用
       const settingData = data[0]
-      console.log('設定取得成功:', settingData)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('設定取得成功:', settingData)
+      }
       setSetting(settingData)
       setMessage(null) // エラーが解決されたらメッセージをクリア
     } catch (error) {
@@ -91,7 +101,9 @@ export default function WorkManagementSettings() {
   }
 
   const saveSetting = async () => {
-    console.log('saveSetting開始 - 現在のsetting状態:', setting)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('saveSetting開始 - 現在のsetting状態:', setting)
+    }
     
     if (!setting) {
       console.error('設定がnullです')
@@ -113,10 +125,12 @@ export default function WorkManagementSettings() {
       // 現在のユーザーを再度確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-      console.log('現在のユーザー情報:', {
-        user: user ? { id: user.id, email: user.email } : null,
-        userError
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('現在のユーザー情報:', {
+          user: user ? { id: user.id, email: user.email } : null,
+          userError
+        })
+      }
 
       if (userError || !user) {
         setMessage({ type: 'error', text: 'ユーザーが認証されていません。再度ログインしてください。' })
@@ -124,44 +138,54 @@ export default function WorkManagementSettings() {
       }
 
       // 設定の保存（既存レコードを更新）
-      console.log('設定保存開始:', {
-        setting,
-        settingId: setting.id,
+      if (process.env.NODE_ENV === 'development') {
+        console.log('設定保存開始:', {
+          setting,
+          settingId: setting.id,
         newValue: setting.setting_value
       })
 
       // まず現在のデータを確認
-      console.log('現在のデータを確認...')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('現在のデータを確認...')
+      }
       const { data: currentData, error: fetchError } = await supabase
         .from('admin_settings')
         .select('*')
         .eq('id', setting.id)
         .single()
 
-      console.log('現在のデータ確認結果:', {
-        currentData,
-        fetchError
+      if (process.env.NODE_ENV === 'development') {
+        console.log('現在のデータ確認結果:', {
+          currentData,
+          fetchError
       })
 
       // 既存設定の場合、更新
-      console.log('既存設定更新開始...', setting.id)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('既存設定更新開始...', setting.id)
+      }
       const updateData = {
         setting_value: setting.setting_value,
         updated_at: new Date().toISOString()
       }
-      console.log('更新データ:', updateData)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('更新データ:', updateData)
+      }
 
       const result = await supabase
         .from('admin_settings')
         .update(updateData)
         .eq('id', setting.id)
 
-      console.log('Supabase update result:', {
-        data: result.data,
-        error: result.error,
-        status: result.status,
-        statusText: result.statusText
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Supabase update result:', {
+          data: result.data,
+          error: result.error,
+          status: result.status,
+          statusText: result.statusText
+        })
+      }
 
       const { error } = result
 
@@ -182,7 +206,9 @@ export default function WorkManagementSettings() {
         return
       }
 
-      console.log('設定保存成功:', result.data)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('設定保存成功:', result.data)
+      }
 
       // 保存成功後、ローカルの状態を更新
       setSetting({

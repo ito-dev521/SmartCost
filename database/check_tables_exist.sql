@@ -24,3 +24,4 @@ SELECT 'projects' as table_name, id, name, client_name, contract_amount FROM pro
 SELECT 'clients' as table_name, id, name, payment_cycle_type FROM clients LIMIT 3;
 SELECT 'caddon_billing' as table_name, id, project_id, billing_month, total_amount FROM caddon_billing LIMIT 3;
 SELECT 'fiscal_info' as table_name, id, fiscal_year, settlement_month FROM fiscal_info LIMIT 3;
+

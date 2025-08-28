@@ -63,3 +63,4 @@ COMMENT ON COLUMN caddon_billing.billing_status IS '請求状況';
 COMMENT ON COLUMN caddon_billing.notes IS '備考';
 COMMENT ON COLUMN caddon_billing.created_at IS '作成日時';
 COMMENT ON COLUMN caddon_billing.updated_at IS '更新日時';
+

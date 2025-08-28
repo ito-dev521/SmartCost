@@ -58,12 +58,14 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
     setSubmitMessage(null)
 
     try {
-      console.log('進捗記録開始:', {
-        project_id: selectedProjectId,
-        progress_rate: progressRate,
-        progress_date: progressDate,
-        notes: notes.trim() || null
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('進捗記録開始:', {
+          project_id: selectedProjectId,
+          progress_rate: progressRate,
+          progress_date: progressDate,
+          notes: notes.trim() || null
+        })
+      }
 
       const response = await fetch('/api/progress', {
         method: 'POST',
@@ -78,7 +80,9 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
         })
       })
 
-      console.log('APIレスポンス:', response.status, response.statusText)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('APIレスポンス:', response.status, response.statusText)
+      }
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -87,7 +91,9 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
       }
 
       const result = await response.json()
-      console.log('API結果:', result)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('API結果:', result)
+      }
 
       if (result.success) {
         setSubmitMessage({ type: 'success', message: result.message })
