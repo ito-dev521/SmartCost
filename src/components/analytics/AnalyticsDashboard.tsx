@@ -225,7 +225,7 @@ export default function AnalyticsDashboard() {
   const [selectedDateRange, setSelectedDateRange] = useState('month')
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'total-performance']))
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['total-performance']))
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [clients, setClients] = useState<Client[]>([])
   const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
@@ -1254,53 +1254,148 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
 
-      {/* 概要統計 */}
+      {/* 総合成績分析 */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div 
+        <div
           className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('overview')}
+          onClick={() => toggleSection('total-performance')}
         >
-          <h3 className="text-lg font-semibold">概要統計</h3>
-          {expandedSections.has('overview') ? (
+          <h3 className="text-lg font-semibold">総合成績分析</h3>
+          {expandedSections.has('total-performance') ? (
             <ChevronUp className="h-5 w-5 text-gray-600" />
           ) : (
             <ChevronDown className="h-5 w-5 text-gray-600" />
           )}
         </div>
-        
-        {expandedSections.has('overview') && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalCost)}</div>
-              <div className="text-sm text-gray-600">総原価</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.projectCostTotal)}</div>
-              <div className="text-sm text-gray-600">プロジェクト原価</div>
-            </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{formatCurrency(stats.generalCostTotal)}</div>
-              <div className="text-sm text-gray-600">その他経費</div>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{formatCurrency(stats.totalContractAmount)}</div>
-              <div className="text-sm text-gray-600">総契約金額</div>
-            </div>
-            <div className="text-center p-4 bg-indigo-50 rounded-lg">
-              <div className="text-2xl font-bold text-indigo-600">{formatCurrency(stats.totalProfit)}</div>
-              <div className="text-sm text-gray-600">総利益</div>
-            </div>
-            <div className="text-center p-4 bg-teal-50 rounded-lg">
-              <div className="text-2xl font-bold text-teal-600">{stats.totalProfitMargin.toFixed(1)}%</div>
-              <div className="text-sm text-gray-600">平均利益率</div>
-            </div>
-            <div className="text-center p-4 bg-cyan-50 rounded-lg">
-              <div className="text-2xl font-bold text-cyan-600">{stats.entryCount}</div>
-              <div className="text-sm text-gray-600">エントリ数</div>
-            </div>
-            <div className="text-center p-4 bg-pink-50 rounded-lg">
-              <div className="text-2xl font-bold text-pink-600">{stats.projectCount}</div>
-              <div className="text-sm text-gray-600">対象プロジェクト数</div>
+
+        {expandedSections.has('total-performance') && (
+          <div className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* 総合成績サマリー */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+                <h4 className="text-lg font-semibold text-blue-900 mb-4">総合成績サマリー</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-blue-700">総契約金額:</span>
+                    <span className="text-sm font-medium text-blue-900">{formatCurrency(stats.totalContractAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-blue-700">総原価:</span>
+                    <span className="text-sm font-medium text-blue-900">{formatCurrency(stats.totalCost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-blue-700">総利益:</span>
+                    <span className={`text-sm font-medium ${stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(stats.totalProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-blue-700">平均利益率:</span>
+                    <span className={`text-sm font-medium ${stats.totalProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {stats.totalProfitMargin.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 原価構成比 */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
+                <h4 className="text-lg font-semibold text-green-900 mb-4">原価構成比</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-green-700">プロジェクト原価:</span>
+                    <span className="text-sm font-medium text-green-900">
+                      {stats.totalCost > 0 ? ((stats.projectCostTotal / stats.totalCost) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-green-700">その他経費:</span>
+                    <span className="text-sm font-medium text-green-900">
+                      {stats.totalCost > 0 ? ((stats.generalCostTotal / stats.totalCost) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-green-700">プロジェクト数:</span>
+                    <span className="text-sm font-medium text-green-900">{stats.projectCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-green-700">平均原価/プロジェクト:</span>
+                    <span className="text-sm font-medium text-green-900">
+                      {stats.projectCount > 0 ? formatCurrency(stats.projectCostTotal / stats.projectCount) : formatCurrency(0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 収益性指標 */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
+                <h4 className="text-lg font-semibold text-purple-900 mb-4">収益性指標</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-purple-700">粗利益:</span>
+                    <span className={`text-sm font-medium ${stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(stats.totalProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-purple-700">粗利益率:</span>
+                    <span className={`text-sm font-medium ${stats.totalProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {stats.totalProfitMargin.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-purple-700">契約金額対原価比:</span>
+                    <span className="text-sm font-medium text-purple-900">
+                      {stats.projectCostTotal > 0 ? (stats.totalContractAmount / stats.projectCostTotal).toFixed(2) : 0}x
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-purple-700">平均契約金額:</span>
+                    <span className="text-sm font-medium text-purple-900">
+                      {projects.filter(p => p.contract_amount).length > 0
+                        ? formatCurrency(stats.totalContractAmount / projects.filter(p => p.contract_amount).length)
+                        : formatCurrency(0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* プロジェクト分析サマリー */}
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-lg border border-orange-200">
+                <h4 className="text-lg font-semibold text-orange-900 mb-4">プロジェクト分析</h4>
+                <div className="space-y-3">
+                  {(() => {
+                    const breakdown = getProjectCostBreakdown()
+                    const profitableProjects = breakdown.filter(item => item.profit > 0)
+                    const lossProjects = breakdown.filter(item => item.profit < 0)
+
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-orange-700">黒字プロジェクト:</span>
+                          <span className="text-sm font-medium text-green-600">{profitableProjects.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-orange-700">赤字プロジェクト:</span>
+                          <span className="text-sm font-medium text-red-600">{lossProjects.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-orange-700">最高利益率:</span>
+                          <span className="text-sm font-medium text-green-600">
+                            {profitableProjects.length > 0 ? Math.max(...profitableProjects.map(p => p.profitMargin)).toFixed(1) : 0}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-orange-700">最低利益率:</span>
+                          <span className="text-sm font-medium text-red-600">
+                            {lossProjects.length > 0 ? Math.min(...lossProjects.map(p => p.profitMargin)).toFixed(1) : 0}%
+                          </span>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1783,153 +1878,6 @@ export default function AnalyticsDashboard() {
               </table>
             </div>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* 総合成績分析 */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('total-performance')}
-        >
-          <h3 className="text-lg font-semibold">総合成績分析</h3>
-          {expandedSections.has('total-performance') ? (
-            <ChevronUp className="h-5 w-5 text-gray-600" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-gray-600" />
-          )}
-        </div>
-
-        {expandedSections.has('total-performance') && (
-          <div className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* 総合成績サマリー */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
-                <h4 className="text-lg font-semibold text-blue-900 mb-4">総合成績サマリー</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-blue-700">総契約金額:</span>
-                    <span className="text-sm font-medium text-blue-900">{formatCurrency(stats.totalContractAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-blue-700">総原価:</span>
-                    <span className="text-sm font-medium text-blue-900">{formatCurrency(stats.totalCost)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-blue-700">総利益:</span>
-                    <span className={`text-sm font-medium ${stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(stats.totalProfit)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-blue-700">平均利益率:</span>
-                    <span className={`text-sm font-medium ${stats.totalProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {stats.totalProfitMargin.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 原価構成比 */}
-              <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
-                <h4 className="text-lg font-semibold text-green-900 mb-4">原価構成比</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-green-700">プロジェクト原価:</span>
-                    <span className="text-sm font-medium text-green-900">
-                      {stats.totalCost > 0 ? ((stats.projectCostTotal / stats.totalCost) * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-green-700">その他経費:</span>
-                    <span className="text-sm font-medium text-green-900">
-                      {stats.totalCost > 0 ? ((stats.generalCostTotal / stats.totalCost) * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-green-700">プロジェクト数:</span>
-                    <span className="text-sm font-medium text-green-900">{stats.projectCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-green-700">平均原価/プロジェクト:</span>
-                    <span className="text-sm font-medium text-green-900">
-                      {stats.projectCount > 0 ? formatCurrency(stats.projectCostTotal / stats.projectCount) : formatCurrency(0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 収益性指標 */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
-                <h4 className="text-lg font-semibold text-purple-900 mb-4">収益性指標</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-purple-700">粗利益:</span>
-                    <span className={`text-sm font-medium ${stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(stats.totalProfit)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-purple-700">粗利益率:</span>
-                    <span className={`text-sm font-medium ${stats.totalProfitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {stats.totalProfitMargin.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-purple-700">契約金額対原価比:</span>
-                    <span className="text-sm font-medium text-purple-900">
-                      {stats.projectCostTotal > 0 ? (stats.totalContractAmount / stats.projectCostTotal).toFixed(2) : 0}x
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-purple-700">平均契約金額:</span>
-                    <span className="text-sm font-medium text-purple-900">
-                      {projects.filter(p => p.contract_amount).length > 0
-                        ? formatCurrency(stats.totalContractAmount / projects.filter(p => p.contract_amount).length)
-                        : formatCurrency(0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* プロジェクト分析サマリー */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-lg border border-orange-200">
-                <h4 className="text-lg font-semibold text-orange-900 mb-4">プロジェクト分析</h4>
-                <div className="space-y-3">
-                  {(() => {
-                    const breakdown = getProjectCostBreakdown()
-                    const profitableProjects = breakdown.filter(item => item.profit > 0)
-                    const lossProjects = breakdown.filter(item => item.profit < 0)
-
-                    return (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-orange-700">黒字プロジェクト:</span>
-                          <span className="text-sm font-medium text-green-600">{profitableProjects.length}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-orange-700">赤字プロジェクト:</span>
-                          <span className="text-sm font-medium text-red-600">{lossProjects.length}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-orange-700">最高利益率:</span>
-                          <span className="text-sm font-medium text-green-600">
-                            {profitableProjects.length > 0 ? Math.max(...profitableProjects.map(p => p.profitMargin)).toFixed(1) : 0}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-orange-700">最低利益率:</span>
-                          <span className="text-sm font-medium text-red-600">
-                            {lossProjects.length > 0 ? Math.min(...lossProjects.map(p => p.profitMargin)).toFixed(1) : 0}%
-                          </span>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
