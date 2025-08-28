@@ -51,18 +51,18 @@ export default function WorkManagementSettings() {
         return
       }
 
-      // データが存在しない場合はデフォルト設定を作成
-      if (!data || data.length === 0) {
-        console.log('設定データが存在しないため、デフォルト設定を作成')
-        const { data: newSetting, error: createError } = await supabase
-          .from('admin_settings')
-          .insert([{
-            setting_key: 'work_management_type',
-            setting_value: 'hours', // デフォルトは工数管理
-            description: '作業時間の管理方法（hours: 工数管理, time: 時間管理）'
-          }])
-          .select()
-          .single()
+              // データが存在しない場合はデフォルト設定を作成
+        if (!data || data.length === 0) {
+          console.log('設定データが存在しないため、デフォルト設定を作成')
+          const { data: newSetting, error: createError } = await supabase
+            .from('admin_settings')
+            .insert([{
+              setting_key: 'work_management_type',
+              setting_value: 'time', // デフォルトは時間管理
+              description: '作業時間の管理方法（hours: 工数管理, time: 時間管理）'
+            }])
+            .select()
+            .single()
 
         if (createError) {
           console.error('デフォルト設定作成エラー:', createError)

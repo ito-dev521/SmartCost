@@ -427,27 +427,35 @@ export default function SalaryEntryForm({
         // 時間管理の場合：給与総額 ÷ 総時間
         hourlyRate = salaryForm.salary_amount / totalHours
       } else {
-        // 工数管理の場合：給与総額 ÷ 総工数（人工）
-        hourlyRate = salaryForm.salary_amount / totalHours
+        // 工数管理の場合：給与総額 ÷ 総工数（人工）→ 人工×8時間で時間に戻して計算
+        const totalHoursInTime = totalHours * 8 // 人工を8時間に変換
+        hourlyRate = salaryForm.salary_amount / totalHoursInTime
       }
 
+      const totalHoursForCalculation = workManagementType === 'time' ? totalHours : totalHours * 8 // 人工管理の場合は8時間に変換
       console.log('時給単価計算結果:', {
         salaryAmount: salaryForm.salary_amount,
         totalHours,
+        totalHoursForCalculation,
         hourlyRate,
         workManagementType
       })
 
       // プロジェクト毎の人件費を計算
-      const allocations: ProjectAllocation[] = Object.entries(projectHours).map(([projectId, data]) => ({
-        project_id: projectId,
-        work_hours: data.totalHours,
-        hourly_rate: hourlyRate,
-        labor_cost: data.totalHours * hourlyRate
-      }))
+      const allocations: ProjectAllocation[] = Object.entries(projectHours).map(([projectId, data]) => {
+        const workHours = workManagementType === 'time' ? data.totalHours : data.totalHours * 8 // 人工管理の場合は8時間に変換
+        const laborCost = workHours * hourlyRate
+        return {
+          project_id: projectId,
+          work_hours: workHours, // 時間ベースで保存
+          hourly_rate: hourlyRate,
+          labor_cost: laborCost
+        }
+      })
 
       // 一般管理費の人件費を計算
-      const overheadLaborCost = overheadHours * hourlyRate
+      const overheadWorkHours = workManagementType === 'time' ? overheadHours : overheadHours * 8 // 人工管理の場合は8時間に変換
+      const overheadLaborCost = overheadWorkHours * hourlyRate
 
       console.log('プロジェクト配分計算結果:', allocations)
       console.log('一般管理費人件費:', { overheadHours, hourlyRate, overheadLaborCost })
@@ -805,9 +813,9 @@ export default function SalaryEntryForm({
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
                   <div className="text-center">
-                    <div className="text-sm text-blue-600">総工数</div>
+                    <div className="text-sm text-blue-600">総{workManagementType === 'time' ? '時間' : '工数'}</div>
                     <div className="text-lg font-semibold text-blue-900">
-                      {(totalWorkHours + overheadHours).toFixed(1)}時間
+                      {(totalWorkHours + overheadHours).toFixed(1)}{workManagementType === 'time' ? '時間' : '人工'}
                     </div>
                   </div>
                   <div className="text-center">
@@ -823,9 +831,9 @@ export default function SalaryEntryForm({
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="text-sm text-blue-600">一般管理費工数</div>
+                    <div className="text-sm text-blue-600">一般管理費{workManagementType === 'time' ? '時間' : '工数'}</div>
                     <div className="text-lg font-semibold text-gray-600">
-                      {overheadHours.toFixed(1)}時間
+                      {overheadHours.toFixed(1)}{workManagementType === 'time' ? '時間' : '人工'}
                     </div>
                   </div>
                   <div className="text-center">
@@ -848,7 +856,7 @@ export default function SalaryEntryForm({
                           {cost.project_name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          工数: {cost.work_hours.toFixed(1)}時間 × 時給: {formatCurrency(cost.hourly_rate)}
+                          {workManagementType === 'time' ? '時間' : '工数'}: {cost.work_hours.toFixed(1)}{workManagementType === 'time' ? '時間' : '人工'} × 時給: {formatCurrency(cost.hourly_rate)}
                         </p>
                       </div>
                       <div className="text-right">

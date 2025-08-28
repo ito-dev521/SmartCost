@@ -79,6 +79,27 @@ export default function DailyReportPage() {
   const OVERHEAD_PROJECT_NAME = '一般管理費'
   const OVERHEAD_PROJECT_BUSINESS_NUMBER = 'IP'
 
+  // プロジェクト一覧をフィルタリング・ソート（CADDONシステムを除外、一般管理費を最上位に）
+  const getFilteredAndSortedProjects = () => {
+    const filteredProjects = projects.filter(project => {
+      // CADDONシステムを除外（業務番号がCで始まる、またはプロジェクト名にCADDONが含まれる）
+      const isCaddonSystem = (
+        (project.business_number && project.business_number.startsWith('C')) ||
+        (project.name && project.name.includes('CADDON'))
+      )
+      return !isCaddonSystem
+    })
+
+    // 一般管理費を最上位に、その他は名前順でソート
+    return filteredProjects.sort((a, b) => {
+      // 一般管理費を最上位
+      if (a.name === OVERHEAD_PROJECT_NAME || a.business_number === OVERHEAD_PROJECT_BUSINESS_NUMBER) return -1
+      if (b.name === OVERHEAD_PROJECT_NAME || b.business_number === OVERHEAD_PROJECT_BUSINESS_NUMBER) return 1
+      // その他は名前順
+      return a.name.localeCompare(b.name)
+    })
+  }
+
   // 一般管理費プロジェクトのIDを取得（なければ作成）
   const getOrCreateOverheadProjectId = async (): Promise<string | null> => {
     try {
@@ -864,7 +885,9 @@ export default function DailyReportPage() {
         ]),
         ['', '', '', '', ''],
         ['合計', `${calculateProjectSummary(monthlyReports).length}件`,
-         monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(1),
+                     workManagementType === 'time' 
+              ? monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(2)
+              : monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(1),
          monthlyReports.reduce((total, monthData) => total + monthData.entries.length, 0).toString(),
          ''],
         ['', '', '', '', ''],
@@ -878,7 +901,7 @@ export default function DailyReportPage() {
             entry.business_number || '',
             entry.project_name || '',
             entry.work_content || '',
-            (entry.work_hours || 0).toString(),
+            workManagementType === 'time' ? (entry.work_hours || 0).toFixed(2) : (entry.work_hours || 0).toFixed(1),
             entry.notes || '',
             entry.user_name || '不明'
           ])
@@ -1168,7 +1191,7 @@ export default function DailyReportPage() {
                           プロジェクトデータがありません
                         </option>
                       ) : (
-                        projects.map((project) => (
+                        getFilteredAndSortedProjects().map((project) => (
                           <option key={project.id} value={project.id}>
                             {project.business_number} - {project.name}
                           </option>
@@ -1187,21 +1210,76 @@ export default function DailyReportPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {workManagementType === 'hours' ? '工数（人工）' : '時間（時間）'}
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={workManagementType === 'hours' ? (() => {
-                        const otherEntriesTotal = entries.reduce((total, e, i) => {
-                          return i === index ? total : total + (e.work_hours || 0)
-                        }, 0)
-                        return 1.0 - otherEntriesTotal
-                      })() : undefined}
-                      step="0.1"
-                      value={entry.work_hours}
-                      onChange={(e) => updateEntry(index, 'work_hours', parseFloat(e.target.value) || 0)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0.0"
-                    />
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const step = workManagementType === 'time' ? 0.25 : 0.1
+                          let newValue
+                          
+                          if (workManagementType === 'time') {
+                            // 時間管理: 0.25刻みで正確に計算
+                            newValue = Math.max(0, Math.round((entry.work_hours - step) * 100) / 100)
+                          } else {
+                            // 工数管理: 0.1刻みで正確に計算
+                            newValue = Math.max(0, Math.round((entry.work_hours - step) * 10) / 10)
+                          }
+                          
+                          updateEntry(index, 'work_hours', newValue)
+                        }}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        max={workManagementType === 'hours' ? (() => {
+                          const otherEntriesTotal = entries.reduce((total, e, i) => {
+                            return i === index ? total : total + (e.work_hours || 0)
+                          }, 0)
+                          return 1.0 - otherEntriesTotal
+                        })() : undefined}
+                        step={workManagementType === 'time' ? 0.25 : 0.1}
+                        inputMode="none"
+                        value={workManagementType === 'time' ? entry.work_hours.toFixed(2) : entry.work_hours.toFixed(1)}
+                        readOnly
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                        placeholder="0.0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const step = workManagementType === 'time' ? 0.25 : 0.1
+                          let newValue
+                          
+                          if (workManagementType === 'time') {
+                            // 時間管理: 0.25刻みで正確に計算
+                            newValue = Math.round((entry.work_hours + step) * 100) / 100
+                          } else {
+                            // 工数管理: 0.1刻みで正確に計算
+                            newValue = Math.round((entry.work_hours + step) * 10) / 10
+                          }
+                          
+                          // 人工管理の場合、合計が1.0を超えないように制限
+                          if (workManagementType === 'hours') {
+                            const otherEntriesTotal = entries.reduce((total, e, i) => {
+                              return i === index ? total : total + (e.work_hours || 0)
+                            }, 0)
+                            const maxValue = Math.round((1.0 - otherEntriesTotal) * 10) / 10
+                            if (newValue > maxValue) {
+                              alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${otherEntriesTotal.toFixed(1)}人工、最大追加可能: ${maxValue.toFixed(1)}人工`)
+                              return
+                            }
+                          }
+                          
+                          updateEntry(index, 'work_hours', newValue)
+                        }}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      >
+                        +
+                      </button>
+                    </div>
                     {workManagementType === 'hours' && (() => {
                       const otherEntriesTotal = entries.reduce((total, e, i) => {
                         return i === index ? total : total + (e.work_hours || 0)
@@ -1284,7 +1362,7 @@ export default function DailyReportPage() {
                     プロジェクトデータがありません
                   </option>
                 ) : (
-                  projects.map((project) => (
+                  getFilteredAndSortedProjects().map((project) => (
                     <option key={project.id} value={project.id}>
                       {project.business_number} - {project.name}
                     </option>
@@ -1303,31 +1381,69 @@ export default function DailyReportPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {workManagementType === 'hours' ? '工数（人工）' : '時間（時間）'}
               </label>
-              <input
-                type="number"
-                min="0"
-                max={workManagementType === 'hours' ? 1.01 - getTotalHours() : undefined}
-                step="0.1"
-                value={newEntry.work_hours}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value) || 0
-
-                  if (workManagementType === 'hours') {
-                    const totalHours = getTotalHours()
-                    const newTotal = totalHours + value
-
-                    // 浮動小数点数の精度問題を回避するため、0.01の誤差を許容
-                    if (newTotal > 1.01) {
-                      alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、入力値: ${value}人工、最大追加可能: ${(1.0 - totalHours).toFixed(1)}人工`)
-                      return
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const step = workManagementType === 'time' ? 0.25 : 0.1
+                    let newValue
+                    
+                    if (workManagementType === 'time') {
+                      // 時間管理: 0.25刻みで正確に計算
+                      newValue = Math.max(0, Math.round((newEntry.work_hours - step) * 100) / 100)
+                    } else {
+                      // 工数管理: 0.1刻みで正確に計算
+                      newValue = Math.max(0, Math.round((newEntry.work_hours - step) * 10) / 10)
                     }
-                  }
-
-                  setNewEntry({...newEntry, work_hours: value})
-                }}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0.0"
-              />
+                    
+                    setNewEntry({...newEntry, work_hours: newValue})
+                  }}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  max={workManagementType === 'hours' ? 1.01 - getTotalHours() : undefined}
+                  step={workManagementType === 'time' ? 0.25 : 0.1}
+                  inputMode="none"
+                  value={workManagementType === 'time' ? newEntry.work_hours.toFixed(2) : newEntry.work_hours.toFixed(1)}
+                  readOnly
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                  placeholder="0.0"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const step = workManagementType === 'time' ? 0.25 : 0.1
+                    let newValue
+                    
+                    if (workManagementType === 'time') {
+                      // 時間管理: 0.25刻みで正確に計算
+                      newValue = Math.round((newEntry.work_hours + step) * 100) / 100
+                    } else {
+                      // 工数管理: 0.1刻みで正確に計算
+                      newValue = Math.round((newEntry.work_hours + step) * 10) / 10
+                    }
+                    
+                    // 人工管理の場合、合計が1.0を超えないように制限
+                    if (workManagementType === 'hours') {
+                      const totalHours = getTotalHours()
+                      const maxValue = Math.round((1.0 - totalHours) * 10) / 10
+                      if (newValue > maxValue) {
+                        alert(`工数の合計が1.0人工を超えてしまいます。現在の合計: ${totalHours.toFixed(1)}人工、最大追加可能: ${maxValue.toFixed(1)}人工`)
+                        return
+                      }
+                    }
+                    
+                    setNewEntry({...newEntry, work_hours: newValue})
+                  }}
+                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  +
+                </button>
+              </div>
 
               {workManagementType === 'hours' && getTotalHours() + newEntry.work_hours > 1.01 && (
                 <div className="mt-1 text-xs text-red-500">
@@ -1501,9 +1617,10 @@ export default function DailyReportPage() {
                         {calculateProjectSummary(monthlyReports).length}件
                       </td>
                       <td className="px-4 py-3 text-sm font-bold text-blue-600 border-t border-gray-200">
-                        {monthlyReports.reduce((total, monthData) =>
-                          total + monthData.totalHours, 0
-                        ).toFixed(1)}
+                        {workManagementType === 'time' 
+                          ? monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(2)
+                          : monthlyReports.reduce((total, monthData) => total + monthData.totalHours, 0).toFixed(1)
+                        }
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
                         {monthlyReports.reduce((total, monthData) =>
@@ -1541,7 +1658,7 @@ export default function DailyReportPage() {
                       })}
                     </h4>
                     <span className="text-sm font-medium text-blue-600">
-                      合計: {monthData.totalHours.toFixed(1)}{getTotalHoursUnit()}
+                      合計: {workManagementType === 'time' ? monthData.totalHours.toFixed(2) : monthData.totalHours.toFixed(1)}{getTotalHoursUnit()}
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -1552,7 +1669,7 @@ export default function DailyReportPage() {
                             {entry.business_number} - {entry.project_name}
                           </span>
                           <span className="text-sm text-gray-500">
-                            {entry.work_hours}{getTotalHoursUnit()}
+                            {workManagementType === 'time' ? entry.work_hours.toFixed(2) : entry.work_hours.toFixed(1)}{getTotalHoursUnit()}
                           </span>
                         </div>
                         <div className="text-sm text-gray-600 mb-1">
