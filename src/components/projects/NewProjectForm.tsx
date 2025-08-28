@@ -153,7 +153,7 @@ export default function NewProjectForm() {
     }
 
     if (!formData.client_id.trim()) {
-      newErrors.client_id = '元請け先は必須です'
+      newErrors.client_id = '発注者は必須です'
     }
 
     if (!formData.start_date) {
@@ -358,7 +358,7 @@ export default function NewProjectForm() {
           {/* クライアント */}
           <div>
             <label htmlFor="client_id" className="block text-sm font-medium text-gray-700 mb-2">
-              元請け先 *
+              発注者 *
             </label>
             <div className="relative">
               <Users className="absolute left-3 top-3 w-5 h-5 text-gray-400 z-10" />
@@ -381,7 +381,7 @@ export default function NewProjectForm() {
                 disabled={loadingClients}
               >
                 <option value="">
-                  {loadingClients ? '元請け先を読み込み中...' : '元請け先を選択してください'}
+                  {loadingClients ? '発注者を読み込み中...' : '発注者を選択してください'}
                 </option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
@@ -400,9 +400,9 @@ export default function NewProjectForm() {
             {errors.client_id && <p className="mt-1 text-sm text-red-600">{errors.client_id}</p>}
             {clients.length === 0 && !loadingClients && (
               <p className="mt-1 text-sm text-blue-600">
-                元請け先が登録されていません。
+                発注者が登録されていません。
                 <a href="/clients/new" className="underline hover:no-underline">
-                  新しい元請け先を作成
+                  新しい発注者を作成
                 </a>
               </p>
             )}

@@ -228,9 +228,18 @@ export default function DailyReportPage() {
   }
 
   useEffect(() => {
-    fetchWorkManagementType()
-    fetchProjects()
-    
+    // 初回のみ並列で実行
+    Promise.all([
+      fetchWorkManagementType().catch(error => {
+        console.error('工数管理タイプ取得エラー:', error)
+      }),
+      fetchProjects().catch(error => {
+        console.error('プロジェクト取得エラー:', error)
+      })
+    ])
+  }, []) // 初回のみ実行
+
+  useEffect(() => {
     // 新規エントリー追加フォームが表示されている場合、日付を同期
     if (showNewEntryForm) {
       setNewEntry(prev => ({
@@ -258,8 +267,12 @@ export default function DailyReportPage() {
     
     // 月間データがない場合や該当する日付のデータがない場合は、通常の取得処理
     fetchDailyReports()
-    fetchMonthlyEntries() // カレンダー用の月間データも取得
-  }, [selectedDate])
+  }, [selectedDate, monthlyEntries]) // monthlyEntriesも依存関係に追加
+
+  // 月間データの取得を分離（カレンダー表示用）
+  useEffect(() => {
+    fetchMonthlyEntries()
+  }, [selectedDate.split('-').slice(0, 2).join('-')]) // 年月のみで実行
 
   useEffect(() => {
     if (showMonthlyView) {
@@ -372,40 +385,40 @@ export default function DailyReportPage() {
         return
       }
 
-      // 各エントリーのユーザー情報を取得
-      const entriesWithUserInfo = await Promise.all(
-        data.map(async (entry: any) => {
-          let userName = '不明'
-          let userEmail = ''
-          
-          if (entry.user_id) {
-            try {
-              // usersテーブルからユーザー情報を取得
-              const { data: userData, error: userError } = await supabase
-                .from('users')
-                .select('name, email')
-                .eq('id', entry.user_id)
-                .single()
-              
-              if (!userError && userData) {
-                userName = userData.name || userData.email || '不明'
-                userEmail = userData.email || ''
-                console.log(`ユーザー情報取得成功: ${entry.user_id} -> ${userName}`)
-              } else {
-                console.warn('ユーザー情報取得エラー:', userError)
-              }
-            } catch (userErr) {
-              console.warn('ユーザー情報取得例外:', userErr)
-            }
-          }
+      // ユーザー情報とプロジェクト情報を取得（効率的なバッチ処理）
+      const userIds = [...new Set(data.map(entry => entry.user_id).filter(Boolean))]
+      const projectIds = [...new Set(data.map(entry => entry.project_id).filter(Boolean))]
 
-          return {
-            ...entry,
-            user_name: userName,
-            user_email: userEmail
-          }
-        })
-      )
+      console.log('fetchDailyReports - 取得対象ユーザーID:', userIds)
+      console.log('fetchDailyReports - 取得対象プロジェクトID:', projectIds)
+
+      const [usersResult, projectsResult] = await Promise.all([
+        userIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', userIds) : Promise.resolve({ data: [] }),
+        projectIds.length > 0 ? supabase.from('projects').select('id, name, business_number').in('id', projectIds) : Promise.resolve({ data: [] })
+      ])
+
+      console.log('fetchDailyReports - ユーザー情報取得結果:', usersResult)
+      console.log('fetchDailyReports - プロジェクト情報取得結果:', projectsResult)
+
+      const usersMap = new Map(usersResult.data?.map(user => [user.id, user]) || [])
+      const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
+
+      // ユーザー情報とプロジェクト情報をマージ
+      const entriesWithUserInfo = data.map((entry: any) => {
+        const user = usersMap.get(entry.user_id)
+        const project = projectsMap.get(entry.project_id)
+        
+        const userName = user?.name || user?.email || '不明'
+        const userEmail = user?.email || ''
+        
+        return {
+          ...entry,
+          user_name: userName,
+          user_email: userEmail,
+          project_name: project?.name || '不明',
+          business_number: project?.business_number || '不明'
+        }
+      })
 
       console.log('エントリー情報:', entriesWithUserInfo)
       setEntries(entriesWithUserInfo)
@@ -431,6 +444,7 @@ export default function DailyReportPage() {
       
       console.log('カレンダー用日付範囲:', startDate, '〜', endDate)
 
+      // まず基本データを取得
       const { data, error } = await supabase
         .from('daily_reports')
         .select('*, work_type')
@@ -452,36 +466,40 @@ export default function DailyReportPage() {
         return
       }
 
-      // 各エントリーのユーザー情報を取得
-      const entriesWithUserInfo = await Promise.all(
-        data.map(async (entry: any) => {
-          let userName = '不明'
-          let userEmail = ''
-          
-          if (entry.user_id) {
-            try {
-              const { data: userData, error: userError } = await supabase
-                .from('users')
-                .select('name, email')
-                .eq('id', entry.user_id)
-                .single()
-              
-              if (!userError && userData) {
-                userName = userData.name || userData.email || '不明'
-                userEmail = userData.email || ''
-              }
-            } catch (userErr) {
-              console.warn('ユーザー情報取得例外:', userErr)
-            }
-          }
+      // ユーザー情報とプロジェクト情報を取得（効率的なバッチ処理）
+      const userIds = [...new Set(data.map(entry => entry.user_id).filter(Boolean))]
+      const projectIds = [...new Set(data.map(entry => entry.project_id).filter(Boolean))]
 
-          return {
-            ...entry,
-            user_name: userName,
-            user_email: userEmail
-          }
-        })
-      )
+      console.log('fetchMonthlyEntries - 取得対象ユーザーID:', userIds)
+      console.log('fetchMonthlyEntries - 取得対象プロジェクトID:', projectIds)
+
+      const [usersResult, projectsResult] = await Promise.all([
+        userIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', userIds) : Promise.resolve({ data: [] }),
+        projectIds.length > 0 ? supabase.from('projects').select('id, name, business_number').in('id', projectIds) : Promise.resolve({ data: [] })
+      ])
+
+      console.log('fetchMonthlyEntries - ユーザー情報取得結果:', usersResult)
+      console.log('fetchMonthlyEntries - プロジェクト情報取得結果:', projectsResult)
+
+      const usersMap = new Map(usersResult.data?.map(user => [user.id, user]) || [])
+      const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
+
+      // ユーザー情報とプロジェクト情報をマージ
+      const entriesWithUserInfo = data.map((entry: any) => {
+        const user = usersMap.get(entry.user_id)
+        const project = projectsMap.get(entry.project_id)
+        
+        const userName = user?.name || user?.email || '不明'
+        const userEmail = user?.email || ''
+        
+        return {
+          ...entry,
+          user_name: userName,
+          user_email: userEmail,
+          project_name: project?.name || '不明',
+          business_number: project?.business_number || '不明'
+        }
+      })
 
       console.log('カレンダー用エントリー情報:', entriesWithUserInfo)
       setMonthlyEntries(entriesWithUserInfo)
@@ -814,8 +832,11 @@ export default function DailyReportPage() {
       // 月次表示を日次表示に戻す
       setShowMonthlyView(false)
       
-      // 保存完了後にその日の日報を再取得して表示
-      await fetchDailyReports()
+      // 保存完了後にデータを効率的に更新
+      await Promise.all([
+        fetchDailyReports(),
+        fetchMonthlyEntries() // カレンダー表示も更新
+      ])
       
       alert('作業日報が保存されました')
     } catch (error) {
@@ -947,13 +968,10 @@ export default function DailyReportPage() {
     <div className="max-w-7xl mx-auto">
       <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {workManagementType === 'hours' ? '作業日報' : '作業時間管理'}
+            作業日報管理
       </h1>
       <p className="text-gray-600">
-            {workManagementType === 'hours'
-              ? '日々の作業内容と工数を記録・管理します'
-              : '日々の作業内容と時間を記録・管理します'
-            }
+            日々の作業内容と工数を記録・管理します
           </p>
         </div>
 

@@ -191,7 +191,7 @@ export default function ProjectList() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
                   type="text"
-                  placeholder="プロジェクト名、元請け先、場所で検索..."
+                  placeholder="プロジェクト名、発注者、場所で検索..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -265,7 +265,7 @@ export default function ProjectList() {
                     </span>
                   </div>
                   <div className="mb-4 text-sm text-gray-600">
-                    <span>元請け先: {project.client_name}</span>
+                    <span>発注者: {project.client_name}</span>
                   </div>
 
                   <div className="space-y-3 mb-4">

@@ -694,6 +694,23 @@ export default function AnalyticsDashboard() {
     setMonthlyRevenue(monthlyData)
   }, [fiscalInfo, projects, clients, caddonBillings, selectedYear])
 
+  // プロジェクトが中止されているかチェック
+  const isProjectCancelled = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId)
+    return project?.status === 'cancelled'
+  }
+
+  // 月次編集のタイトルを取得
+  const getMonthEditTitle = (item: MonthlyRevenue) => {
+    if (item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) {
+      return 'CADDONシステムのため編集できません'
+    }
+    if (isProjectCancelled(item.projectId)) {
+      return 'プロジェクトが中止されているため編集できません'
+    }
+    return '分割請求を開始'
+  }
+
   // 年間合計を計算
   const calculateYearlyTotal = (item: MonthlyRevenue) => {
     const fiscalYearStart = (fiscalInfo?.settlement_month || 3) + 1
@@ -710,6 +727,11 @@ export default function AnalyticsDashboard() {
 
   // 月次編集を開始
   const startMonthEdit = (projectId: string, month: string) => {
+    // 中止プロジェクトの場合は編集を開始しない
+    if (isProjectCancelled(projectId)) {
+      return
+    }
+    
     // 現在の値を取得して編集値として設定
     const currentItem = monthlyRevenue.find(item => item.projectId === projectId)
     const currentAmount = currentItem ? (currentItem.splitBillingAmounts[month] || currentItem.monthlyAmounts[month] || 0) : 0
@@ -875,9 +897,152 @@ export default function AnalyticsDashboard() {
     link.click()
   }
 
-  // PDFエクスポート
+    // 年間入金予定表専用PDFエクスポート
   const exportToPDF = () => {
+    // 印刷専用のコンテナを作成
+    const printContainer = document.createElement('div')
+    printContainer.id = 'print-container'
+            printContainer.innerHTML = `
+      <div style="padding: 20px; font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="font-size: 18px; font-weight: bold; margin: 0 0 5px 0;">年間入金予定表</h2>
+          <p style="font-size: 14px; color: #666; margin: 0;">${selectedYear}年度</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background-color: #f9fafb;">
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 60px;">業務番号</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 120px;">プロジェクト名</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 80px;">クライアント名</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 50px;">開始日</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold; min-width: 50px;">終了日</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 70px;">契約金額</th>
+              ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                return `<th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 45px;">${month}月</th>`
+              }).join('')}
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold; min-width: 70px;">年間合計</th>
+              <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold; min-width: 60px;">ステータス</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${monthlyRevenue.map(item => `
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.businessNumber || ''}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.projectName}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.clientName}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.startDate ? new Date(item.startDate).toLocaleDateString('ja-JP') : '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${(() => {
+                  const project = projects.find(p => p.id === item.projectId)
+                  if (project?.status === 'cancelled') return '-'
+                  return item.contractAmount ? formatCurrency(item.contractAmount) : ''
+                })()}</td>
+                ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                  const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                  const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                  const monthKey = `${year}-${String(month).padStart(2, '0')}`
+                  const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
+                  const project = projects.find(p => p.id === item.projectId)
+                  return `<td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${project?.status === 'cancelled' ? '-' : (amount > 0 ? formatCurrency(amount) : '-')}</td>`
+                }).join('')}
+                                  <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-weight: bold;">${(() => {
+                    const project = projects.find(p => p.id === item.projectId)
+                    if (project?.status === 'cancelled') return '-'
+                    return formatCurrency(calculateYearlyTotal(item))
+                  })()}</td>
+                <td style="border: 1px solid #ddd; padding: 6px; text-align: center;">
+                  ${(() => {
+                    const project = projects.find(p => p.id === item.projectId)
+                    if (!project) return '-'
+                    
+                    const statusMap: { [key: string]: string } = {
+                      'completed': '完了',
+                      'in_progress': '進行中',
+                      'planning': '計画中',
+                      'on_hold': '保留中',
+                      'cancelled': '中止'
+                    }
+                    
+                    return statusMap[project.status] || '未設定'
+                  })()}
+                </td>
+              </tr>
+            `).join('')}
+            <tr style="background-color: #f3f4f6; font-weight: bold;">
+              <td style="border: 1px solid #ddd; padding: 6px;">合計</td>
+              <td colspan="4" style="border: 1px solid #ddd; padding: 6px;"></td>
+              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => sum + (item.contractAmount || 0), 0))}</td>
+              ${fiscalInfo && Array.from({ length: 12 }, (_, i) => {
+                const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
+                const year = month <= fiscalInfo.settlement_month + 1 ? selectedYear + 1 : selectedYear
+                const monthKey = `${year}-${String(month).padStart(2, '0')}`
+                const total = monthlyRevenue.reduce((sum, item) => {
+                  const amount = item.splitBillingAmounts[monthKey] || item.monthlyAmounts[monthKey] || 0
+                  return sum + amount
+                }, 0)
+                return `<td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(total)}</td>`
+              }).join('')}
+              <td style="border: 1px solid #ddd; padding: 6px; text-align: right;">${formatCurrency(monthlyRevenue.reduce((sum, item) => sum + item.totalRevenue, 0))}</td>
+              <td style="border: 1px solid #ddd; padding: 6px;"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `
+    
+    // 印刷用のスタイルを追加
+    const printStyle = document.createElement('style')
+    printStyle.id = 'annual-revenue-print-style'
+    printStyle.textContent = `
+      @media print {
+        /* 既存のコンテンツを非表示 */
+        body > *:not(#print-container) {
+          display: none !important;
+        }
+        
+        /* 印刷コンテナを表示 */
+        #print-container {
+          display: block !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        
+        /* ページ設定 */
+        @page {
+          size: A3 landscape;
+          margin: 15mm;
+        }
+        
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
+      }
+    `
+    
+    // 既存のスタイルとコンテナを削除
+    const existingStyle = document.getElementById('annual-revenue-print-style')
+    const existingContainer = document.getElementById('print-container')
+    if (existingStyle) existingStyle.remove()
+    if (existingContainer) existingContainer.remove()
+    
+    // 新しいコンテナとスタイルを追加
+    document.body.appendChild(printContainer)
+    document.head.appendChild(printStyle)
+    
+    // 印刷実行
     window.print()
+    
+    // 印刷後にコンテナとスタイルを削除
+    setTimeout(() => {
+      const containerToRemove = document.getElementById('print-container')
+      const styleToRemove = document.getElementById('annual-revenue-print-style')
+      if (containerToRemove) containerToRemove.remove()
+      if (styleToRemove) styleToRemove.remove()
+    }, 1000)
   }
 
   // 月別原価推移
@@ -1300,7 +1465,7 @@ export default function AnalyticsDashboard() {
       </div>
 
       {/* 年間入金予定表 */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 annual-revenue-section">
         <div 
           className="flex items-center justify-between cursor-pointer"
           onClick={() => toggleSection('annual-revenue')}
@@ -1314,7 +1479,7 @@ export default function AnalyticsDashboard() {
         </div>
         
         {expandedSections.has('annual-revenue') && (
-          <div className="mt-4">
+          <div className="mt-4 annual-revenue-content">
             {/* 年度選択とエクスポートボタン */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-4">
@@ -1386,6 +1551,10 @@ export default function AnalyticsDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
+                <div className="print-title mb-4" style={{ display: 'none' }}>
+                  <h2 className="text-xl font-bold text-center mb-2">年間入金予定表</h2>
+                  <p className="text-center text-gray-600">{selectedYear}年度</p>
+                </div>
                 <table className="min-w-full divide-y divide-gray-200 annual-revenue-table">
                 <thead className="bg-gray-50">
                   <tr>
@@ -1420,7 +1589,7 @@ export default function AnalyticsDashboard() {
                       年間合計
                     </th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
-                      操作
+                      ステータス
                     </th>
                   </tr>
                 </thead>
@@ -1443,7 +1612,7 @@ export default function AnalyticsDashboard() {
                         {item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : '-'}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-green-600" data-amount="true">
-                        {item.contractAmount ? formatCurrency(item.contractAmount) : ''}
+                        {isProjectCancelled(item.projectId) ? '-' : (item.contractAmount ? formatCurrency(item.contractAmount) : '')}
                       </td>
                       {fiscalInfo && Array.from({ length: 12 }, (_, i) => {
                         const month = (fiscalInfo.settlement_month + 1 + i) % 12 + 1
@@ -1462,8 +1631,9 @@ export default function AnalyticsDashboard() {
                                   data-project={item.projectId}
                                   className="w-20 px-2 py-1 text-sm border border-gray-300 rounded"
                                   autoFocus
+                                  disabled={isProjectCancelled(item.projectId)}
                                   onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
+                                    if (e.key === 'Enter' && !isProjectCancelled(item.projectId)) {
                                       const value = e.currentTarget.value.replace(/[,\s]/g, '')
                                       saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
                                     } else if (e.key === 'Escape') {
@@ -1471,6 +1641,7 @@ export default function AnalyticsDashboard() {
                                     }
                                   }}
                                   onChange={(e) => {
+                                    if (isProjectCancelled(item.projectId)) return
                                     const value = e.target.value.replace(/[^\d]/g, '')
                                     const numValue = value ? parseInt(value, 10) : 0
                                     setEditValues(prev => ({
@@ -1479,16 +1650,19 @@ export default function AnalyticsDashboard() {
                                     }))
                                   }}
                                   onBlur={() => {
+                                    if (isProjectCancelled(item.projectId)) return
                                     const value = editValues[`${item.projectId}-${monthKey}`]?.replace(/[,\s]/g, '') || '0'
                                     saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
                                   }}
                                 />
                                 <button
                                   onClick={() => {
+                                    if (isProjectCancelled(item.projectId)) return
                                     const value = editValues[`${item.projectId}-${monthKey}`]?.replace(/[,\s]/g, '') || '0'
                                     saveMonthEdit(item.projectId, monthKey, Number(value) || 0)
                                   }}
                                   className="text-green-600 hover:text-green-800"
+                                  disabled={isProjectCancelled(item.projectId)}
                                 >
                                   ✓
                                 </button>
@@ -1501,11 +1675,11 @@ export default function AnalyticsDashboard() {
                               </div>
                             ) : (
                               <span
-                                className={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? '' : 'cursor-pointer hover:text-blue-600'}
-                                onClick={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? undefined : () => startMonthEdit(item.projectId, monthKey)}
-                                title={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? 'CADDONシステムのため編集できません' : '分割請求を開始'}
+                                className={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON') || isProjectCancelled(item.projectId)) ? '' : 'cursor-pointer hover:text-blue-600'}
+                                onClick={(item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON') || isProjectCancelled(item.projectId)) ? undefined : () => startMonthEdit(item.projectId, monthKey)}
+                                title={getMonthEditTitle(item)}
                               >
-                                {amount > 0 ? formatCurrency(amount) : '-'}
+                                {isProjectCancelled(item.projectId) ? '-' : (amount > 0 ? formatCurrency(amount) : '-')}
                               </span>
                             )}
                           </td>
@@ -1516,11 +1690,30 @@ export default function AnalyticsDashboard() {
                           (item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) ? 'text-black' : 
                           (calculateYearlyTotal(item) !== (item.contractAmount || 0) ? 'text-red-600' : '')
                         }>
-                          {formatCurrency(calculateYearlyTotal(item))}
+                          {isProjectCancelled(item.projectId) ? '-' : formatCurrency(calculateYearlyTotal(item))}
                         </span>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
-                        -
+                        {(() => {
+                          const project = projects.find(p => p.id === item.projectId)
+                          if (!project) return '-'
+                          
+                          const statusMap: { [key: string]: { text: string; color: string; bgColor: string } } = {
+                            'completed': { text: '完了', color: 'text-green-800', bgColor: 'bg-green-100' },
+                            'in_progress': { text: '進行中', color: 'text-blue-800', bgColor: 'bg-blue-100' },
+                            'planning': { text: '計画中', color: 'text-yellow-800', bgColor: 'bg-yellow-100' },
+                            'on_hold': { text: '保留中', color: 'text-gray-800', bgColor: 'bg-gray-100' },
+                            'cancelled': { text: '中止', color: 'text-red-800', bgColor: 'bg-red-100' }
+                          }
+                          
+                          const status = statusMap[project.status] || { text: '未設定', color: 'text-gray-800', bgColor: 'bg-gray-100' }
+                          
+                          return (
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${status.bgColor} ${status.color}`}>
+                              {status.text}
+                            </span>
+                          )
+                        })()}
                       </td>
                     </tr>
                   ))}

@@ -166,7 +166,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
 
 
     if (!formData.client_id.trim()) {
-      newErrors.client_id = '元請け先は必須です'
+              newErrors.client_id = '発注者は必須です'
     }
 
     if (!formData.start_date) {
@@ -381,7 +381,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           {/* クライアント選択 */}
           <div className="md:col-span-2">
             <label htmlFor="client_id" className="block text-sm font-medium text-gray-700 mb-2">
-              元請け先 *
+              発注者 *
             </label>
             <select
               id="client_id"
@@ -392,7 +392,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
                 errors.client_id ? 'border-red-300' : 'border-gray-300'
               }`}
             >
-                              <option value="">元請け先を選択</option>
+                              <option value="">発注者を選択</option>
               {clients.map(client => (
                 <option key={client.id} value={client.id}>
                   {client.name}
