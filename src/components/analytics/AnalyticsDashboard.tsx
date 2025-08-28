@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
+import CategoryCostChart from './CategoryCostChart'
 
 interface Project {
   id: string
@@ -222,7 +223,7 @@ export default function AnalyticsDashboard() {
   const [categories, setCategories] = useState<BudgetCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingSplitBilling, setLoadingSplitBilling] = useState(false)
-  const [selectedDateRange, setSelectedDateRange] = useState('month')
+
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['total-performance']))
@@ -354,31 +355,54 @@ export default function AnalyticsDashboard() {
     }
   }
 
+  // プロジェクト情報を含む原価エントリデータを取得
+  const getEnrichedCostEntries = () => {
+    return costEntries.map(entry => {
+      const project = projects.find(p => p.id === entry.project_id)
+      return {
+        ...entry,
+        project: project ? {
+          name: project.name,
+          business_number: project.business_number
+        } : undefined
+      }
+    })
+  }
+
   // フィルタリングされたデータを取得
   const getFilteredData = () => {
-    let filtered = costEntries
+    let filtered = getEnrichedCostEntries()
 
-    // 日付範囲でフィルタリング
-    if (selectedDateRange !== 'all') {
-      const now = new Date()
-      let startDate = new Date()
-      
-      switch (selectedDateRange) {
-        case 'week':
-          startDate.setDate(now.getDate() - 7)
-          break
-        case 'month':
-          startDate.setMonth(now.getMonth() - 1)
-          break
-        case 'quarter':
-          startDate.setMonth(now.getMonth() - 3)
-          break
-        case 'year':
-          startDate.setFullYear(now.getFullYear() - 1)
-          break
-      }
-      
-      filtered = filtered.filter(entry => new Date(entry.entry_date) >= startDate)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('原価エントリの詳細:', {
+        totalEntries: filtered.length,
+        entryTypes: filtered.reduce((acc, entry) => {
+          acc[entry.entry_type] = (acc[entry.entry_type] || 0) + 1
+          return acc
+        }, {} as { [key: string]: number }),
+        sampleEntries: filtered.slice(0, 3).map(entry => ({
+          id: entry.id,
+          entry_type: entry.entry_type,
+          category_id: entry.category_id,
+          amount: entry.amount,
+          description: entry.description
+        }))
+      })
+    }
+
+    // 一時的にフィルタリングを無効にして、entry_typeを確認
+    const originalFiltered = filtered
+    // filtered = filtered.filter(entry => entry.entry_type === 'salary_allocation')
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('フィルタリング結果:', {
+        originalCount: originalFiltered.length,
+        filteredCount: filtered.length,
+        filteredByType: filtered.reduce((acc, entry) => {
+          acc[entry.entry_type] = (acc[entry.entry_type] || 0) + 1
+          return acc
+        }, {} as { [key: string]: number })
+      })
     }
 
     // プロジェクトでフィルタリング
@@ -462,6 +486,63 @@ export default function AnalyticsDashboard() {
         return b.total - a.total
       }
     })
+  }
+
+  // プロジェクト詳細データを取得
+  const getProjectDetailData = (projectId: string) => {
+    const filteredData = getFilteredData().filter(entry => entry.project_id === projectId)
+    const project = projects.find(p => p.id === projectId)
+    
+    if (!project) return null
+
+    // カテゴリ別内訳
+    const categoryBreakdown = categories.map(category => {
+      const categoryCosts = filteredData.filter(entry => entry.category_id === category.id)
+      const amount = categoryCosts.reduce((sum, entry) => sum + entry.amount, 0)
+      
+      return {
+        id: category.id,
+        name: category.name,
+        amount
+      }
+    }).filter(item => item.amount > 0).sort((a, b) => b.amount - a.amount)
+
+    // 月別内訳
+    const monthlyBreakdown = filteredData.reduce((acc: any[], entry) => {
+      const date = new Date(entry.entry_date)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const monthName = `${date.getFullYear()}年${date.getMonth() + 1}月`
+      
+      const existingMonth = acc.find(item => item.monthKey === monthKey)
+      if (existingMonth) {
+        existingMonth.amount += entry.amount
+      } else {
+        acc.push({
+          monthKey,
+          month: monthName,
+          amount: entry.amount,
+          cumulative: 0
+        })
+      }
+      
+      return acc
+    }, []).sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+
+    // 累計を計算
+    let cumulative = 0
+    monthlyBreakdown.forEach(month => {
+      cumulative += month.amount
+      month.cumulative = cumulative
+    })
+
+    return {
+      project,
+      categoryBreakdown,
+      monthlyBreakdown,
+      recentEntries: filteredData
+        .sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+        .slice(0, 10) // 最新10件
+    }
   }
 
   // カテゴリ別原価集計
@@ -1184,24 +1265,6 @@ export default function AnalyticsDashboard() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* 日付範囲 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              日付範囲
-            </label>
-            <select
-              value={selectedDateRange}
-              onChange={(e) => setSelectedDateRange(e.target.value)}
-              className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">全期間</option>
-              <option value="week">過去1週間</option>
-              <option value="month">過去1ヶ月</option>
-              <option value="quarter">過去3ヶ月</option>
-              <option value="year">過去1年</option>
-            </select>
-          </div>
-
           {/* プロジェクト */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1213,11 +1276,24 @@ export default function AnalyticsDashboard() {
               className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">全プロジェクト</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.business_number} - {project.name}
-                </option>
-              ))}
+              {projects
+                .filter(project => {
+                  // CADDONシステムと一般管理費を除外
+                  const isCaddonSystem = (
+                    (project.business_number && project.business_number.startsWith('C')) ||
+                    (project.name && project.name.includes('CADDON'))
+                  )
+                  const isOverhead = (
+                    project.name === '一般管理費' ||
+                    project.business_number === 'OVERHEAD'
+                  )
+                  return !isCaddonSystem && !isOverhead
+                })
+                .map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.business_number} - {project.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -1244,7 +1320,6 @@ export default function AnalyticsDashboard() {
           <div className="flex items-end">
             <button
               onClick={() => {
-                setSelectedDateRange('all')
                 setSelectedProject('all')
                 setSelectedCategory('all')
               }}
@@ -1458,7 +1533,12 @@ export default function AnalyticsDashboard() {
                       key={item.project.id} 
                       className="hover:bg-gray-50 cursor-pointer"
                       onClick={() => {
-                        setSelectedProjectDetail(item)
+                        const detailData = getProjectDetailData(item.project.id)
+                        setSelectedProjectDetail({
+                          ...item,
+                          categoryBreakdown: detailData?.categoryBreakdown,
+                          monthlyBreakdown: detailData?.monthlyBreakdown
+                        })
                         setShowProjectModal(true)
                       }}
                     >
@@ -1540,52 +1620,11 @@ export default function AnalyticsDashboard() {
         
         {expandedSections.has('category-analysis') && (
           <div className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* テーブル表示 */}
-              <div>
-                <h4 className="text-md font-medium mb-3">詳細一覧</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          カテゴリ
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          金額
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          件数
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {categoryBreakdown.map((item) => (
-                        <tr key={item.category.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.category.name}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {formatCurrency(item.total)}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                            {item.count}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* 円グラフ表示（プレースホルダー） */}
-              <div>
-                <h4 className="text-md font-medium mb-3">構成比</h4>
-                <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <p className="text-gray-500">円グラフ実装予定</p>
-                </div>
-              </div>
-            </div>
+            <CategoryCostChart 
+              categoryData={categoryBreakdown} 
+              costEntries={getEnrichedCostEntries()} 
+              selectedProject={selectedProject}
+            />
           </div>
         )}
       </div>
@@ -2102,17 +2141,19 @@ export default function AnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedProjectDetail.categoryBreakdown?.map((category: any, index: number) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">{category.name}</td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                            {formatCurrency(category.amount)}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600">
-                            {selectedProjectDetail.total > 0 ? ((category.amount / selectedProjectDetail.total) * 100).toFixed(1) : 0}%
-                          </td>
-                        </tr>
-                      )) || (
+                      {selectedProjectDetail.categoryBreakdown?.length > 0 ? (
+                        selectedProjectDetail.categoryBreakdown.map((category: any, index: number) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-sm text-gray-900">{category.name}</td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                              {formatCurrency(category.amount)}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {selectedProjectDetail.total > 0 ? ((category.amount / selectedProjectDetail.total) * 100).toFixed(1) : 0}%
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
                           <td colSpan={3} className="px-4 py-2 text-sm text-gray-500 text-center">
                             カテゴリ別内訳データがありません
@@ -2137,20 +2178,68 @@ export default function AnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedProjectDetail.monthlyBreakdown?.map((month: any, index: number) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">{month.month}</td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                            {formatCurrency(month.amount)}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600">
-                            {formatCurrency(month.cumulative)}
-                          </td>
-                        </tr>
-                      )) || (
+                      {selectedProjectDetail.monthlyBreakdown?.length > 0 ? (
+                        selectedProjectDetail.monthlyBreakdown.map((month: any, index: number) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-sm text-gray-900">{month.month}</td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                              {formatCurrency(month.amount)}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {formatCurrency(month.cumulative)}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
                           <td colSpan={3} className="px-4 py-2 text-sm text-gray-500 text-center">
                             月別推移データがありません
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 最近の原価エントリ */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">最近の原価エントリ（最新10件）</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">日付</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">カテゴリ</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">説明</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">金額</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedProjectDetail.recentEntries?.length > 0 ? (
+                        selectedProjectDetail.recentEntries.map((entry: any, index: number) => {
+                          const category = categories.find(c => c.id === entry.category_id)
+                          return (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {new Date(entry.entry_date).toLocaleDateString('ja-JP')}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-600">
+                                {category?.name || '未分類'}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {entry.description || '-'}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                                {formatCurrency(entry.amount)}
+                              </td>
+                            </tr>
+                          )
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-2 text-sm text-gray-500 text-center">
+                            原価エントリデータがありません
                           </td>
                         </tr>
                       )}
