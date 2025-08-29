@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
-import { 
-  BarChart3, 
-  TrendingUp, 
-  PieChart, 
-  Activity, 
+import {
+  BarChart3,
+  TrendingUp,
+  PieChart,
+  Activity,
   Filter,
   Download,
   Calendar,
@@ -14,7 +14,8 @@ import {
   Building,
   Users,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Eye
 } from 'lucide-react'
 import CategoryCostChart from './CategoryCostChart'
 
@@ -1587,9 +1588,6 @@ export default function AnalyticsDashboard() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       エントリ数
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      操作
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1654,11 +1652,6 @@ export default function AnalyticsDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {item.count}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button className="text-blue-600 hover:text-blue-800">
-                          <Download className="h-4 w-4" />
-                        </button>
                       </td>
                     </tr>
                   ))}
