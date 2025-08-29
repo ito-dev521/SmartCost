@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Tables } from '@/lib/supabase'
-import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X } from 'lucide-react'
+import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X, Trash2 } from 'lucide-react'
 
 type Project = Tables<'projects'>
 type BudgetCategory = Tables<'budget_categories'>
@@ -106,6 +106,36 @@ export default function CostEntryForm({
       description: '',
       entry_type: 'general_admin',
     })
+  }
+
+  // 削除機能
+  const handleDelete = async (entry: CostEntry) => {
+    if (!confirm('この原価エントリーを削除してもよろしいですか？')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const { error } = await supabase
+        .from('cost_entries')
+        .delete()
+        .eq('id', entry.id)
+
+      if (error) {
+        console.error('削除エラー:', error)
+        alert('原価エントリーの削除に失敗しました')
+        return
+      }
+
+      // ローカルステートから削除
+      setCostEntries(prev => prev.filter(e => e.id !== entry.id))
+      alert('原価エントリーを削除しました')
+    } catch (error) {
+      console.error('削除エラー:', error)
+      alert('原価エントリーの削除に失敗しました')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // データの再取得（保存後の更新用）
@@ -753,6 +783,15 @@ export default function CostEntryForm({
                     >
                       <Edit className="h-3 w-3 mr-1" />
                       編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(entry)}
+                      disabled={loading}
+                      className="inline-flex items-center px-2 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      削除
                     </button>
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-900">

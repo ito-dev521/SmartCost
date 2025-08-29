@@ -545,6 +545,8 @@ export default function AnalyticsDashboard() {
     }
   }
 
+
+
   // カテゴリ別原価集計
   const getCategoryCostBreakdown = () => {
     const filteredData = getFilteredData()
@@ -946,43 +948,76 @@ export default function AnalyticsDashboard() {
     })
   }
 
-  // CSVエクスポート
-  const exportToCSV = () => {
+  // 年間入金予定表のCSVエクスポート
+  const exportAnnualRevenueToCSV = () => {
     if (!monthlyRevenue.length) return
 
     const fiscalYearStart = fiscalInfo ? fiscalInfo.settlement_month + 1 : 4
     const months: string[] = []
+    const monthNames: string[] = []
     for (let i = 0; i < 12; i++) {
       const month = (fiscalYearStart + i - 1) % 12 + 1
       const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
       months.push(`${year}-${String(month).padStart(2, '0')}`)
+      monthNames.push(`${month}月`)
     }
 
-    const headers = ['業務番号', 'プロジェクト名', 'クライアント名', '開始日', '終了日', '契約金額', ...months, '年間合計']
+    const headers = ['業務番号', 'プロジェクト名', 'クライアント名', '開始日', '終了日', '契約金額', ...monthNames, '年間合計']
+    
+    // プロジェクトデータ行
     const csvData = monthlyRevenue.map(item => {
+      const project = projects.find(p => p.id === item.projectId)
       const row = [
         item.businessNumber,
         item.projectName,
         item.clientName,
-        item.startDate || '',
-        item.endDate || '',
-        item.contractAmount || 0
+        item.startDate ? new Date(item.startDate).toLocaleDateString('ja-JP') : '-',
+        item.endDate ? new Date(item.endDate).toLocaleDateString('ja-JP') : '-',
+        project?.status === 'cancelled' ? '-' : (item.contractAmount ? item.contractAmount.toLocaleString() : '-')
       ]
       
       months.forEach(month => {
+        const project = projects.find(p => p.id === item.projectId)
         const amount = item.splitBillingAmounts[month] || item.monthlyAmounts[month] || 0
-        row.push(amount)
+        row.push(project?.status === 'cancelled' ? '-' : (amount > 0 ? amount.toLocaleString() : '-'))
       })
       
-      row.push(calculateYearlyTotal(item))
+      const total = calculateYearlyTotal(item)
+      row.push(project?.status === 'cancelled' ? '-' : total.toLocaleString())
       return row
     })
 
-    const csvContent = [headers, ...csvData]
+    // 月毎合計行を計算
+    const monthlyTotals = months.map(month => {
+      let total = 0
+      monthlyRevenue.forEach(item => {
+        const project = projects.find(p => p.id === item.projectId)
+        if (project?.status !== 'cancelled') {
+          const amount = item.splitBillingAmounts[month] || item.monthlyAmounts[month] || 0
+          total += amount
+        }
+      })
+      return total > 0 ? total.toLocaleString() : '-'
+    })
+
+    // 年間合計
+    const yearlyTotal = monthlyRevenue.reduce((sum, item) => {
+      const project = projects.find(p => p.id === item.projectId)
+      if (project?.status !== 'cancelled') {
+        return sum + calculateYearlyTotal(item)
+      }
+      return sum
+    }, 0)
+
+    // 合計行
+    const totalRow = ['合計', `${monthlyRevenue.length}件`, '', '', '', '', ...monthlyTotals, yearlyTotal.toLocaleString()]
+
+    const csvContent = [headers, ...csvData, totalRow]
       .map(row => row.map(cell => `"${cell}"`).join(','))
       .join('\n')
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `年間入金予定表_${selectedYear}年度.csv`
@@ -1333,16 +1368,19 @@ export default function AnalyticsDashboard() {
 
       {/* 総合成績分析 */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('total-performance')}
-        >
-          <h3 className="text-lg font-semibold">総合成績分析</h3>
-          {expandedSections.has('total-performance') ? (
-            <ChevronUp className="h-5 w-5 text-gray-600" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-gray-600" />
-          )}
+        <div className="flex items-center justify-between">
+          <div
+            className="flex items-center cursor-pointer flex-1"
+            onClick={() => toggleSection('total-performance')}
+          >
+            <h3 className="text-lg font-semibold">総合成績分析</h3>
+            {expandedSections.has('total-performance') ? (
+              <ChevronUp className="h-5 w-5 text-gray-600 ml-2" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600 ml-2" />
+            )}
+          </div>
+
         </div>
 
         {expandedSections.has('total-performance') && (
@@ -1480,16 +1518,19 @@ export default function AnalyticsDashboard() {
 
       {/* プロジェクト別原価分析 */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div 
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('project-analysis')}
-        >
-          <h3 className="text-lg font-semibold">プロジェクト別収益性分析</h3>
-          {expandedSections.has('project-analysis') ? (
-            <ChevronUp className="h-5 w-5 text-gray-600" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-gray-600" />
-          )}
+        <div className="flex items-center justify-between">
+          <div
+            className="flex items-center cursor-pointer flex-1"
+            onClick={() => toggleSection('project-analysis')}
+          >
+            <h3 className="text-lg font-semibold">プロジェクト別収益性分析</h3>
+            {expandedSections.has('project-analysis') ? (
+              <ChevronUp className="h-5 w-5 text-gray-600 ml-2" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600 ml-2" />
+            )}
+          </div>
+
         </div>
         
         {expandedSections.has('project-analysis') && (
@@ -1606,16 +1647,19 @@ export default function AnalyticsDashboard() {
 
       {/* カテゴリ別原価分析 */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div 
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => toggleSection('category-analysis')}
-        >
-          <h3 className="text-lg font-semibold">カテゴリ別原価分析</h3>
-          {expandedSections.has('category-analysis') ? (
-            <ChevronUp className="h-5 w-5 text-gray-600" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-gray-600" />
-          )}
+        <div className="flex items-center justify-between">
+          <div
+            className="flex items-center cursor-pointer flex-1"
+            onClick={() => toggleSection('category-analysis')}
+          >
+            <h3 className="text-lg font-semibold">カテゴリ別原価分析</h3>
+            {expandedSections.has('category-analysis') ? (
+              <ChevronUp className="h-5 w-5 text-gray-600 ml-2" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600 ml-2" />
+            )}
+          </div>
+
         </div>
         
         {expandedSections.has('category-analysis') && (
@@ -1661,7 +1705,7 @@ export default function AnalyticsDashboard() {
               </div>
               <div className="flex space-x-2 no-print">
                 <button
-                  onClick={exportToCSV}
+                  onClick={exportAnnualRevenueToCSV}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm flex items-center space-x-2"
                 >
                   <Download className="h-4 w-4" />
@@ -1930,116 +1974,7 @@ export default function AnalyticsDashboard() {
         )}
       </div>
 
-      {/* エクスポート機能 */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">レポートエクスポート</h3>
-        </div>
-        
-        <div className="mt-4 space-y-6">
-          {/* レポートタイプ選択 */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-md font-medium text-gray-900 mb-3">レポートタイプ</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="comprehensive"
-                  defaultChecked
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-2 text-sm text-gray-700">包括的分析レポート</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="profitability"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-2 text-sm text-gray-700">収益性分析レポート</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="summary"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-2 text-sm text-gray-700">サマリーレポート</span>
-              </label>
-            </div>
-          </div>
 
-          {/* エクスポート形式 */}
-          <div>
-            <h4 className="text-md font-medium text-gray-900 mb-3">エクスポート形式</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button className="flex items-center justify-center p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <Download className="h-5 w-5 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">CSV形式</div>
-                  <div className="text-xs opacity-90">契約金額・利益率を含む詳細データ</div>
-                </div>
-              </button>
-              <button className="flex items-center justify-center p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                <Download className="h-5 w-5 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">Excel形式</div>
-                  <div className="text-xs opacity-90">グラフ・チャート付き</div>
-                </div>
-              </button>
-              <button className="flex items-center justify-center p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                <Download className="h-5 w-5 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">PDF形式</div>
-                  <div className="text-xs opacity-90">印刷用レポート</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* 追加オプション */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-md font-medium text-gray-900 mb-3">追加オプション</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">契約金額・利益率を含む</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">プロジェクト別詳細分析</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">月別推移データ</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">カテゴリ別分析</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* プロジェクト詳細ポップアップ */}
       {showProjectModal && selectedProjectDetail && (

@@ -1515,7 +1515,8 @@ export default function DailyReportPage() {
               </h4>
 
               {/* 時間管理の場合、時給単価を表示 */}
-              {workManagementType === 'time' && laborCostData && (
+              {/* 時給単価表示を非表示に変更 */}
+              {/* {workManagementType === 'time' && laborCostData && (
                 <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
                   <div className="flex items-center gap-2 text-green-800">
                     <span className="font-medium">時給単価:</span>
@@ -1525,10 +1526,11 @@ export default function DailyReportPage() {
                     </span>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* 時間管理の場合、給与データが見つからない場合の警告 */}
-              {workManagementType === 'time' && !laborCostData && monthlyReports.length > 0 && (
+              {/* 人件費計算警告を非表示に変更 */}
+              {/* {workManagementType === 'time' && !laborCostData && monthlyReports.length > 0 && (
                 <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                   <div className="flex">
                     <div className="flex-shrink-0">
@@ -1547,7 +1549,7 @@ export default function DailyReportPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              )} */}
 
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -1568,11 +1570,12 @@ export default function DailyReportPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                         平均{workManagementType === 'hours' ? '工数' : '時間'}/日
                       </th>
-                      {workManagementType === 'time' && laborCostData && (
+                      {/* 人件費列を非表示に変更 */}
+                      {/* {workManagementType === 'time' && laborCostData && (
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                           人件費（円）
                         </th>
-                      )}
+                      )} */}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -1599,11 +1602,12 @@ export default function DailyReportPage() {
                           <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-200">
                             {(project.totalHours / project.days).toFixed(1)}
                           </td>
-                          {workManagementType === 'time' && laborCostData && (
+                          {/* 人件費列を非表示に変更 */}
+                          {/* {workManagementType === 'time' && laborCostData && (
                             <td className="px-4 py-3 text-sm font-medium text-green-600 border-b border-gray-200">
                               {laborCostProject ? laborCostProject.laborCost.toLocaleString() : '-'}
                             </td>
-                          )}
+                          )} */}
                         </tr>
                       )
                     })}
@@ -1630,11 +1634,12 @@ export default function DailyReportPage() {
                       <td className="px-4 py-3 text-sm text-gray-600 border-t border-gray-200">
                         -
                       </td>
-                      {workManagementType === 'time' && laborCostData && (
+                      {/* 人件費合計列を非表示に変更 */}
+                      {/* {workManagementType === 'time' && laborCostData && (
                         <td className="px-4 py-3 text-sm font-bold text-green-600 border-t border-gray-200">
                           {laborCostData.projects.reduce((total, project) => total + project.laborCost, 0).toLocaleString()}
                         </td>
-                      )}
+                      )} */}
                     </tr>
                   </tfoot>
                 </table>
