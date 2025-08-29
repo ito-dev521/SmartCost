@@ -378,6 +378,28 @@ export default function CostEntryForm({
     )
   }
 
+  // エントリータイプの表示名を取得
+  const getEntryTypeDisplayName = (entryType: string) => {
+    switch (entryType) {
+      case 'direct':
+        return '直接費'
+      case 'indirect':
+        return '間接費'
+      case 'outsourcing':
+        return '委託費'
+      case 'salary_allocation':
+        return '人件費'
+      case 'material':
+        return '材料費'
+      case 'overhead':
+        return '経費'
+      case 'general_admin':
+        return 'その他経費'  // 一般管理費ではなく「その他経費」として表示
+      default:
+        return 'その他'
+    }
+  }
+
   // 表示するエントリを取得（5件 or 全て）
   const getDisplayedEntries = () => {
     const entries = showAllEntries ? costEntries : costEntries.slice(0, 5)
@@ -784,7 +806,7 @@ export default function CostEntryForm({
                       {getProjectName(entry.project_id)}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {getCategoryName(entry.category_id)} - {entry.entry_type === 'direct' ? '直接費' : entry.entry_type === 'indirect' ? '間接費' : '一般管理費'}
+                      {getCategoryName(entry.category_id)} - {getEntryTypeDisplayName(entry.entry_type)}
                     </p>
                     {/* 一般管理費の場合は会社名を表示 */}
                     {!entry.project_id && (entry as any).company_name && (
