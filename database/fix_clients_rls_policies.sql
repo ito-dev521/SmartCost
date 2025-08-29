@@ -69,3 +69,4 @@ CREATE POLICY "Users can delete clients in their company" ON clients
 SELECT 'クライアントテーブルのRLSポリシーを修正しました' AS message;
 
 
+

@@ -29,3 +29,4 @@ COMMENT ON POLICY "Anyone can read admin settings" ON admin_settings IS 'すべ�
 
 
 
+

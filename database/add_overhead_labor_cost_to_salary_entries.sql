@@ -13,3 +13,4 @@ COMMENT ON COLUMN salary_entries.overhead_labor_cost IS '一般管理費とし�
 
 
 
+

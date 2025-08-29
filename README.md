@@ -62,7 +62,7 @@ cat database/schema.sql
 ### 5. 環境変数の設定
 ```bash
 # .env.localファイルを作成
-cp .env.example .env.local
+touch .env.local
 ```
 
 `.env.local`に以下の値を設定:
@@ -74,7 +74,14 @@ OPENAI_API_KEY=your-openai-api-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### 6. 開発サーバーの起動
+### 6. OpenAI APIキーの設定
+AIチャットボット機能を使用するには、OpenAI APIキーが必要です：
+
+1. [OpenAI](https://platform.openai.com/api-keys)でAPIキーを取得
+2. `.env.local`ファイルに`OPENAI_API_KEY=your-api-key`を追加
+3. 環境変数を設定後、開発サーバーを再起動
+
+### 7. 開発サーバーの起動
 ```bash
 npm run dev
 ```

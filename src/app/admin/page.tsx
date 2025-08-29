@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import DepartmentManagement from '@/components/admin/DepartmentManagement'
 import WorkManagementSettings from '@/components/admin/WorkManagementSettings'
 import FiscalInfoSettings from '@/components/admin/FiscalInfoSettings'
+import BankBalanceHistoryManager from '@/components/admin/BankBalanceHistoryManager'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Shield, Building, Settings } from 'lucide-react'
 
@@ -65,8 +66,8 @@ export default async function AdminPage() {
     redirect('/dashboard')
   }
 
-  // 部署一覧を取得
-  const { data: departments } = await supabase
+  // 部署一覧を取得（将来使用予定）
+  await supabase
     .from('departments')
     .select('*')
     .order('name')
@@ -88,6 +89,11 @@ export default async function AdminPage() {
           {/* 決算情報設定 */}
           <div>
             <FiscalInfoSettings />
+          </div>
+
+          {/* 銀行残高履歴管理 */}
+          <div>
+            <BankBalanceHistoryManager />
           </div>
 
           {/* 工数管理設定 */}

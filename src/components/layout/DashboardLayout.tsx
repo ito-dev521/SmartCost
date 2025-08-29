@@ -8,7 +8,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import AIAssistant from '@/components/ai/AIAssistant'
+import ChatBot from '@/components/ai/ChatBot'
 import SidebarNavigation from './SidebarNavigation'
 
 interface DashboardLayoutProps {
@@ -99,8 +99,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </main>
       </div>
 
-      {/* AIアシスタント（全ページで利用可能） */}
-      <AIAssistant />
+      {/* AI ChatBot */}
+      <ChatBot />
     </div>
   )
 }

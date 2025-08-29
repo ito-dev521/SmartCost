@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@/lib/supabase'
+// Supabaseクライアントは現在使用しない
 import {
   LineChart,
   Line,
@@ -10,11 +10,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
 } from 'recharts'
 import {
   AlertTriangle,
@@ -24,7 +19,9 @@ import {
   Calendar,
   Target,
   Zap,
+  Brain,
 } from 'lucide-react'
+import AIEnhancedCashFlow from './AIEnhancedCashFlow'
 
 interface CashFlowData {
   date: string
@@ -55,57 +52,59 @@ interface FiscalInfo {
 export default function CashFlowDashboard() {
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([])
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
-  const [aiPredictions, setAiPredictions] = useState<Record<string, unknown>[]>([])
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     fetchCashFlowData()
     fetchFiscalInfo()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchCashFlowData = async () => {
     try {
-      // キャッシュフロー予測データを取得
-      const { data: predictions } = await supabase
-        .from('cash_flow_predictions')
-        .select('*')
-        .order('prediction_date')
+      // キャッシュフロー予測データをAPIから取得
+      const response = await fetch('/api/cash-flow-prediction')
+      const predictionData = await response.json()
 
-      // 支払いスケジュールデータを取得
-      const { data: payments } = await supabase
-        .from('payment_schedule')
-        .select('*')
-        .order('due_date')
-
-      // AI予測データを取得
-      const { data: aiData } = await supabase
-        .from('ai_predictions')
-        .select('*')
-        .eq('prediction_type', 'cash_flow')
-        .order('created_at', { ascending: false })
-        .limit(5)
+      // 銀行残高履歴データをAPIから取得
+      const historyResponse = await fetch('/api/bank-balance-history')
+      const historyData = await historyResponse.json()
 
       // サンプルデータを設定（実際のデータがない場合）
-      if (!predictions?.length) {
+      if (!predictionData?.predictions?.length) {
         const sampleCashFlow: CashFlowData[] = []
-        const today = new Date()
+        // 決算月の翌月から開始
+        const settlementMonth = fiscalInfo?.settlement_month || 3 // デフォルトは3月決算
+        const currentYear = new Date().getFullYear()
+        const startDate = new Date(currentYear, settlementMonth, 1) // 決算月の翌月の1日
         const initialBalance = fiscalInfo?.bank_balance || 5000000
 
         for (let i = 0; i < 12; i++) {
-          const date = new Date(today)
-          date.setMonth(date.getMonth() + i)
+          const date = new Date(startDate)
+          date.setMonth(startDate.getMonth() + i)
 
-          const baseInflow = 15000000 + Math.random() * 10000000
-          const baseOutflow = 12000000 + Math.random() * 8000000
+          // 月別の季節性係数（建設業向け）
+          const month = date.getMonth() + 1
+          let seasonalFactor = 1.0
+
+          // 年度末（3月）は集中入金・支出
+          if (month === 3) seasonalFactor = 1.3
+          // 年末（12月）はボーナス・賞与支給
+          else if (month === 12) seasonalFactor = 1.2
+          // 年初（1月）は入金減少
+          else if (month === 1) seasonalFactor = 0.8
+          // 夏期休暇（8月）は業務減少
+          else if (month === 8) seasonalFactor = 0.9
+
+          const baseInflow = (15000000 + Math.random() * 10000000) * seasonalFactor
+          const baseOutflow = (12000000 + Math.random() * 8000000) * seasonalFactor
           const balance = baseInflow - baseOutflow + (i > 0 ? sampleCashFlow[i-1].balance : initialBalance)
 
           sampleCashFlow.push({
             date: date.toISOString().split('T')[0],
-            inflow: baseInflow,
-            outflow: baseOutflow,
-            balance: balance,
+            inflow: Math.round(baseInflow),
+            outflow: Math.round(baseOutflow),
+            balance: Math.round(balance),
           })
         }
         setCashFlowData(sampleCashFlow)
@@ -158,18 +157,45 @@ export default function CashFlowDashboard() {
           },
         ])
       } else {
-        setPaymentData(payments.map(p => ({
-          id: p.id,
-          vendor: p.vendor_name || '',
-          amount: p.payment_amount,
-          dueDate: p.due_date,
-          type: p.payment_type || '',
-          priority: p.priority_score || 5,
-          negotiable: p.is_negotiable || false,
+        // APIから取得した予測データをキャッシュフローデータとして設定
+        setCashFlowData(predictionData.predictions.map(p => ({
+          date: p.date,
+          inflow: p.predicted_inflow,
+          outflow: p.predicted_outflow,
+          balance: p.predicted_balance
         })))
-      }
 
-      setAiPredictions(aiData || [])
+        // サンプル支払いデータを設定
+        setPaymentData([
+          {
+            id: '1',
+            vendor: '人件費（8月分）',
+            amount: 3800000,
+            dueDate: '2024-08-31',
+            type: '人件費',
+            priority: 10,
+            negotiable: false,
+          },
+          {
+            id: '2',
+            vendor: '材料費',
+            amount: 2500000,
+            dueDate: '2024-08-25',
+            type: '材料費',
+            priority: 8,
+            negotiable: true,
+          },
+          {
+            id: '3',
+            vendor: '委託費',
+            amount: 1800000,
+            dueDate: '2024-08-20',
+            type: '委託費',
+            priority: 9,
+            negotiable: false,
+          },
+        ])
+      }
     } catch (error) {
       console.error('Error fetching cash flow data:', error)
     } finally {
@@ -234,10 +260,21 @@ export default function CashFlowDashboard() {
     <div className="space-y-6">
       {/* ページヘッダー */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">資金管理</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          キャッシュフロー予測と支払い管理を行います
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <DollarSign className="h-8 w-8 text-green-600" />
+              資金管理
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              キャッシュフロー予測と支払い管理を行います
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Brain className="h-5 w-5 text-blue-600" />
+            <span className="text-sm font-medium text-gray-700">AI分析対応</span>
+          </div>
+        </div>
       </div>
 
       {/* 統計カード */}
@@ -352,24 +389,28 @@ export default function CashFlowDashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* キャッシュフロー予測グラフ */}
         <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            キャッシュフロー予測（12ヶ月）
+          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            キャッシュフロー予測（決算月の翌月から12ヶ月）
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={cashFlowData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="date" 
-                tickFormatter={(date) => formatDate(date)}
+              <XAxis
+                dataKey="date"
+                tickFormatter={(date) => {
+                  const d = new Date(date)
+                  return `${d.getMonth() + 1}月`
+                }}
                 fontSize={12}
               />
-              <YAxis 
+              <YAxis
                 tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`}
                 fontSize={12}
               />
-              <Tooltip 
+              <Tooltip
                 formatter={(value: number, name: string) => [
-                  formatCurrency(value), 
+                  formatCurrency(value),
                   name === 'inflow' ? '入金' : name === 'outflow' ? '支出' : '残高'
                 ]}
                 labelFormatter={(date) => `日付: ${formatDate(date)}`}
@@ -502,6 +543,9 @@ export default function CashFlowDashboard() {
           </table>
         </div>
       </div>
+
+      {/* AI強化資金分析 */}
+      <AIEnhancedCashFlow />
     </div>
   )
 }

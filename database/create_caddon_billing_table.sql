@@ -65,3 +65,4 @@ COMMENT ON COLUMN caddon_billing.created_at IS '作成日時';
 COMMENT ON COLUMN caddon_billing.updated_at IS '更新日時';
 
 
+
