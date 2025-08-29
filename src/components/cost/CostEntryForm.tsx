@@ -378,9 +378,9 @@ export default function CostEntryForm({
     )
   }
 
-  // 表示するエントリを取得（10件 or 全て）
+  // 表示するエントリを取得（5件 or 全て）
   const getDisplayedEntries = () => {
-    const entries = showAllEntries ? costEntries : costEntries.slice(0, 10)
+    const entries = showAllEntries ? costEntries : costEntries.slice(0, 5)
     console.log('表示エントリー取得:', {
       showAllEntries,
       totalEntries: costEntries.length,
@@ -391,7 +391,7 @@ export default function CostEntryForm({
 
   // 「もっと見る」ボタンを表示するかどうか
   const shouldShowMoreButton = () => {
-    const shouldShow = costEntries.length > 10 && !showAllEntries
+    const shouldShow = costEntries.length > 5 && !showAllEntries
     console.log('もっと見るボタン表示チェック:', {
       totalEntries: costEntries.length,
       showAllEntries,
@@ -841,7 +841,7 @@ export default function CostEntryForm({
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     <ChevronDown className="h-4 w-4 mr-2" />
-                    もっと見る ({costEntries.length - 10}件)
+                    もっと見る ({costEntries.length - 5}件)
                   </button>
                 </div>
               )}
