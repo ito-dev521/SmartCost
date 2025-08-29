@@ -12,7 +12,7 @@ export default async function CostEntry() {
     redirect('/login')
   }
 
-  // サーバーサイドでプロジェクトデータを取得（一般管理費プロジェクトは除外）
+  // サーバーサイドでプロジェクトデータを取得（一般管理費プロジェクトのみ除外）
   const { data: projects } = await supabase
     .from('projects')
     .select('id, name, business_number, status, created_at, updated_at')
@@ -20,13 +20,36 @@ export default async function CostEntry() {
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('name')
 
+  console.log('=== 原価入力ページのプロジェクトデータ ===')
+  projects?.forEach((project, index) => {
+    console.log(`プロジェクト ${index + 1}:`, {
+      id: project.id,
+      name: project.name,
+      business_number: project.business_number,
+      status: project.status,
+      isCaddonSystem: project.business_number?.startsWith('C') || project.name?.includes('CADDON')
+    })
+  })
+  console.log(`総プロジェクト数: ${projects?.length || 0}`)
+
+  // CADDONシステムのプロジェクトが存在するかチェック
+  const hasCaddonSystem = projects?.some(p => p.business_number?.startsWith('C') || p.name?.includes('CADDON'))
+  console.log(`CADDONシステムプロジェクト有無: ${hasCaddonSystem ? 'あり' : 'なし'}`)
+
+  if (!hasCaddonSystem) {
+    console.log('CADDONシステムのプロジェクトが見つかりません')
+    console.log('プロジェクト管理ページでCADDONシステムのプロジェクトを作成してください')
+  }
+
+  console.log('=======================================')
+
   // 予算科目データを取得
   const { data: categories } = await supabase
     .from('budget_categories')
     .select('*')
     .order('level, sort_order')
 
-  // 最近の原価エントリーを取得
+  // 最近の原価エントリーを取得（全件取得してフロントエンドで制御）
   const { data: costEntries } = await supabase
     .from('cost_entries')
     .select(`
@@ -35,7 +58,6 @@ export default async function CostEntry() {
       budget_categories:category_id(name)
     `)
     .order('created_at', { ascending: false })
-    .limit(10)
 
   return (
     <DashboardLayout>

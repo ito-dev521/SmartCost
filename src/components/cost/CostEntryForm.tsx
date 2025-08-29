@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Tables } from '@/lib/supabase'
-import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X, Trash2 } from 'lucide-react'
+import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X, Trash2, ChevronDown } from 'lucide-react'
 
 type Project = Tables<'projects'>
 type BudgetCategory = Tables<'budget_categories'>
@@ -28,6 +28,7 @@ export default function CostEntryForm({
   const [savingGeneral, setSavingGeneral] = useState(false)
   const [editingEntry, setEditingEntry] = useState<CostEntry | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [showAllEntries, setShowAllEntries] = useState(false)
   
   // プロジェクト原価用のフォームデータ
   const [projectFormData, setProjectFormData] = useState({
@@ -155,7 +156,7 @@ export default function CostEntryForm({
         .select('*')
         .order('level, sort_order')
 
-      // 最近の原価エントリーを再取得
+      // 最近の原価エントリーを再取得（全件取得してフロントエンドで制御）
       const { data: entriesData } = await supabase
         .from('cost_entries')
         .select(`
@@ -164,11 +165,14 @@ export default function CostEntryForm({
           budget_categories:category_id(name)
         `)
         .order('created_at', { ascending: false })
-        .limit(10)
 
       if (projectsData) setProjects(projectsData)
       if (categoriesData) setCategories(categoriesData)
-      if (entriesData) setCostEntries(entriesData)
+      if (entriesData) {
+        setCostEntries(entriesData)
+        // 新しいデータが読み込まれたら、表示状態をリセット
+        setShowAllEntries(false)
+      }
     } catch (error) {
       console.error('データ再取得エラー:', error)
     } finally {
@@ -366,12 +370,34 @@ export default function CostEntryForm({
 
   // その他経費用のカテゴリを取得
   const getGeneralCategories = () => {
-    return categories.filter(c => 
+    return categories.filter(c =>
       // 一般管理費、開発費、間接費を含める
       c.name.includes('一般管理費') ||
       c.name.includes('開発費') ||
       c.name.includes('間接費')
     )
+  }
+
+  // 表示するエントリを取得（10件 or 全て）
+  const getDisplayedEntries = () => {
+    const entries = showAllEntries ? costEntries : costEntries.slice(0, 10)
+    console.log('表示エントリー取得:', {
+      showAllEntries,
+      totalEntries: costEntries.length,
+      displayedCount: entries.length
+    })
+    return entries
+  }
+
+  // 「もっと見る」ボタンを表示するかどうか
+  const shouldShowMoreButton = () => {
+    const shouldShow = costEntries.length > 10 && !showAllEntries
+    console.log('もっと見るボタン表示チェック:', {
+      totalEntries: costEntries.length,
+      showAllEntries,
+      shouldShow
+    })
+    return shouldShow
   }
 
   // デバッグ用：プロジェクトデータの詳細を表示
@@ -747,7 +773,8 @@ export default function CostEntryForm({
 
         <div className="space-y-4">
           {costEntries.length > 0 ? (
-            costEntries.map((entry) => (
+            <>
+              {getDisplayedEntries().map((entry) => (
               <div key={entry.id} className={`border-l-4 pl-4 py-2 ${
                 entry.project_id ? 'border-blue-400' : 'border-orange-400'
               }`}>
@@ -804,7 +831,37 @@ export default function CostEntryForm({
                   </div>
                 </div>
               </div>
-            ))
+              ))}
+
+              {/* もっと見るボタン */}
+              {shouldShowMoreButton() && (
+                <div className="text-center pt-4">
+                  <button
+                    onClick={() => setShowAllEntries(true)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    もっと見る ({costEntries.length - 10}件)
+                  </button>
+                </div>
+              )}
+
+              {/* 全て表示中の場合のメッセージと閉じるボタン */}
+              {showAllEntries && costEntries.length > 10 && (
+                <div className="text-center pt-4 space-y-3">
+                  <p className="text-sm text-gray-500">
+                    全{costEntries.length}件を表示中
+                  </p>
+                  <button
+                    onClick={() => setShowAllEntries(false)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-2 rotate-180" />
+                    閉じる
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-8">
               <Calendar className="mx-auto h-12 w-12 text-gray-400" />

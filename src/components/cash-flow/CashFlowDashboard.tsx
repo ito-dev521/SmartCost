@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@/lib/supabase'
 import {
   LineChart,
   Line,
@@ -61,6 +62,9 @@ export default function CashFlowDashboard() {
 
   const fetchCashFlowData = async () => {
     try {
+      // Supabaseクライアントを作成
+      const supabase = createClientComponentClient()
+
       // APIからキャッシュフロー予測データを取得
       const response = await fetch('/api/cash-flow-prediction')
       if (!response.ok) {
@@ -81,7 +85,15 @@ export default function CashFlowDashboard() {
         // フォールバック: サンプルデータを生成
         const sampleData: CashFlowData[] = []
         const currentYear = new Date().getFullYear()
-        const startDate = new Date(currentYear, 3, 1) // 4月開始
+        // 決算月に基づいて年度開始月を決定（決算月の翌月）
+        console.log('キャッシュフロー予測開始月計算:', { fiscalInfo, settlementMonth: fiscalInfo?.settlement_month })
+        const fiscalStartMonth = fiscalInfo ? fiscalInfo.settlement_month : 3 // デフォルトは3月決算
+        const startDate = new Date(currentYear, fiscalStartMonth, 1) // 決算月の翌月を開始月とする
+        console.log('計算結果:', {
+          fiscalStartMonth,
+          startDate: startDate.toISOString().split('T')[0],
+          startMonth: startDate.getMonth() + 1
+        })
         const initialBalance = 5000000
 
         for (let i = 0; i < 12; i++) {
@@ -102,36 +114,8 @@ export default function CashFlowDashboard() {
         setCashFlowData(sampleData)
       }
 
-      // 支払いデータを設定
-      setPaymentData([
-        {
-          id: '1',
-          vendor: '人件費（8月分）',
-          amount: 3800000,
-          dueDate: '2024-08-31',
-          type: '人件費',
-          priority: 10,
-          negotiable: false,
-        },
-        {
-          id: '2',
-          vendor: '材料費',
-          amount: 2500000,
-          dueDate: '2024-08-25',
-          type: '材料費',
-          priority: 8,
-          negotiable: true,
-        },
-        {
-          id: '3',
-          vendor: '委託費',
-          amount: 1800000,
-          dueDate: '2024-08-20',
-          type: '委託費',
-          priority: 9,
-          negotiable: false,
-        },
-      ])
+      // 支払いデータをデータベースから取得
+      await fetchPaymentData(supabase)
     } catch (error) {
       console.error('Error fetching cash flow data:', error)
       // エラー時はサンプルデータを表示
@@ -157,15 +141,269 @@ export default function CashFlowDashboard() {
   }
   const fetchFiscalInfo = async () => {
     try {
+      console.log('fetchFiscalInfo開始')
       const response = await fetch('/api/fiscal-info')
+      console.log('APIレスポンス:', response.status, response.ok)
+
       if (response.ok) {
         const data = await response.json()
+        console.log('取得した決算情報:', data)
         if (data.fiscalInfo) {
+          console.log('設定する決算情報:', data.fiscalInfo)
           setFiscalInfo(data.fiscalInfo)
+        } else {
+          console.log('fiscalInfoが空です')
         }
+      } else {
+        console.log('APIレスポンスがNG:', response.status)
       }
     } catch (error) {
       console.error('決算情報取得エラー:', error)
+    }
+  }
+
+  // 支払いデータをデータベースから取得
+  const fetchPaymentData = async (supabaseClient: any) => {
+    try {
+      // 今後30日以内の支払い予定を取得
+      const today = new Date()
+      const thirtyDaysLater = new Date()
+      thirtyDaysLater.setDate(today.getDate() + 30)
+
+      console.log('支払いデータ取得開始:', {
+        today: today.toISOString().split('T')[0],
+        thirtyDaysLater: thirtyDaysLater.toISOString().split('T')[0]
+      })
+
+      // cost_entriesテーブルが存在するか確認
+      const { data: simpleData, error: simpleError } = await supabaseClient
+        .from('cost_entries')
+        .select('count', { count: 'exact', head: true })
+
+      console.log('cost_entriesテーブル存在確認:', {
+        exists: !simpleError,
+        error: simpleError?.message
+      })
+
+      // テーブルが存在しない場合はsalary_entriesからデータを取得
+      if (simpleError) {
+        console.log('cost_entriesテーブルが存在しないため、salary_entriesからデータを取得します')
+
+        const { data: salaryData, error: salaryError } = await supabaseClient
+          .from('salary_entries')
+          .select(`
+            id,
+            salary_amount,
+            salary_period_end,
+            employee_name,
+            employee_department,
+            notes,
+            created_at
+          `)
+          .gte('salary_period_end', today.toISOString().split('T')[0])
+          .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
+          .order('salary_period_end', { ascending: true })
+          .limit(20)
+
+        console.log('salary_entriesクエリ結果:', { salaryData, salaryError })
+
+        if (salaryError) {
+          console.error('salary_entries取得エラー:', salaryError)
+          setPaymentData([
+            {
+              id: 'error-1',
+              vendor: `データ取得エラー: ${salaryError.message}`,
+              amount: 0,
+              dueDate: today.toISOString().split('T')[0],
+              type: 'エラー',
+              priority: 1,
+              negotiable: false,
+            }
+          ])
+          return
+        }
+
+        if (salaryData && salaryData.length > 0) {
+          // salary_entriesデータをPaymentData形式に変換
+          const paymentData: PaymentData[] = salaryData.map((entry: any) => {
+            const dueDate = new Date(entry.payment_date)
+            const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+            let priority = 5
+            if (daysUntilDue <= 3) priority = 10
+            else if (daysUntilDue <= 7) priority = 8
+            else if (daysUntilDue <= 14) priority = 6
+
+            return {
+              id: entry.id,
+              vendor: `${entry.employee_name} (${entry.employee_department || '部署不明'})`,
+              amount: entry.salary_amount,
+              dueDate: entry.salary_period_end,
+              type: '人件費',
+              priority,
+              negotiable: false, // 人件費は交渉不可
+            }
+          })
+
+          setPaymentData(paymentData)
+          return
+        }
+      }
+
+      // 原価入力（cost_entries）と給与入力（salary_entries）の両方からデータを取得
+      console.log('原価入力と給与入力から支払いデータを取得します')
+
+      // cost_entriesからデータを取得
+      const { data: costEntries, error: costError } = await supabaseClient
+        .from('cost_entries')
+        .select(`
+          id,
+          amount,
+          entry_date,
+          entry_type,
+          company_name,
+          description,
+          project_id
+        `)
+        .gte('entry_date', today.toISOString().split('T')[0])
+        .lte('entry_date', thirtyDaysLater.toISOString().split('T')[0])
+        .order('entry_date', { ascending: true })
+        .limit(10)
+
+      console.log('cost_entriesクエリ結果:', { costEntries, costError })
+
+      // salary_entriesからデータを取得
+      const { data: salaryData, error: salaryError } = await supabaseClient
+        .from('salary_entries')
+        .select(`
+          id,
+          salary_amount,
+          salary_period_end,
+          employee_name,
+          employee_department,
+          notes,
+          created_at
+        `)
+        .gte('salary_period_end', today.toISOString().split('T')[0])
+        .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
+        .order('salary_period_end', { ascending: true })
+        .limit(10)
+
+      console.log('salary_entriesクエリ結果:', { salaryData, salaryError })
+
+      // エラーチェック
+      if (costError && salaryError) {
+        console.error('両方のテーブルでエラーが発生:', { costError, salaryError })
+        setPaymentData([
+          {
+            id: 'error-1',
+            vendor: `データ取得エラー: 原価・給与両方でエラー`,
+            amount: 0,
+            dueDate: today.toISOString().split('T')[0],
+            type: 'エラー',
+            priority: 1,
+            negotiable: false,
+          }
+        ])
+        return
+      }
+
+      // データを統合
+      const paymentData: PaymentData[] = []
+
+      // cost_entriesのデータを変換
+      if (costEntries && !costError) {
+        costEntries.forEach((entry: any) => {
+          const vendor = entry.company_name || '未設定'
+
+          let type = 'その他'
+          if (entry.entry_type === 'salary_allocation') {
+            type = '人件費'
+          } else if (entry.entry_type === 'material') {
+            type = '材料費'
+          } else if (entry.entry_type === 'outsourcing') {
+            type = '委託費'
+          } else if (entry.entry_type === 'overhead') {
+            type = '経費'
+          }
+
+          const dueDate = new Date(entry.entry_date)
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          let priority = 5
+          if (daysUntilDue <= 3) priority = 10
+          else if (daysUntilDue <= 7) priority = 8
+          else if (daysUntilDue <= 14) priority = 6
+
+          const negotiable = entry.amount > 500000 && type !== '人件費'
+
+          paymentData.push({
+            id: `cost-${entry.id}`,
+            vendor: vendor,
+            amount: entry.amount,
+            dueDate: entry.entry_date,
+            type,
+            priority,
+            negotiable
+          })
+        })
+      }
+
+      // salary_entriesのデータを変換
+      if (salaryData && !salaryError) {
+        salaryData.forEach((entry: any) => {
+          const dueDate = new Date(entry.salary_period_end)
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          let priority = 5
+          if (daysUntilDue <= 3) priority = 10
+          else if (daysUntilDue <= 7) priority = 8
+          else if (daysUntilDue <= 14) priority = 6
+
+          paymentData.push({
+            id: `salary-${entry.id}`,
+            vendor: `${entry.employee_name} (${entry.employee_department || '部署不明'})`,
+            amount: entry.salary_amount,
+            dueDate: entry.salary_period_end,
+            type: '人件費',
+            priority,
+            negotiable: false, // 人件費は交渉不可
+          })
+        })
+      }
+
+      // データを期日順にソート
+      paymentData.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+
+      console.log('統合された支払いデータ:', { paymentData, count: paymentData.length })
+
+      if (paymentData.length > 0) {
+        setPaymentData(paymentData)
+      } else {
+        // データがない場合は適切なメッセージを表示
+        setPaymentData([
+          {
+            id: 'no-data',
+            vendor: '今後の支払い予定はありません',
+            amount: 0,
+            dueDate: thirtyDaysLater.toISOString().split('T')[0],
+            type: '情報',
+            priority: 1,
+            negotiable: false,
+          }
+        ])
+      }
+    } catch (error) {
+      console.error('支払いデータ取得エラー:', error)
+      setPaymentData([
+        {
+          id: 'error-1',
+          vendor: 'データ取得エラー',
+          amount: 0,
+          dueDate: new Date().toISOString().split('T')[0],
+          type: 'エラー',
+          priority: 1,
+          negotiable: false,
+        }
+      ])
     }
   }
 
@@ -343,7 +581,7 @@ export default function CashFlowDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            キャッシュフロー予測（決算月の翌月から12ヶ月）
+            キャッシュフロー予測（年度開始月から12ヶ月）
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={cashFlowData}>
