@@ -29,3 +29,4 @@ WHERE support_fee IS NULL;
 
 SELECT 'CADDON請求テーブルに初期設定料フィールドを追加し、サポート料を任意項目に変更しました' AS message;
 
+

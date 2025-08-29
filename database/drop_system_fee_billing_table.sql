@@ -11,3 +11,4 @@ DROP TABLE IF EXISTS system_fee_billing CASCADE;
 -- 削除完了メッセージ
 SELECT 'system_fee_billingテーブルを削除しました' AS message;
 
+
