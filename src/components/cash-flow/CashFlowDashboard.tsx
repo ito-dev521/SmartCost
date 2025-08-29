@@ -54,10 +54,21 @@ export default function CashFlowDashboard() {
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
     fetchCashFlowData()
     fetchFiscalInfo()
+
+    // 支払いスケジュールを30秒ごとに自動更新
+    const intervalId = setInterval(() => {
+      fetchPaymentDataOnly()
+    }, 30000) // 30秒間隔
+
+    // クリーンアップ関数
+    return () => {
+      clearInterval(intervalId)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchCashFlowData = async () => {
@@ -159,6 +170,120 @@ export default function CashFlowDashboard() {
       }
     } catch (error) {
       console.error('決算情報取得エラー:', error)
+    }
+  }
+
+  // 支払いデータのみを定期的に更新
+  const fetchPaymentDataOnly = async () => {
+    try {
+      const supabase = createClientComponentClient()
+
+      // 今後30日以内の支払い予定を取得
+      const today = new Date()
+      const thirtyDaysLater = new Date()
+      thirtyDaysLater.setDate(today.getDate() + 30)
+
+      console.log('支払いデータ自動更新:', {
+        today: today.toISOString().split('T')[0],
+        thirtyDaysLater: thirtyDaysLater.toISOString().split('T')[0]
+      })
+
+      // cost_entriesからデータを取得
+      const { data: costEntries, error: costError } = await supabase
+        .from('cost_entries')
+        .select(`id, amount, entry_date, entry_type, company_name, description, project_id`)
+        .gte('entry_date', today.toISOString().split('T')[0])
+        .lte('entry_date', thirtyDaysLater.toISOString().split('T')[0])
+        .order('entry_date', { ascending: true })
+        .limit(10)
+
+      // salary_entriesからデータを取得
+      const { data: salaryData, error: salaryError } = await supabase
+        .from('salary_entries')
+        .select(`id, salary_amount, salary_period_end, employee_name, employee_department, notes, created_at`)
+        .gte('salary_period_end', today.toISOString().split('T')[0])
+        .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
+        .order('salary_period_end', { ascending: true })
+        .limit(10)
+
+      if (costError && salaryError) {
+        console.error('支払いデータ自動更新エラー:', { costError, salaryError })
+        return
+      }
+
+      // データを統合してPaymentData形式に変換
+      const newPaymentData: PaymentData[] = []
+
+      // cost_entriesのデータを追加
+      if (costEntries && !costError) {
+        costEntries.forEach(entry => {
+          const vendor = entry.company_name || '不明な業者'
+          const dueDate = entry.entry_date
+          const amount = entry.amount
+
+          // エントリータイプに応じた分類
+          let entryType = 'その他'
+          if (entry.entry_type === 'direct') {
+            entryType = '直接費'
+          } else if (entry.entry_type === 'indirect') {
+            entryType = '間接費'
+          } else if (entry.entry_type === 'outsourcing') {
+            entryType = '委託費'
+          } else if (entry.entry_type === 'salary_allocation') {
+            entryType = '人件費'
+          } else if (entry.entry_type === 'material') {
+            entryType = '材料費'
+          } else if (entry.entry_type === 'overhead') {
+            entryType = '経費'
+          } else {
+            entryType = '一般管理費'
+          }
+
+          newPaymentData.push({
+            id: entry.id,
+            vendor,
+            amount,
+            dueDate,
+            type: entryType,
+            priority: 1,
+            negotiable: entry.entry_type !== 'direct' && entry.entry_type !== 'salary_allocation'
+          })
+        })
+      }
+
+      // salary_entriesのデータを追加
+      if (salaryData && !salaryError) {
+        salaryData.forEach(entry => {
+          const vendor = `${entry.employee_name}（${entry.employee_department || '部署不明'}）`
+          const dueDate = entry.salary_period_end
+          const amount = entry.salary_amount
+
+          newPaymentData.push({
+            id: entry.id,
+            vendor,
+            amount,
+            dueDate,
+            type: '給与',
+            priority: 2,
+            negotiable: false
+          })
+        })
+      }
+
+      // 日付順にソート
+      newPaymentData.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+
+      // ステートを更新
+      setPaymentData(newPaymentData)
+      setLastUpdated(new Date())
+
+      console.log('支払いデータ自動更新完了:', {
+        count: newPaymentData.length,
+        lastUpdated: new Date().toISOString()
+      })
+
+    } catch (error) {
+      console.error('支払いデータ自動更新エラー:', error)
     }
   }
 
@@ -377,6 +502,7 @@ export default function CashFlowDashboard() {
 
       if (paymentData.length > 0) {
         setPaymentData(paymentData)
+        setLastUpdated(new Date())
       } else {
         // データがない場合は適切なメッセージを表示
         setPaymentData([
@@ -390,6 +516,7 @@ export default function CashFlowDashboard() {
             negotiable: false,
           }
         ])
+        setLastUpdated(new Date())
       }
     } catch (error) {
       console.error('支払いデータ取得エラー:', error)
@@ -404,6 +531,7 @@ export default function CashFlowDashboard() {
           negotiable: false,
         }
       ])
+      setLastUpdated(new Date())
     }
   }
 
@@ -663,10 +791,25 @@ export default function CashFlowDashboard() {
       {/* 支払いスケジュール */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">支払いスケジュール</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            今後の支払い予定と優先度を確認できます
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">支払いスケジュール</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                今後の支払い予定と優先度を確認できます
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center text-xs text-gray-500">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                自動更新中
+              </div>
+              {lastUpdated && (
+                <p className="text-xs text-gray-400 mt-1">
+                  最終更新: {lastUpdated.toLocaleTimeString('ja-JP')}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
