@@ -253,9 +253,137 @@ export interface Database {
           created_at?: string
         }
       }
-
-
-
+      cash_flow_predictions: {
+        Row: {
+          id: string
+          project_id: string
+          prediction_date: string
+          predicted_outflow: number
+          predicted_inflow: number
+          confidence_score: number | null
+          risk_level: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          prediction_date: string
+          predicted_outflow: number
+          predicted_inflow: number
+          confidence_score?: number | null
+          risk_level?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          prediction_date?: string
+          predicted_outflow?: number
+          predicted_inflow?: number
+          confidence_score?: number | null
+          risk_level?: string | null
+          created_at?: string
+        }
+      }
+      ai_predictions: {
+        Row: {
+          id: string
+          project_id: string
+          prediction_type: string
+          prediction_value: number | null
+          confidence_score: number | null
+          explanation: string | null
+          recommendations: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          prediction_type: string
+          prediction_value?: number | null
+          confidence_score?: number | null
+          explanation?: string | null
+          recommendations?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          prediction_type?: string
+          prediction_value?: number | null
+          confidence_score?: number | null
+          explanation?: string | null
+          recommendations?: Record<string, unknown> | null
+          created_at?: string
+        }
+      }
+      payment_schedule: {
+        Row: {
+          id: string
+          project_id: string
+          vendor_name: string | null
+          payment_amount: number
+          due_date: string
+          payment_type: string | null
+          priority_score: number | null
+          is_negotiable: boolean | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          vendor_name?: string | null
+          payment_amount: number
+          due_date: string
+          payment_type?: string | null
+          priority_score?: number | null
+          is_negotiable?: boolean | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          vendor_name?: string | null
+          payment_amount?: number
+          due_date?: string
+          payment_type?: string | null
+          priority_score?: number | null
+          is_negotiable?: boolean | null
+          created_at?: string
+        }
+      }
+      historical_patterns: {
+        Row: {
+          id: string
+          project_type: string | null
+          project_scale: string | null
+          seasonal_factor: string | null
+          cost_pattern: Record<string, unknown> | null
+          timeline_pattern: Record<string, unknown> | null
+          risk_factors: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_type?: string | null
+          project_scale?: string | null
+          seasonal_factor?: string | null
+          cost_pattern?: Record<string, unknown> | null
+          timeline_pattern?: Record<string, unknown> | null
+          risk_factors?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_type?: string | null
+          project_scale?: string | null
+          seasonal_factor?: string | null
+          cost_pattern?: Record<string, unknown> | null
+          timeline_pattern?: Record<string, unknown> | null
+          risk_factors?: Record<string, unknown> | null
+          created_at?: string
+        }
+      }
 
       user_permissions: {
         Row: {

@@ -109,11 +109,11 @@ export default function CashFlowDashboard() {
         }
         setCashFlowData(sampleCashFlow)
       } else {
-        setCashFlowData(predictions.map(p => ({
-          date: p.prediction_date,
+        setCashFlowData(predictionData.predictions.map(p => ({
+          date: p.date,
           inflow: p.predicted_inflow,
           outflow: p.predicted_outflow,
-          balance: p.predicted_inflow - p.predicted_outflow,
+          balance: p.predicted_balance,
         })))
       }
 
