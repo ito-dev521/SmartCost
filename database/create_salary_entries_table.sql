@@ -151,3 +151,4 @@ COMMENT ON COLUMN salary_allocations.created_at IS '作成日時';
 
 
 
+

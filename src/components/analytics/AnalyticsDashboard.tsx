@@ -310,15 +310,33 @@ export default function AnalyticsDashboard() {
         .select('*')
         .order('billing_month')
 
-      // 決算情報を取得
-      const { data: fiscalInfoData } = await supabase
-        .from('fiscal_info')
-        .select('*')
-        .order('fiscal_year', { ascending: false })
-        .limit(1)
+      // 決算情報を取得（管理者ページで設定されたクッキーから）
+      let fiscalInfoData = null
+      try {
+        const response = await fetch('/api/fiscal-info')
+        if (response.ok) {
+          const data = await response.json()
+          fiscalInfoData = data.fiscalInfo ? [data.fiscalInfo] : null
+          console.log('管理者ページ設定から取得した決算情報:', fiscalInfoData?.[0])
+        }
+      } catch (error) {
+        console.error('決算情報取得エラー:', error)
+      }
+
+      // フォールバック：Supabaseから取得
+      if (!fiscalInfoData) {
+        console.log('管理者ページ設定が見つからないため、Supabaseから取得します')
+        const { data: supabaseData } = await supabase
+          .from('fiscal_info')
+          .select('*')
+          .order('fiscal_year', { ascending: false })
+          .limit(1)
+        fiscalInfoData = supabaseData
+      }
 
       // 決算情報を設定
       if (fiscalInfoData && fiscalInfoData.length > 0) {
+        console.log('Supabaseから取得した決算情報:', fiscalInfoData[0])
         setFiscalInfo(fiscalInfoData[0])
       } else {
         console.log('決算情報が取得できません。デフォルト値（3月決算）を使用します。')
@@ -330,6 +348,7 @@ export default function AnalyticsDashboard() {
           bank_balance: 0,
           notes: 'デフォルト設定'
         }
+        console.log('デフォルト決算情報:', defaultFiscalInfo)
         setFiscalInfo(defaultFiscalInfo)
       }
 
@@ -1290,6 +1309,11 @@ export default function AnalyticsDashboard() {
   const categoryBreakdown = getCategoryCostBreakdown()
   const monthlyTrend = getMonthlyCostTrend()
 
+  // fiscalInfoのデバッグ情報
+  if (process.env.NODE_ENV === 'development' && fiscalInfo) {
+    console.log('年間入金予定表で使用されるfiscalInfo:', fiscalInfo)
+  }
+
   return (
     <div className="space-y-6">
       {/* フィルターセクション */}
@@ -1789,6 +1813,20 @@ export default function AnalyticsDashboard() {
                       const fiscalYearStart = fiscalInfo.settlement_month + 1
                       const month = (fiscalYearStart + i - 1) % 12 + 1
                       const year = month < fiscalYearStart ? selectedYear + 1 : selectedYear
+
+                      // デバッグ情報（開発時のみ）
+                      if (process.env.NODE_ENV === 'development') {
+                        console.log(`月ヘッダー計算 [i=${i}]:`, {
+                          settlementMonth: fiscalInfo.settlement_month,
+                          fiscalYearStart,
+                          month,
+                          year: year,
+                          selectedYear,
+                          i,
+                          calculation: `(fiscalYearStart + i - 1) % 12 + 1 = (${fiscalYearStart} + ${i} - 1) % 12 + 1 = ${(fiscalYearStart + i - 1) % 12 + 1}`
+                        })
+                      }
+
                       return (
                         <th key={month} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[45px]">
                           {month}月

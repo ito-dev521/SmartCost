@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+// Supabaseクライアントは現在使用しない
 import {
   LineChart,
   Line,
@@ -48,11 +49,149 @@ interface FiscalInfo {
   notes: string | null
 }
 
+// インターフェース定義
+interface Project {
+  id: string
+  name: string
+  business_number: string | null
+  contract_amount: number | null
+  start_date: string | null
+  end_date: string | null
+  client_name: string | null
+  status: string
+}
+
+interface Client {
+  id: string
+  name: string
+  payment_cycle_type: string | null
+  payment_cycle_closing_day: number | null
+  payment_cycle_payment_month_offset: number | null
+  payment_cycle_payment_day: number | null
+}
+
+interface CostEntry {
+  id: string
+  project_id: string | null
+  entry_date: string
+  amount: number
+  entry_type: string
+}
+
+interface CaddonBilling {
+  id: string
+  billing_month: string
+  amount: number
+}
+
+interface MonthlyData {
+  month: number
+  year: number
+  amount: number
+}
+
 export default function CashFlowDashboard() {
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([])
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // 分析・レポートと同じ計算ロジック
+  const calculateMonthlyRevenue = (
+    projects: Project[],
+    clients: Client[],
+    caddonBillings: CaddonBilling[],
+    fiscalInfo: any
+  ): MonthlyData[] => {
+    const fiscalYearStart = fiscalInfo.settlement_month + 1
+    const monthlyRevenue: MonthlyData[] = []
+
+    // 一般管理費を除外したプロジェクトを取得
+    const filteredProjects = projects.filter(project =>
+      !project.name.includes('一般管理費') &&
+      !project.name.includes('その他経費')
+    )
+
+    filteredProjects.forEach(project => {
+      const client = clients.find(c => c.name === project.client_name)
+
+      if (project.contract_amount && project.contract_amount > 0) {
+        // プロジェクトの終了日を基に収入を計上
+        if (project.end_date) {
+          const endDate = new Date(project.end_date)
+          const revenueMonth = endDate.getMonth() + 1
+          const revenueYear = endDate.getFullYear()
+
+          // 既存のデータを検索または新規作成
+          let existingData = monthlyRevenue.find(
+            r => r.month === revenueMonth && r.year === revenueYear
+          )
+
+          if (existingData) {
+            existingData.amount += project.contract_amount
+          } else {
+            monthlyRevenue.push({
+              month: revenueMonth,
+              year: revenueYear,
+              amount: project.contract_amount
+            })
+          }
+        }
+      }
+    })
+
+    // CADDON請求も収入として計上
+    caddonBillings.forEach(billing => {
+      const billingDate = new Date(billing.billing_month)
+      const month = billingDate.getMonth() + 1
+      const year = billingDate.getFullYear()
+
+      let existingData = monthlyRevenue.find(
+        r => r.month === month && r.year === year
+      )
+
+      if (existingData) {
+        existingData.amount += billing.amount
+      } else {
+        monthlyRevenue.push({
+          month,
+          year,
+          amount: billing.amount
+        })
+      }
+    })
+
+    return monthlyRevenue
+  }
+
+  const calculateMonthlyCost = (
+    costEntries: CostEntry[],
+    projects: Project[]
+  ): MonthlyData[] => {
+    const monthlyCost: MonthlyData[] = []
+
+    costEntries.forEach(entry => {
+      const entryDate = new Date(entry.entry_date)
+      const month = entryDate.getMonth() + 1
+      const year = entryDate.getFullYear()
+
+      let existingData = monthlyCost.find(
+        c => c.month === month && c.year === year
+      )
+
+      if (existingData) {
+        existingData.amount += entry.amount
+      } else {
+        monthlyCost.push({
+          month,
+          year,
+          amount: entry.amount
+        })
+      }
+    })
+
+    return monthlyCost
+  }
 
   useEffect(() => {
     fetchCashFlowData()
@@ -61,100 +200,220 @@ export default function CashFlowDashboard() {
 
   const fetchCashFlowData = async () => {
     try {
-      // APIからキャッシュフロー予測データを取得
-      const response = await fetch('/api/cash-flow-prediction')
-      if (!response.ok) {
-        throw new Error('Failed to fetch cash flow data')
-      }
-      const predictionData = await response.json()
+      // 分析・レポートと同じデータソースを使用
+      const supabase = createClientComponentClient()
 
-      if (predictionData.predictions && predictionData.predictions.length > 0) {
-        // APIの予測データをチャート用データに変換
-        const chartData: CashFlowData[] = predictionData.predictions.map((p: any) => ({ 
-          date: p.date,
-          inflow: p.predicted_inflow,
-          outflow: p.predicted_outflow,
-          balance: p.predicted_balance,
-        }))
-        setCashFlowData(chartData)
+      // プロジェクトデータを取得
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name')
+
+      // 原価エントリーデータを取得
+      const { data: costEntries } = await supabase
+        .from('cost_entries')
+        .select('*')
+        .order('entry_date', { ascending: false })
+
+      // クライアントデータを取得
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name')
+
+      // CADDON請求データを取得
+      const { data: caddonBillings } = await supabase
+        .from('caddon_billing')
+        .select('*')
+        .order('billing_month')
+
+      // 銀行残高履歴データをAPIから取得
+      const historyResponse = await fetch('/api/bank-balance-history')
+      const historyData = await historyResponse.json()
+
+      // 決算情報を取得
+      const fiscalResponse = await fetch('/api/fiscal-info')
+      const fiscalData = await fiscalResponse.json()
+      const currentFiscalInfo = fiscalData.fiscalInfo || {
+        fiscal_year: new Date().getFullYear(),
+        settlement_month: 3,
+        bank_balance: 5000000
+      }
+
+      // ローカル変数として設定（stateのfiscalInfoではなく）
+      const fiscalInfoForCalculation = currentFiscalInfo
+
+      // 分析・レポートと同じ計算ロジックを使用
+      const monthlyRevenue = calculateMonthlyRevenue(
+        projects || [],
+        clients || [],
+        caddonBillings || [],
+        fiscalInfoForCalculation
+      )
+
+      const monthlyCost = calculateMonthlyCost(
+        costEntries || [],
+        projects || []
+      )
+
+      // 予測データを生成
+      if (monthlyRevenue.length > 0 || monthlyCost.length > 0) {
+        const cashFlowData: CashFlowData[] = []
+        const fiscalYearStart = currentFiscalInfo.settlement_month + 1
+
+        for (let i = 0; i < 12; i++) {
+          const month = ((fiscalYearStart - 1 + i) % 12) + 1
+          const year = currentFiscalInfo.fiscal_year + Math.floor((fiscalYearStart - 1 + i) / 12)
+
+          const revenueData = monthlyRevenue.find(r => r.month === month && r.year === year)
+          const costData = monthlyCost.find(c => c.month === month && c.year === year)
+
+          const inflow = revenueData?.amount || 0
+          const outflow = costData?.amount || 0
+          const balance = inflow - outflow + (i > 0 ? cashFlowData[i-1].balance : currentFiscalInfo.bank_balance)
+
+          cashFlowData.push({
+            date: `${year}-${month.toString().padStart(2, '0')}-01`,
+            inflow: Math.round(inflow),
+            outflow: Math.round(outflow),
+            balance: Math.round(balance)
+          })
+        }
+
+        setCashFlowData(cashFlowData)
       } else {
-        // フォールバック: サンプルデータを生成
-        const sampleData: CashFlowData[] = []
+        // サンプルデータを設定（実際のデータがない場合）
+        const sampleCashFlow: CashFlowData[] = []
+        // 決算月の翌月から開始
+        const settlementMonth = fiscalInfoForCalculation.settlement_month || 3 // デフォルトは3月決算
         const currentYear = new Date().getFullYear()
-        const startDate = new Date(currentYear, 3, 1) // 4月開始
-        const initialBalance = 5000000
+        const startDate = new Date(currentYear, settlementMonth, 1) // 決算月の翌月の1日
+        const initialBalance = fiscalInfoForCalculation.bank_balance || 5000000
 
         for (let i = 0; i < 12; i++) {
           const date = new Date(startDate)
           date.setMonth(startDate.getMonth() + i)
-          
-          const inflow = 15000000 + Math.random() * 5000000
-          const outflow = 12000000 + Math.random() * 3000000
-          const balance = inflow - outflow + (i > 0 ? sampleData[i-1].balance : initialBalance)
-          
-          sampleData.push({
+
+          // 月別の季節性係数（建設業向け）
+          const month = date.getMonth() + 1
+          let seasonalFactor = 1.0
+
+          // 年度末（3月）は集中入金・支出
+          if (month === 3) seasonalFactor = 1.3
+          // 年末（12月）はボーナス・賞与支給
+          else if (month === 12) seasonalFactor = 1.2
+          // 年初（1月）は入金減少
+          else if (month === 1) seasonalFactor = 0.8
+          // 夏期休暇（8月）は業務減少
+          else if (month === 8) seasonalFactor = 0.9
+
+          const baseInflow = (15000000 + Math.random() * 10000000) * seasonalFactor
+          const baseOutflow = (12000000 + Math.random() * 8000000) * seasonalFactor
+          const balance = baseInflow - baseOutflow + (i > 0 ? sampleCashFlow[i-1].balance : initialBalance)
+
+          sampleCashFlow.push({
             date: date.toISOString().split('T')[0],
-            inflow: Math.round(inflow),
-            outflow: Math.round(outflow),
+            inflow: Math.round(baseInflow),
+            outflow: Math.round(baseOutflow),
             balance: Math.round(balance),
           })
         }
-        setCashFlowData(sampleData)
+        setCashFlowData(sampleCashFlow)
+      } else {
+        setCashFlowData(predictionData.predictions.map(p => ({
+          date: p.date,
+          inflow: p.predicted_inflow,
+          outflow: p.predicted_outflow,
+          balance: p.predicted_balance,
+        })))
       }
 
-      // 支払いデータを設定
+      // 支払いデータを設定（サンプルデータを使用）
       setPaymentData([
-        {
-          id: '1',
-          vendor: '人件費（8月分）',
-          amount: 3800000,
-          dueDate: '2024-08-31',
-          type: '人件費',
-          priority: 10,
-          negotiable: false,
-        },
-        {
-          id: '2',
-          vendor: '材料費',
-          amount: 2500000,
-          dueDate: '2024-08-25',
-          type: '材料費',
-          priority: 8,
-          negotiable: true,
-        },
-        {
-          id: '3',
-          vendor: '委託費',
-          amount: 1800000,
-          dueDate: '2024-08-20',
-          type: '委託費',
-          priority: 9,
-          negotiable: false,
-        },
-      ])
+          {
+            id: '1',
+            vendor: '株式会社A設計',
+            amount: 2800000,
+            dueDate: '2024-09-15',
+            type: '外注費',
+            priority: 8,
+            negotiable: false,
+          },
+          {
+            id: '2',
+            vendor: 'B測量事務所',
+            amount: 1200000,
+            dueDate: '2024-09-20',
+            type: '測量費',
+            priority: 6,
+            negotiable: true,
+          },
+          {
+            id: '3',
+            vendor: 'C建設コンサルタント',
+            amount: 3500000,
+            dueDate: '2024-09-25',
+            type: '委託費',
+            priority: 9,
+            negotiable: false,
+          },
+          {
+            id: '4',
+            vendor: '人件費（9月分）',
+            amount: 4200000,
+            dueDate: '2024-09-30',
+            type: '人件費',
+            priority: 10,
+            negotiable: false,
+          },
+        ])
+      } else {
+        // APIから取得した予測データをキャッシュフローデータとして設定
+        setCashFlowData(predictionData.predictions.map(p => ({
+          date: p.date,
+          inflow: p.predicted_inflow,
+          outflow: p.predicted_outflow,
+          balance: p.predicted_balance
+        })))
+
+        // サンプル支払いデータを設定
+        setPaymentData([
+          {
+            id: '1',
+            vendor: '人件費（8月分）',
+            amount: 3800000,
+            dueDate: '2024-08-31',
+            type: '人件費',
+            priority: 10,
+            negotiable: false,
+          },
+          {
+            id: '2',
+            vendor: '材料費',
+            amount: 2500000,
+            dueDate: '2024-08-25',
+            type: '材料費',
+            priority: 8,
+            negotiable: true,
+          },
+          {
+            id: '3',
+            vendor: '委託費',
+            amount: 1800000,
+            dueDate: '2024-08-20',
+            type: '委託費',
+            priority: 9,
+            negotiable: false,
+          },
+        ])
+      }
     } catch (error) {
       console.error('Error fetching cash flow data:', error)
-      // エラー時はサンプルデータを表示
-      const fallbackData: CashFlowData[] = []
-      const currentYear = new Date().getFullYear()
-      const startDate = new Date(currentYear, 3, 1)
-      
-      for (let i = 0; i < 12; i++) {
-        const date = new Date(startDate)
-        date.setMonth(startDate.getMonth() + i)
-        
-        fallbackData.push({
-          date: date.toISOString().split('T')[0],
-          inflow: 15000000,
-          outflow: 12000000,
-          balance: 3000000,
-        })
-      }
-      setCashFlowData(fallbackData)
     } finally {
       setLoading(false)
     }
   }
+
   const fetchFiscalInfo = async () => {
     try {
       const response = await fetch('/api/fiscal-info')

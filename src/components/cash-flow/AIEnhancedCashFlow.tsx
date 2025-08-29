@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@/lib/supabase'
 import {
   Brain,
   TrendingUp,
@@ -25,6 +26,47 @@ import {
   Area,
   AreaChart,
 } from 'recharts'
+
+// 追加のインターフェース定義
+interface Project {
+  id: string
+  name: string
+  business_number: string | null
+  contract_amount: number | null
+  start_date: string | null
+  end_date: string | null
+  client_name: string | null
+  status: string
+}
+
+interface Client {
+  id: string
+  name: string
+  payment_cycle_type: string | null
+  payment_cycle_closing_day: number | null
+  payment_cycle_payment_month_offset: number | null
+  payment_cycle_payment_day: number | null
+}
+
+interface CostEntry {
+  id: string
+  project_id: string | null
+  entry_date: string
+  amount: number
+  entry_type: string
+}
+
+interface CaddonBilling {
+  id: string
+  billing_month: string
+  amount: number
+}
+
+interface MonthlyData {
+  month: number
+  year: number
+  amount: number
+}
 
 interface BankBalanceHistory {
   id: string
@@ -101,6 +143,103 @@ export default function AIEnhancedCashFlow() {
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'predictions' | 'analysis'>('overview')
 
+  // 分析・レポートと同じ計算ロジック
+  const calculateMonthlyRevenue = (
+    projects: Project[],
+    clients: Client[],
+    caddonBillings: CaddonBilling[],
+    fiscalInfo: any
+  ): MonthlyData[] => {
+    const fiscalYearStart = fiscalInfo.settlement_month + 1
+    const monthlyRevenue: MonthlyData[] = []
+
+    // 一般管理費を除外したプロジェクトを取得
+    const filteredProjects = projects.filter(project =>
+      !project.name.includes('一般管理費') &&
+      !project.name.includes('その他経費')
+    )
+
+    filteredProjects.forEach(project => {
+      const client = clients.find(c => c.name === project.client_name)
+
+      if (project.contract_amount && project.contract_amount > 0) {
+        // プロジェクトの終了日を基に収入を計上
+        if (project.end_date) {
+          const endDate = new Date(project.end_date)
+          const revenueMonth = endDate.getMonth() + 1
+          const revenueYear = endDate.getFullYear()
+
+          // 既存のデータを検索または新規作成
+          let existingData = monthlyRevenue.find(
+            r => r.month === revenueMonth && r.year === revenueYear
+          )
+
+          if (existingData) {
+            existingData.amount += project.contract_amount
+          } else {
+            monthlyRevenue.push({
+              month: revenueMonth,
+              year: revenueYear,
+              amount: project.contract_amount
+            })
+          }
+        }
+      }
+    })
+
+    // CADDON請求も収入として計上
+    caddonBillings.forEach(billing => {
+      const billingDate = new Date(billing.billing_month)
+      const month = billingDate.getMonth() + 1
+      const year = billingDate.getFullYear()
+
+      let existingData = monthlyRevenue.find(
+        r => r.month === month && r.year === year
+      )
+
+      if (existingData) {
+        existingData.amount += billing.amount
+      } else {
+        monthlyRevenue.push({
+          month,
+          year,
+          amount: billing.amount
+        })
+      }
+    })
+
+    return monthlyRevenue
+  }
+
+  const calculateMonthlyCost = (
+    costEntries: CostEntry[],
+    projects: Project[]
+  ): MonthlyData[] => {
+    const monthlyCost: MonthlyData[] = []
+
+    costEntries.forEach(entry => {
+      const entryDate = new Date(entry.entry_date)
+      const month = entryDate.getMonth() + 1
+      const year = entryDate.getFullYear()
+
+      let existingData = monthlyCost.find(
+        c => c.month === month && c.year === year
+      )
+
+      if (existingData) {
+        existingData.amount += entry.amount
+      } else {
+        monthlyCost.push({
+          month,
+          year,
+          amount: entry.amount
+        })
+      }
+    })
+
+    return monthlyCost
+  }
+
   useEffect(() => {
     initializeData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -155,32 +294,73 @@ export default function AIEnhancedCashFlow() {
   const generateAIAnalysis = async () => {
     setGenerating(true)
     try {
+      // 分析・レポートと同じデータソースを使用
+      const supabase = createClientComponentClient()
+
+      // プロジェクトデータを取得
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name')
+
+      // 原価エントリーデータを取得
+      const { data: costEntries } = await supabase
+        .from('cost_entries')
+        .select('*')
+        .order('entry_date', { ascending: false })
+
+      // クライアントデータを取得
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name')
+
+      // CADDON請求データを取得
+      const { data: caddonBillings } = await supabase
+        .from('caddon_billing')
+        .select('*')
+        .order('billing_month')
+
       const currentBalance = fiscalInfo?.bank_balance || 0
 
-      // 過去3ヶ月分のデータを分析
-      const recentHistory = history
-        .sort((a, b) => new Date(b.balance_date).getTime() - new Date(a.balance_date).getTime())
-        .slice(0, 3)
+      // 分析・レポートと同じ計算ロジックを使用
+      const monthlyRevenue = calculateMonthlyRevenue(
+        projects || [],
+        clients || [],
+        caddonBillings || [],
+        fiscalInfo || { settlement_month: 3 }
+      )
+
+      const monthlyCost = calculateMonthlyCost(
+        costEntries || [],
+        projects || []
+      )
 
       // 月間収入・支出の平均を計算
-      const totalIncome = recentHistory.reduce((sum, h) => sum + h.total_income, 0)
-      const totalExpense = recentHistory.reduce((sum, h) => sum + h.total_expense, 0)
-      const averageMonthlyIncome = totalIncome / Math.max(recentHistory.length, 1)
-      const averageMonthlyExpense = totalExpense / Math.max(recentHistory.length, 1)
+      const totalIncome = monthlyRevenue.reduce((sum, r) => sum + r.amount, 0)
+      const totalExpense = monthlyCost.reduce((sum, c) => sum + c.amount, 0)
+      const averageMonthlyIncome = monthlyRevenue.length > 0 ? totalIncome / monthlyRevenue.length : 0
+      const averageMonthlyExpense = monthlyCost.length > 0 ? totalExpense / monthlyCost.length : 0
 
       // 残存月数を計算
       const burnRate = averageMonthlyExpense > 0 ? averageMonthlyExpense : 1
       const runwayMonths = currentBalance / burnRate
 
-      // 残高推移を分析
+      // 残高推移を分析（収入・支出データから計算）
       let balance_trend: 'increasing' | 'decreasing' | 'stable' = 'stable'
-      if (recentHistory.length >= 2) {
-        const firstBalance = recentHistory[recentHistory.length - 1].closing_balance
-        const lastBalance = recentHistory[0].closing_balance
-        const change = ((lastBalance - firstBalance) / firstBalance) * 100
+      if (monthlyRevenue.length >= 2 && monthlyCost.length >= 2) {
+        // 直近2ヶ月の収入・支出バランスを比較
+        const recentRevenue = monthlyRevenue.slice(-2).reduce((sum, r) => sum + r.amount, 0) / 2
+        const recentCost = monthlyCost.slice(-2).reduce((sum, c) => sum + c.amount, 0) / 2
+        const earlierRevenue = monthlyRevenue.slice(-4, -2).reduce((sum, r) => sum + r.amount, 0) / 2 || recentRevenue
+        const earlierCost = monthlyCost.slice(-4, -2).reduce((sum, c) => sum + c.amount, 0) / 2 || recentCost
 
-        if (change > 5) balance_trend = 'increasing'
-        else if (change < -5) balance_trend = 'decreasing'
+        const recentBalance = recentRevenue - recentCost
+        const earlierBalance = earlierRevenue - earlierCost
+        const change = earlierBalance > 0 ? ((recentBalance - earlierBalance) / earlierBalance) * 100 : 0
+
+        if (change > 10) balance_trend = 'increasing'
+        else if (change < -10) balance_trend = 'decreasing'
       }
 
       // AI予測を生成
