@@ -12,15 +12,28 @@ import {
 import { Bar, Doughnut } from 'react-chartjs-2'
 
 // ドーナツグラフの中心にテキストを表示するプラグイン
-const createCenterTextPlugin = (projectInfo: any) => {
+const createCenterTextPlugin = (projectInfo: {
+  name: string
+  businessNumber: string
+} | null) => {
   return {
     id: 'centerText',
-    afterDraw(chart: any) {
+    afterDraw(chart: {
+      ctx: CanvasRenderingContext2D
+      chartArea: {
+        left: number
+        right: number
+        top: number
+        bottom: number
+        width: number
+        height: number
+      } | null
+    }) {
       const { ctx, chartArea } = chart
       
       if (!chartArea) return
       
-      const { left, right, top, bottom, width, height } = chartArea
+      const { left, top, width, height } = chartArea
       const centerX = left + width / 2
       const centerY = top + height / 2
 
@@ -303,7 +316,14 @@ const CategoryDetailModal: React.FC<CategoryDetailModalProps> = ({
 }
 
 const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, costEntries, selectedProject }) => {
-  const [selectedCategory, setSelectedCategory] = useState<any>(null)
+  const [selectedCategory, setSelectedCategory] = useState<{
+    category: {
+      id: string
+      name: string
+    }
+    total: number
+    count: number
+  } | null>(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   
   // データの準備
@@ -399,7 +419,15 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
       },
       tooltip: {
         callbacks: {
-          label: function(context: any) {
+          label: function(context: {
+            dataset: {
+              label: string
+            }
+            label: string
+            parsed: {
+              y: number
+            }
+          }) {
             if (context.dataset.label === '原価（円）') {
               return `${context.label}: ${Math.round(context.parsed.y).toLocaleString('ja-JP')}円`
             } else {
@@ -419,7 +447,7 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
           text: '原価（円）',
         },
         ticks: {
-          callback: function(value: any) {
+          callback: function(value: number) {
             return value.toLocaleString('ja-JP') + '円'
           }
         }
@@ -456,10 +484,16 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
       },
       tooltip: {
         callbacks: {
-          label: function(context: any) {
+          label: function(context: {
+            dataset: {
+              data: number[]
+            }
+            label: string
+            parsed: number
+          }) {
             const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
             const percentage = ((context.parsed / total) * 100).toFixed(1)
-            return `${context.label}: ${Math.round(context.parsed).toLocaleString('ja-JP')}円 (${percentage}%)`
+            return `${context.label}: ${Math.round(context.parsed).toLocaleString('ja-JP') + '円'} (${percentage}%)`
           }
         }
       }
@@ -597,7 +631,10 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
             return categoryMatch
           })}
           selectedProject={selectedProject}
-          projects={costEntries?.reduce((acc: any[], entry) => {
+          projects={costEntries?.reduce((acc: {
+            id: string | null
+            name: string
+          }[], entry) => {
             if (entry.project && !acc.find(p => p.id === entry.project_id)) {
               acc.push({ id: entry.project_id, name: entry.project.name })
             }

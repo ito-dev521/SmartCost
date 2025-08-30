@@ -59,3 +59,4 @@ COMMENT ON COLUMN bank_balance_history.total_income IS '総収入額';
 COMMENT ON COLUMN bank_balance_history.total_expense IS '総支出額';
 COMMENT ON COLUMN bank_balance_history.transaction_count IS '取引件数';
 
+

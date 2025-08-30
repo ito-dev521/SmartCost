@@ -85,7 +85,12 @@ export default function CashFlowDashboard() {
 
       if (predictionData.predictions && predictionData.predictions.length > 0) {
         // APIの予測データをチャート用データに変換
-        const chartData: CashFlowData[] = predictionData.predictions.map((p: any) => ({ 
+        const chartData: CashFlowData[] = predictionData.predictions.map((p: {
+          date: string
+          predicted_inflow: number
+          predicted_outflow: number
+          predicted_balance: number
+        }) => ({ 
           date: p.date,
           inflow: p.predicted_inflow,
           outflow: p.predicted_outflow,
@@ -288,7 +293,7 @@ export default function CashFlowDashboard() {
   }
 
   // 支払いデータをデータベースから取得
-  const fetchPaymentData = async (supabaseClient: any) => {
+  const fetchPaymentData = async (supabaseClient: ReturnType<typeof createClientComponentClient>) => {
     try {
       // 今後30日以内の支払い予定を取得
       const today = new Date()
@@ -301,7 +306,7 @@ export default function CashFlowDashboard() {
       })
 
       // cost_entriesテーブルが存在するか確認
-      const { data: simpleData, error: simpleError } = await supabaseClient
+      const { error: simpleError } = await supabaseClient
         .from('cost_entries')
         .select('count', { count: 'exact', head: true })
 
@@ -350,7 +355,14 @@ export default function CashFlowDashboard() {
 
         if (salaryData && salaryData.length > 0) {
           // salary_entriesデータをPaymentData形式に変換
-          const paymentData: PaymentData[] = salaryData.map((entry: any) => {
+          const paymentData: PaymentData[] = salaryData.map((entry: {
+            id: string
+            salary_amount: number
+            salary_period_end: string
+            employee_name: string
+            employee_department: string | null
+            payment_date: string
+          }) => {
             const dueDate = new Date(entry.payment_date)
             const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -438,7 +450,13 @@ export default function CashFlowDashboard() {
 
       // cost_entriesのデータを変換
       if (costEntries && !costError) {
-        costEntries.forEach((entry: any) => {
+        costEntries.forEach((entry: {
+          id: string
+          company_name: string | null
+          entry_type: string
+          entry_date: string
+          amount: number
+        }) => {
           const vendor = entry.company_name || '未設定'
 
           let type = 'その他'
@@ -475,7 +493,13 @@ export default function CashFlowDashboard() {
 
       // salary_entriesのデータを変換
       if (salaryData && !salaryError) {
-        salaryData.forEach((entry: any) => {
+        salaryData.forEach((entry: {
+          id: string
+          salary_amount: number
+          salary_period_end: string
+          employee_name: string
+          employee_department: string | null
+        }) => {
           const dueDate = new Date(entry.salary_period_end)
           const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
           let priority = 5
@@ -544,6 +568,11 @@ export default function CashFlowDashboard() {
   }
 
   const formatDate = (date: string) => {
+    // APIから受け取った日付文字列が「YYYY年M月」形式の場合はそのまま返す
+    if (date.includes('年') && date.includes('月')) {
+      return date
+    }
+    // 従来の日付形式の場合は従来通り処理
     return new Date(date).toLocaleDateString('ja-JP', {
       month: 'short',
       day: 'numeric',
@@ -717,8 +746,15 @@ export default function CashFlowDashboard() {
               <XAxis
                 dataKey="date"
                 tickFormatter={(date) => {
-                  const d = new Date(date)
-                  return `${d.getMonth() + 1}月`
+                  if (typeof date === 'string') {
+                    if (date.includes('年') && date.includes('月')) {
+                      const m = date.match(/(\d+)月/)
+                      const month = m ? parseInt(m[1], 10) : NaN
+                      return Number.isFinite(month) ? `${month}月` : date
+                    }
+                  }
+                  const d = new Date(date as string)
+                  return Number.isFinite(d.getTime()) ? `${d.getMonth() + 1}月` : String(date)
                 }}
                 fontSize={12}
               />

@@ -19,14 +19,16 @@ export async function GET(request: NextRequest) {
     // リクエストヘッダーをログ出力
     console.log('📋 /api/projects: リクエストヘッダー:', Object.fromEntries(request.headers.entries()))
 
-    // プロジェクト一覧を取得（一般管理費プロジェクトは除外）
+    // プロジェクト一覧を取得（一般管理費プロジェクトとCADDONシステムは除外）
     console.log('🔍 /api/projects: プロジェクト一覧取得開始')
     const { data: projects, error } = await supabase
       .from('projects')
       .select('*')
       .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
       .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
-      .order('created_at', { ascending: false })
+      .not('business_number', 'ilike', 'C%')  // CADDONシステムを除外（業務番号がCで始まる）
+      .not('name', 'ilike', '%CADDON%')  // CADDONシステムを除外（プロジェクト名にCADDONが含まれる）
+      .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
     if (error) {
       console.error('❌ /api/projects: プロジェクト取得エラー:', error)

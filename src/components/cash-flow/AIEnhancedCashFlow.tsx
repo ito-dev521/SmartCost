@@ -39,14 +39,7 @@ interface Project {
   status: string
 }
 
-interface Client {
-  id: string
-  name: string
-  payment_cycle_type: string | null
-  payment_cycle_closing_day: number | null
-  payment_cycle_payment_month_offset: number | null
-  payment_cycle_payment_day: number | null
-}
+
 
 interface CostEntry {
   id: string
@@ -105,6 +98,37 @@ interface DetailedCashFlowPrediction {
   recommendations: string[]
 }
 
+// AI分析結果のインターフェース
+interface AIAnalysisResult {
+  riskAnalysis: {
+    highRiskPeriods: {
+      months: string[]
+      riskFactors: string[]
+      severity: 'high' | 'medium' | 'low'
+      recommendations: string[]
+    }
+    seasonalRisks: {
+      winterRisk: boolean
+      yearEndRisk: boolean
+      fiscalYearEndRisk: boolean
+      riskFactors: string[]
+      recommendations: string[]
+    }
+  }
+  growthOpportunities: {
+    highGrowthMonths: string[]
+    potentialProjects: string[]
+    marketTrends: string[]
+    recommendations: string[]
+  }
+  overallAssessment: {
+    riskLevel: 'low' | 'medium' | 'high'
+    confidence: number
+    summary: string
+    keyActions: string[]
+  }
+}
+
 interface PredictionSummary {
   total_predicted_inflow: number
   total_predicted_outflow: number
@@ -142,15 +166,15 @@ export default function AIEnhancedCashFlow() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'predictions' | 'analysis'>('overview')
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null)
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
 
   // 分析・レポートと同じ計算ロジック
   const calculateMonthlyRevenue = (
     projects: Project[],
-    clients: Client[],
-    caddonBillings: CaddonBilling[],
-    fiscalInfo: any
+    caddonBillings: CaddonBilling[]
   ): MonthlyData[] => {
-    const fiscalYearStart = fiscalInfo.settlement_month + 1
+
     const monthlyRevenue: MonthlyData[] = []
 
     // 一般管理費を除外したプロジェクトを取得
@@ -160,7 +184,7 @@ export default function AIEnhancedCashFlow() {
     )
 
     filteredProjects.forEach(project => {
-      const client = clients.find(c => c.name === project.client_name)
+
 
       if (project.contract_amount && project.contract_amount > 0) {
         // プロジェクトの終了日を基に収入を計上
@@ -170,9 +194,9 @@ export default function AIEnhancedCashFlow() {
           const revenueYear = endDate.getFullYear()
 
           // 既存のデータを検索または新規作成
-          let existingData = monthlyRevenue.find(
-            r => r.month === revenueMonth && r.year === revenueYear
-          )
+                const existingData = monthlyRevenue.find(
+        r => r.month === revenueMonth && r.year === revenueYear
+      )
 
           if (existingData) {
             existingData.amount += project.contract_amount
@@ -193,7 +217,7 @@ export default function AIEnhancedCashFlow() {
       const month = billingDate.getMonth() + 1
       const year = billingDate.getFullYear()
 
-      let existingData = monthlyRevenue.find(
+      const existingData = monthlyRevenue.find(
         r => r.month === month && r.year === year
       )
 
@@ -212,8 +236,7 @@ export default function AIEnhancedCashFlow() {
   }
 
   const calculateMonthlyCost = (
-    costEntries: CostEntry[],
-    projects: Project[]
+    costEntries: CostEntry[]
   ): MonthlyData[] => {
     const monthlyCost: MonthlyData[] = []
 
@@ -222,7 +245,7 @@ export default function AIEnhancedCashFlow() {
       const month = entryDate.getMonth() + 1
       const year = entryDate.getFullYear()
 
-      let existingData = monthlyCost.find(
+      const existingData = monthlyCost.find(
         c => c.month === month && c.year === year
       )
 
@@ -309,11 +332,7 @@ export default function AIEnhancedCashFlow() {
         .select('*')
         .order('entry_date', { ascending: false })
 
-      // クライアントデータを取得
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name')
+
 
       // CADDON請求データを取得
       const { data: caddonBillings } = await supabase
@@ -326,9 +345,7 @@ export default function AIEnhancedCashFlow() {
       // 分析・レポートと同じ計算ロジックを使用
       const monthlyRevenue = calculateMonthlyRevenue(
         projects || [],
-        clients || [],
-        caddonBillings || [],
-        fiscalInfo || { settlement_month: 3 }
+        caddonBillings || []
       )
 
       const monthlyCost = calculateMonthlyCost(
@@ -460,8 +477,49 @@ export default function AIEnhancedCashFlow() {
       case 'cash_shortage': return 'border-red-200 bg-red-50'
       case 'surplus': return 'border-green-200 bg-green-50'
       case 'optimal': return 'border-blue-200 bg-blue-50'
-      case 'warning': return 'border-yellow-200 bg-yellow-50'
+      case 'warning': return 'border-yellow-200 bg-yellow-500'
       default: return 'border-gray-200 bg-gray-50'
+    }
+  }
+
+  // AI分析を実行する関数
+  const performAIAnalysis = async () => {
+    if (!detailedPredictions.length) return
+
+    try {
+      setAiAnalysisLoading(true)
+      
+      // プロジェクトデータを取得
+      const supabase = createClientComponentClient()
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('*')
+        .order('business_number', { ascending: true })
+
+      // AI分析APIを呼び出し
+      const response = await fetch('/api/ai-cash-flow-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          predictions: detailedPredictions,
+          projects: projects || [],
+          fiscalInfo
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setAiAnalysisResult(result.analysis)
+        console.log('AI分析結果:', result.analysis)
+      } else {
+        console.error('AI分析APIエラー:', response.status)
+      }
+    } catch (error) {
+      console.error('AI分析実行エラー:', error)
+    } finally {
+      setAiAnalysisLoading(false)
     }
   }
 
@@ -859,8 +917,13 @@ export default function AIEnhancedCashFlow() {
                     <XAxis
                       dataKey="date"
                       tickFormatter={(date) => {
-                        const d = new Date(date)
-                        return `${d.getMonth() + 1}月`
+                        if (typeof date === 'string' && date.includes('年') && date.includes('月')) {
+                          const m = date.match(/(\d+)月/)
+                          const month = m ? parseInt(m[1], 10) : NaN
+                          return Number.isFinite(month) ? `${month}月` : date
+                        }
+                        const d = new Date(date as string)
+                        return Number.isFinite(d.getTime()) ? `${d.getMonth() + 1}月` : String(date)
                       }}
                       fontSize={12}
                     />
@@ -874,7 +937,13 @@ export default function AIEnhancedCashFlow() {
                         name === 'predicted_inflow' ? '予測収入' :
                         name === 'predicted_outflow' ? '予測支出' : '予測残高'
                       ]}
-                      labelFormatter={(date) => `日付: ${new Date(date).toLocaleDateString('ja-JP')}`}
+                      labelFormatter={(date) => {
+                        if (typeof date === 'string' && date.includes('年') && date.includes('月')) {
+                          return `日付: ${date}`
+                        }
+                        const d = new Date(date as string)
+                        return `日付: ${Number.isFinite(d.getTime()) ? d.toLocaleDateString('ja-JP') : String(date)}`
+                      }}
                     />
                     <Area
                       type="monotone"
@@ -940,7 +1009,10 @@ export default function AIEnhancedCashFlow() {
                     {detailedPredictions.map((prediction, index) => (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(prediction.date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                          {prediction.date.includes('年') && prediction.date.includes('月') 
+                            ? prediction.date 
+                            : new Date(prediction.date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })
+                          }
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
                           +{formatCurrency(prediction.predicted_inflow)}
@@ -977,12 +1049,223 @@ export default function AIEnhancedCashFlow() {
       {/* リスク分析タブ */}
       {activeTab === 'analysis' && (
         <div className="space-y-6">
-          {/* リスク警告と推奨事項 */}
+          {/* AI分析実行ボタン */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              リスク分析と対策
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                <Brain className="h-5 w-5 text-blue-600" />
+                AI分析実行
+              </h3>
+              <button
+                onClick={performAIAnalysis}
+                disabled={aiAnalysisLoading || !detailedPredictions.length}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {aiAnalysisLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4" />
+                    AI分析を実行
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              詳細な予測データを基に、AIが高リスク期間、季節性リスク、成長機会を分析します。
+            </p>
+          </div>
+
+          {/* AI分析結果 */}
+          {aiAnalysisResult && (
+            <div className="space-y-6">
+              {/* 全体的なリスク評価 */}
+              <div className={`bg-white shadow rounded-lg p-6 border-l-4 ${
+                aiAnalysisResult.overallAssessment.riskLevel === 'high' ? 'border-red-500' :
+                aiAnalysisResult.overallAssessment.riskLevel === 'medium' ? 'border-yellow-500' :
+                'border-green-500'
+              }`}>
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  全体的なリスク評価
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      aiAnalysisResult.overallAssessment.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
+                      aiAnalysisResult.overallAssessment.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      リスクレベル: {aiAnalysisResult.overallAssessment.riskLevel === 'high' ? '高' :
+                                   aiAnalysisResult.overallAssessment.riskLevel === 'medium' ? '中' : '低'}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      信頼度: {(aiAnalysisResult.overallAssessment.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <p className="text-gray-700">{aiAnalysisResult.overallAssessment.summary}</p>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 mb-2">キーアクション:</p>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      {aiAnalysisResult.overallAssessment.keyActions.map((action, index) => (
+                        <li key={index} className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          {action}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* 高リスク期間の検知 */}
+              {aiAnalysisResult.riskAnalysis.highRiskPeriods.months.length > 0 && (
+                <div className="bg-white shadow rounded-lg p-6 border-l-4 border-red-500">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    高リスク期間の検知
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-4">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        aiAnalysisResult.riskAnalysis.highRiskPeriods.severity === 'high' ? 'bg-red-100 text-red-800' :
+                        aiAnalysisResult.riskAnalysis.highRiskPeriods.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        リスク度: {aiAnalysisResult.riskAnalysis.highRiskPeriods.severity === 'high' ? '高' :
+                                 aiAnalysisResult.riskAnalysis.highRiskPeriods.severity === 'medium' ? '中' : '低'}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        高リスク月: {aiAnalysisResult.riskAnalysis.highRiskPeriods.months.join(', ')}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-2">リスク要因:</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {aiAnalysisResult.riskAnalysis.highRiskPeriods.riskFactors.map((factor, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            {factor}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-2">推奨対策:</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {aiAnalysisResult.riskAnalysis.highRiskPeriods.recommendations.map((rec, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 季節性リスクの検知 */}
+              {(aiAnalysisResult.riskAnalysis.seasonalRisks.winterRisk || 
+                aiAnalysisResult.riskAnalysis.seasonalRisks.yearEndRisk || 
+                aiAnalysisResult.riskAnalysis.seasonalRisks.fiscalYearEndRisk) && (
+                <div className="bg-white shadow rounded-lg p-6 border-l-4 border-yellow-500">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-yellow-500" />
+                    季節性リスクの検知
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-2">検知されたリスク:</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {aiAnalysisResult.riskAnalysis.seasonalRisks.riskFactors.map((factor, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                            {factor}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-2">季節性対策:</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {aiAnalysisResult.riskAnalysis.seasonalRisks.recommendations.map((rec, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 成長機会の検知 */}
+              {(aiAnalysisResult.growthOpportunities.highGrowthMonths.length > 0 || 
+                aiAnalysisResult.growthOpportunities.potentialProjects.length > 0) && (
+                <div className="bg-white shadow rounded-lg p-6 border-l-4 border-green-500">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-500" />
+                    成長機会の検知
+                  </h3>
+                  <div className="space-y-3">
+                    {aiAnalysisResult.growthOpportunities.highGrowthMonths.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 mb-2">高成長月:</p>
+                        <p className="text-sm text-gray-700">
+                          {aiAnalysisResult.growthOpportunities.highGrowthMonths.join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {aiAnalysisResult.growthOpportunities.potentialProjects.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 mb-2">潜在的なプロジェクト機会:</p>
+                        <ul className="text-sm text-gray-700 space-y-1">
+                          {aiAnalysisResult.growthOpportunities.potentialProjects.map((project, index) => (
+                            <li key={index} className="flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              {project}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {aiAnalysisResult.growthOpportunities.marketTrends.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 mb-2">市場トレンド:</p>
+                        <ul className="text-sm text-gray-700 space-y-1">
+                          {aiAnalysisResult.growthOpportunities.marketTrends.map((trend, index) => (
+                            <li key={index} className="flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-green-600" />
+                              {trend}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-2">成長戦略:</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {aiAnalysisResult.growthOpportunities.recommendations.map((rec, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 従来のリスク分析（AI分析が実行されていない場合のフォールバック） */}
+          {!aiAnalysisResult && (
             <div className="space-y-4">
               {/* 高リスク期間の警告 */}
               {detailedPredictions.some(p => p.risk_level === 'high') && (
@@ -1012,7 +1295,15 @@ export default function AIEnhancedCashFlow() {
               {/* 季節性リスクの警告 */}
               {(() => {
                 const seasonalRiskMonths = detailedPredictions.filter(p => {
-                  const month = new Date(p.date).getMonth() + 1
+                  let month = 1
+                  if (p.date.includes('年') && p.date.includes('月')) {
+                    // 「YYYY年M月」形式から月を抽出
+                    const monthMatch = p.date.match(/(\d+)月/)
+                    month = monthMatch ? parseInt(monthMatch[1]) : 1
+                  } else {
+                    // 従来の日付形式の場合
+                    month = new Date(p.date).getMonth() + 1
+                  }
                   return (month >= 11 || month <= 2) && p.predicted_outflow > p.predicted_inflow * 1.1
                 })
                 return seasonalRiskMonths.length > 0 && (
@@ -1062,7 +1353,7 @@ export default function AIEnhancedCashFlow() {
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

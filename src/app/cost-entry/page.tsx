@@ -18,7 +18,7 @@ export default async function CostEntry() {
     .select('id, name, business_number, status, created_at, updated_at')
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
-    .order('name')
+    .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
   console.log('=== 原価入力ページのプロジェクトデータ ===')
   projects?.forEach((project, index) => {

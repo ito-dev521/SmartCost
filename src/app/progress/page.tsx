@@ -20,6 +20,7 @@ export default async function Progress() {
     .select('*')
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
+    .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
   // 進捗データの取得
   const { data: progressData } = await supabase

@@ -67,3 +67,4 @@ COMMENT ON COLUMN caddon_billing.updated_at IS '更新日時';
 
 
 
+

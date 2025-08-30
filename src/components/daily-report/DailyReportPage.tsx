@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
-import { Calendar, Clock, FileText, Plus, Trash2, Save, Download, AlertCircle } from 'lucide-react'
+import { Calendar, Clock, FileText, Plus, Trash2, Save, Download } from 'lucide-react'
 import DailyReportCalendar from './DailyReportCalendar'
 
 interface DailyReportEntry {
@@ -37,10 +37,25 @@ export default function DailyReportPage() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [monthlyReports, setMonthlyReports] = useState<any[]>([])
+  const [monthlyReports, setMonthlyReports] = useState<{
+    id: string
+    month: string
+    total_hours: number
+    total_projects: number
+    entries: DailyReportEntry[]
+  }[]>([])
   const [showMonthlyView, setShowMonthlyView] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM形式
-  const [laborCostData, setLaborCostData] = useState<{ hourlyRate: number; projects: any[] } | null>(null)
+  const [laborCostData, setLaborCostData] = useState<{ 
+    hourlyRate: number; 
+    projects: {
+      id: string
+      name: string
+      business_number: string
+      total_hours: number
+      labor_cost: number
+    }[] 
+  } | null>(null)
   const [showNewEntryForm, setShowNewEntryForm] = useState(false)
   const [deletedEntries, setDeletedEntries] = useState<string[]>([])
   const [workManagementType, setWorkManagementType] = useState<'hours' | 'time'>('hours')
@@ -149,11 +164,17 @@ export default function DailyReportPage() {
   }
 
   // プロジェクト毎の工数集計を計算
-  const calculateProjectSummary = (reports: any[]) => {
+  const calculateProjectSummary = (reports: {
+    id: string
+    month: string
+    total_hours: number
+    total_projects: number
+    entries: DailyReportEntry[]
+  }[]) => {
     const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number } } = {}
 
     reports.forEach(monthData => {
-      monthData.entries.forEach((entry: any) => {
+      monthData.entries.forEach((entry: DailyReportEntry) => {
         const projectKey = entry.project_id || `${entry.business_number}-${entry.project_name}`
         if (!projectSummary[projectKey]) {
           projectSummary[projectKey] = {
@@ -211,7 +232,13 @@ export default function DailyReportPage() {
   }
 
   // プロジェクト毎の人件費を計算
-  const calculateLaborCost = async (reports: any[], userId: string, periodStart: string, periodEnd: string) => {
+  const calculateLaborCost = async (reports: {
+    id: string
+    month: string
+    total_hours: number
+    total_projects: number
+    entries: DailyReportEntry[]
+  }[], userId: string, periodStart: string, periodEnd: string) => {
     const hourlyRate = await calculateHourlyRate(userId, periodStart, periodEnd)
 
     if (!hourlyRate) {
@@ -221,7 +248,7 @@ export default function DailyReportPage() {
     const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number; laborCost: number } } = {}
 
     reports.forEach(monthData => {
-      monthData.entries.forEach((entry: any) => {
+      monthData.entries.forEach((entry: DailyReportEntry) => {
         // 時間管理のエントリーのみ計算
         if (entry.work_type === 'time') {
           const projectKey = entry.project_id || `${entry.business_number}-${entry.project_name}`
@@ -338,7 +365,11 @@ export default function DailyReportPage() {
       console.log('データ件数:', data?.length || 0)
 
       // 実際の業務番号を使用
-      const projectsWithBusinessNumbers = data?.map((project: any) => ({
+      const projectsWithBusinessNumbers = data?.map((project: {
+        id: string
+        name: string
+        business_number: string | null
+      }) => ({
         id: project.id,
         name: project.name,
         business_number: project.business_number || 'N/A'
@@ -390,7 +421,7 @@ export default function DailyReportPage() {
       if (error) {
         console.error('作業日報取得エラー:', error)
         console.error('エラーの詳細:', {
-          message: (error as any).message || '不明',
+          message: (error as Error).message || '不明',
           details: (error as any).details || '不明',
           hint: (error as any).hint || '不明',
           code: (error as any).code || '不明'
@@ -425,7 +456,18 @@ export default function DailyReportPage() {
       const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
 
       // ユーザー情報とプロジェクト情報をマージ
-      const entriesWithUserInfo = data.map((entry: any) => {
+      const entriesWithUserInfo = data.map((entry: {
+        id: string
+        user_id: string
+        project_id: string | null
+        date: string
+        work_content: string
+        work_hours: number
+        work_type: string
+        notes: string | null
+        created_at: string
+        updated_at: string
+      }) => {
         const user = usersMap.get(entry.user_id)
         const project = projectsMap.get(entry.project_id)
         
@@ -595,7 +637,6 @@ export default function DailyReportPage() {
         
         // ユーザー情報を個別に取得
         let userName = '不明'
-        let userEmail = ''
         
         if (report.user_id) {
           try {
@@ -607,7 +648,6 @@ export default function DailyReportPage() {
             
             if (!userError && userData) {
               userName = userData.name || userData.email || '不明'
-              userEmail = userData.email || ''
               console.log(`月次ユーザー情報取得成功: ${report.user_id} -> ${userName}`)
             } else {
               console.warn('月次ユーザー情報取得エラー:', userError)
@@ -629,8 +669,7 @@ export default function DailyReportPage() {
           updated_at: report.updated_at,
           project_name: report.projects?.name || '不明',
           business_number: report.projects?.business_number || 'N/A',
-          user_name: userName,
-          user_email: userEmail
+          user_name: userName
         })
       }
 
@@ -640,7 +679,7 @@ export default function DailyReportPage() {
       const monthlyData = sortedDates.map(date => ({
         date,
         entries: groupedByDate[date],
-        totalHours: groupedByDate[date].reduce((sum: number, entry: any) => sum + (entry.work_hours || 0), 0)
+        totalHours: groupedByDate[date].reduce((sum: number, entry: DailyReportEntry) => sum + (entry.work_hours || 0), 0)
       }))
 
       console.log('月次データ:', monthlyData)
@@ -661,7 +700,7 @@ export default function DailyReportPage() {
     } catch (error) {
       console.error('月次作業日報取得エラー:', error)
       console.error('エラーの詳細:', {
-        message: (error as any)?.message || '不明',
+        message: (error as Error)?.message || '不明',
         details: (error as any)?.details || '不明',
         hint: (error as any)?.hint || '不明',
         code: (error as any)?.code || '不明'
@@ -710,7 +749,7 @@ export default function DailyReportPage() {
     // await fetchDailyReports()
   }
 
-  const updateEntry = (index: number, field: keyof DailyReportEntry, value: any) => {
+  const updateEntry = (index: number, field: keyof DailyReportEntry, value: string | number) => {
     const updatedEntries = [...entries]
 
     if (field === 'work_hours') {
@@ -896,7 +935,7 @@ export default function DailyReportPage() {
         ['=== 日別詳細 ==='],
         ['日付', '業務番号', 'プロジェクト名', '作業内容', `${workManagementType === 'hours' ? '工数' : '時間'}（${workManagementType === 'hours' ? '人工' : '時間'}）`, '備考', '入力者'],
         ...monthlyReports.flatMap(monthData => 
-          monthData.entries.map((entry: any) => [
+          monthData.entries.map((entry: DailyReportEntry) => [
             monthData.date,
             entry.business_number || '',
             entry.project_name || '',
@@ -909,7 +948,7 @@ export default function DailyReportPage() {
       ]
       
       const csvString = csvContent.map(row => 
-        row.map((cell: any) => `"${cell}"`).join(',')
+        row.map((cell: string | number) => `"${cell}"`).join(',')
       ).join('\n')
       
       const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
@@ -939,7 +978,7 @@ export default function DailyReportPage() {
       ]
       
       const csvString = csvContent.map(row => 
-        row.map((field: any) => `"${field}"`).join(',')
+        row.map((field: string | number) => `"${field}"`).join(',')
       ).join('\n')
       
       const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
@@ -1667,7 +1706,7 @@ export default function DailyReportPage() {
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {monthData.entries.map((entry: any, index: number) => (
+                    {monthData.entries.map((entry: DailyReportEntry, index: number) => (
                       <div key={entry.id || index} className="bg-gray-50 rounded p-3">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-gray-700">

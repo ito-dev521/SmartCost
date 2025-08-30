@@ -51,6 +51,162 @@ interface MonthlyData {
   amount: number
 }
 
+// 年間入金予定表の月毎の金額を計算する関数
+function calculateMonthlyRevenueFromProjects(
+  projects: Project[],
+  clients: Client[],
+  caddonBillings: CaddonBilling[],
+  fiscalInfo: FiscalInfo
+): MonthlyData[] {
+  const monthlyRevenue: MonthlyData[] = []
+
+  // 一般管理費とCADDONシステムを除外したプロジェクトを取得
+  const filteredProjects = projects.filter(project => {
+    const isCaddonSystem = (
+      (project.business_number && project.business_number.startsWith('C')) ||
+      (project.name && project.name.includes('CADDON'))
+    )
+    const isOverhead = (
+      project.name === '一般管理費' ||
+      project.business_number === 'OVERHEAD'
+    )
+    return !isCaddonSystem && !isOverhead
+  })
+
+  // 各プロジェクトの月毎の入金予定を計算
+  filteredProjects.forEach(project => {
+    if (project.contract_amount && project.contract_amount > 0) {
+      // プロジェクトの開始日と終了日を基に収入を計上
+      if (project.start_date && project.end_date) {
+        const startDate = new Date(project.start_date)
+        const endDate = new Date(project.end_date)
+        
+        // プロジェクト期間中の各月に収入を分散
+        const startMonth = startDate.getMonth() + 1
+        const startYear = startDate.getFullYear()
+        const endMonth = endDate.getMonth() + 1
+        const endYear = endDate.getFullYear()
+        
+        // 月数計算
+        let monthCount = 0
+        let currentYear = startYear
+        let currentMonth = startMonth
+        
+        while (
+          (currentYear < endYear) || 
+          (currentYear === endYear && currentMonth <= endMonth)
+        ) {
+          monthCount++
+          currentMonth++
+          if (currentMonth > 12) {
+            currentMonth = 1
+            currentYear++
+          }
+        }
+        
+        // 月額収入を計算（契約金額を月数で割る）
+        const monthlyAmount = project.contract_amount / monthCount
+        
+        // 各月に収入を計上
+        currentYear = startYear
+        currentMonth = startMonth
+        
+        for (let i = 0; i < monthCount; i++) {
+          const existingData = monthlyRevenue.find(
+            r => r.month === currentMonth && r.year === currentYear
+          )
+
+          if (existingData) {
+            existingData.amount += monthlyAmount
+          } else {
+            monthlyRevenue.push({
+              month: currentMonth,
+              year: currentYear,
+              amount: monthlyAmount
+            })
+          }
+          
+          currentMonth++
+          if (currentMonth > 12) {
+            currentMonth = 1
+            currentYear++
+          }
+        }
+      } else if (project.contract_amount) {
+        // 開始日・終了日が設定されていない場合は、現在の年度に収入として計上
+        const currentYear = fiscalInfo.fiscal_year
+        const currentMonth = fiscalInfo.current_period || 1
+        
+        const existingData = monthlyRevenue.find(
+          r => r.month === currentMonth && r.year === currentYear
+        )
+
+        if (existingData) {
+          existingData.amount += project.contract_amount
+        } else {
+          monthlyRevenue.push({
+            month: currentMonth,
+            year: currentYear,
+            amount: project.contract_amount
+          })
+        }
+      }
+    }
+  })
+
+  // CADDON請求も収入として計上
+  caddonBillings.forEach(billing => {
+    const billingDate = new Date(billing.billing_month)
+    const month = billingDate.getMonth() + 1
+    const year = billingDate.getFullYear()
+
+    const existingData = monthlyRevenue.find(
+      r => r.month === month && r.year === year
+    )
+
+    if (existingData) {
+      existingData.amount += billing.amount
+    } else {
+      monthlyRevenue.push({
+        month,
+        year,
+        amount: billing.amount
+      })
+    }
+  })
+
+  return monthlyRevenue
+}
+
+// 月別原価を計算する関数
+function calculateMonthlyCost(
+  costEntries: CostEntry[]
+): MonthlyData[] {
+  const monthlyCost: MonthlyData[] = []
+
+  costEntries.forEach(entry => {
+    const entryDate = new Date(entry.entry_date)
+    const month = entryDate.getMonth() + 1
+    const year = entryDate.getFullYear()
+
+    const existingData = monthlyCost.find(
+      c => c.month === month && c.year === year
+    )
+
+    if (existingData) {
+      existingData.amount += entry.amount
+    } else {
+      monthlyCost.push({
+        month,
+        year,
+        amount: entry.amount
+      })
+    }
+  })
+
+  return monthlyCost
+}
+
 export async function GET(request: NextRequest) {
   try {
     console.log('Cash flow prediction API called')
@@ -64,15 +220,17 @@ export async function GET(request: NextRequest) {
     // Supabaseクライアントを作成
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookies().getAll()
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
           },
-          setAll(cookiesToSet) {
+          async setAll(cookiesToSet) {
+            const cookieStore = await cookies()
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookies().set(name, value, options)
+              cookieStore.set(name, value, options)
             })
           },
         },
@@ -84,7 +242,7 @@ export async function GET(request: NextRequest) {
     const { data: projects } = await supabase
       .from('projects')
       .select('*')
-      .order('name')
+      .order('business_number', { ascending: true })
 
     // 原価エントリーデータを取得
     const { data: costEntries } = await supabase
@@ -105,8 +263,8 @@ export async function GET(request: NextRequest) {
       .order('billing_month')
 
     // クッキーから決算情報を取得
-    const allCookies = cookies().getAll()
-    const fiscalInfoCookie = allCookies.find(cookie => cookie.name === 'fiscal-info')
+    const allCookies = await cookies()
+    const fiscalInfoCookie = allCookies.get('fiscal-info')
 
     let fiscalInfoData = null
     if (fiscalInfoCookie) {
@@ -131,8 +289,8 @@ export async function GET(request: NextRequest) {
 
     console.log('使用する決算情報:', fiscalInfo)
 
-    // 分析・レポートと同じ計算ロジック
-    const monthlyRevenue = calculateMonthlyRevenue(
+    // 年間入金予定表の月毎の金額を計算
+    const monthlyRevenue = calculateMonthlyRevenueFromProjects(
       projects || [],
       clients || [],
       caddonBillings || [],
@@ -140,9 +298,11 @@ export async function GET(request: NextRequest) {
     )
 
     const monthlyCost = calculateMonthlyCost(
-      costEntries || [],
-      projects || []
+      costEntries || []
     )
+
+    console.log('月別収入データ:', monthlyRevenue)
+    console.log('月別原価データ:', monthlyCost)
 
     // 予測データを生成（決算月の翌月1日から開始）
     const predictions = []
@@ -170,8 +330,8 @@ export async function GET(request: NextRequest) {
       const month = targetDate.getMonth() + 1
       const year = targetDate.getFullYear()
 
-      // 日付文字列を明示的に生成（タイムゾーン問題を避ける）
-      const dateString = `${year}-${String(month).padStart(2, '0')}-01`
+      // 月表示のみの文字列を生成
+      const dateString = `${year}年${month}月`
 
       console.log(`i=${i}: 計算前: nextMonth=${nextMonth}, targetMonth=${nextMonth + i}`)
       console.log(`i=${i}: 計算後: targetMonth=${targetMonth}, targetYear=${targetYear}, dateString=${dateString}`)
@@ -231,98 +391,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// 分析・レポートと同じ計算ロジック
-function calculateMonthlyRevenue(
-  projects: Project[],
-  clients: Client[],
-  caddonBillings: CaddonBilling[],
-  fiscalInfo: FiscalInfo
-): MonthlyData[] {
-  const monthlyRevenue: MonthlyData[] = []
-
-  // 一般管理費を除外したプロジェクトを取得
-  const filteredProjects = projects.filter(project =>
-    !project.name.includes('一般管理費') &&
-    !project.name.includes('その他経費')
-  )
-
-  filteredProjects.forEach(project => {
-    if (project.contract_amount && project.contract_amount > 0) {
-      // プロジェクトの終了日を基に収入を計上
-      if (project.end_date) {
-        const endDate = new Date(project.end_date)
-        const revenueMonth = endDate.getMonth() + 1
-        const revenueYear = endDate.getFullYear()
-
-        // 既存のデータを検索または新規作成
-        let existingData = monthlyRevenue.find(
-          r => r.month === revenueMonth && r.year === revenueYear
-        )
-
-        if (existingData) {
-          existingData.amount += project.contract_amount
-        } else {
-          monthlyRevenue.push({
-            month: revenueMonth,
-            year: revenueYear,
-            amount: project.contract_amount
-          })
-        }
-      }
-    }
-  })
-
-  // CADDON請求も収入として計上
-  caddonBillings.forEach(billing => {
-    const billingDate = new Date(billing.billing_month)
-    const month = billingDate.getMonth() + 1
-    const year = billingDate.getFullYear()
-
-    let existingData = monthlyRevenue.find(
-      r => r.month === month && r.year === year
-    )
-
-    if (existingData) {
-      existingData.amount += billing.amount
-    } else {
-      monthlyRevenue.push({
-        month,
-        year,
-        amount: billing.amount
-      })
-    }
-  })
-
-  return monthlyRevenue
-}
-
-function calculateMonthlyCost(
-  costEntries: CostEntry[],
-  projects: Project[]
-): MonthlyData[] {
-  const monthlyCost: MonthlyData[] = []
-
-  costEntries.forEach(entry => {
-    const entryDate = new Date(entry.entry_date)
-    const month = entryDate.getMonth() + 1
-    const year = entryDate.getFullYear()
-
-    let existingData = monthlyCost.find(
-      c => c.month === month && c.year === year
-    )
-
-    if (existingData) {
-      existingData.amount += entry.amount
-    } else {
-      monthlyCost.push({
-        month,
-        year,
-        amount: entry.amount
-      })
-    }
-  })
-
-  return monthlyCost
 }

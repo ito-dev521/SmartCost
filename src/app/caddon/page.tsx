@@ -44,7 +44,7 @@ export default async function CaddonPage() {
   const { data: projects } = await supabase
     .from('projects')
     .select('id, name')
-    .order('name')
+    .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
   return (
     <DashboardLayout>

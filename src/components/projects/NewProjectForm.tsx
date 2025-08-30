@@ -7,7 +7,6 @@ import { Client } from '@/types/database'
 import {
   Building2,
   Calendar,
-  DollarSign,
   Users,
   FileText,
   ArrowLeft,
@@ -124,7 +123,10 @@ export default function NewProjectForm() {
 
       if (response.ok) {
         const data = await response.json()
-        const existingProject = data.projects?.find((p: any) => 
+        const existingProject = data.projects?.find((p: {
+          business_number: string
+          name: string
+        }) => 
           p.business_number === businessNumber
         )
 

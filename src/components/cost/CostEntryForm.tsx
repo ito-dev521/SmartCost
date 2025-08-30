@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { Tables } from '@/lib/supabase'
-import { Plus, Save, Calendar, Calculator, FileText, Building, Briefcase, Edit, X, Trash2, ChevronDown } from 'lucide-react'
+import { Save, Calendar, FileText, Building, Briefcase, Edit, X, Trash2, ChevronDown } from 'lucide-react'
 
 type Project = Tables<'projects'>
 type BudgetCategory = Tables<'budget_categories'>
@@ -77,7 +77,7 @@ export default function CostEntryForm({
       // 一般管理費の場合
       setGeneralFormData({
         category_id: entry.category_id,
-        company_name: (entry as any).company_name || '',
+        company_name: (entry as CostEntry & { company_name?: string }).company_name || '',
         entry_date: entry.entry_date,
         amount: entry.amount.toString(),
         description: entry.description || '',
@@ -148,7 +148,7 @@ export default function CostEntryForm({
       const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
-        .order('name')
+        .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
       // 予算科目データを再取得
       const { data: categoriesData } = await supabase
@@ -809,9 +809,9 @@ export default function CostEntryForm({
                       {getCategoryName(entry.category_id)} - {getEntryTypeDisplayName(entry.entry_type)}
                     </p>
                     {/* 一般管理費の場合は会社名を表示 */}
-                    {!entry.project_id && (entry as any).company_name && (
+                    {!entry.project_id && (entry as CostEntry & { company_name?: string }).company_name && (
                       <p className="text-sm text-gray-600 mt-1">
-                        会社: {(entry as any).company_name}
+                        会社: {(entry as CostEntry & { company_name?: string }).company_name}
                       </p>
                     )}
                     {entry.description && (

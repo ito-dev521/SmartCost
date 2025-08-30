@@ -3,19 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import {
-  BarChart3,
-  TrendingUp,
-  PieChart,
-  Activity,
   Filter,
   Download,
-  Calendar,
-  DollarSign,
-  Building,
-  Users,
   ChevronDown,
-  ChevronUp,
-  Eye
+  ChevronUp
 } from 'lucide-react'
 import CategoryCostChart from './CategoryCostChart'
 
@@ -233,11 +224,19 @@ export default function AnalyticsDashboard() {
   const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
   const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([])
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
-  const [editingSplitBilling, setEditingSplitBilling] = useState<string | null>(null)
   const [editingMonth, setEditingMonth] = useState<{projectId: string, month: string} | null>(null)
   const [editValues, setEditValues] = useState<{[key: string]: string}>({})
   const [splitBillingLoaded, setSplitBillingLoaded] = useState(false)
-  const [selectedProjectDetail, setSelectedProjectDetail] = useState<any>(null)
+  const [selectedProjectDetail, setSelectedProjectDetail] = useState<{
+    id: string
+    name: string
+    business_number: string | null
+    contract_amount: number | null
+    start_date: string | null
+    end_date: string | null
+    client_name: string | null
+    status: string
+  } | null>(null)
   const [showProjectModal, setShowProjectModal] = useState(false)
 
   const supabase = createClientComponentClient()
@@ -285,7 +284,7 @@ export default function AnalyticsDashboard() {
       const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
-        .order('name')
+        .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
       // 原価エントリーデータを取得
       const { data: costEntriesData } = await supabase
@@ -495,7 +494,15 @@ export default function AnalyticsDashboard() {
     }).filter(item => item.total > 0 || item.contractAmount > 0)
 
     return breakdown.sort((a, b) => {
-      // 契約金額がある場合は利益率でソート、ない場合は原価でソート
+      // まず業務番号でソート（昇順）
+      const businessNumberA = a.project.business_number || ''
+      const businessNumberB = b.project.business_number || ''
+      
+      if (businessNumberA !== businessNumberB) {
+        return businessNumberA.localeCompare(businessNumberB)
+      }
+      
+      // 業務番号が同じ場合は、契約金額がある場合は利益率でソート、ない場合は原価でソート
       if (a.contractAmount > 0 && b.contractAmount > 0) {
         return b.profitMargin - a.profitMargin
       } else if (a.contractAmount > 0) {
@@ -528,7 +535,12 @@ export default function AnalyticsDashboard() {
     }).filter(item => item.amount > 0).sort((a, b) => b.amount - a.amount)
 
     // 月別内訳
-    const monthlyBreakdown = filteredData.reduce((acc: any[], entry) => {
+    const monthlyBreakdown = filteredData.reduce((acc: {
+      monthKey: string
+      month: string
+      amount: number
+      cumulative: number
+    }[], entry) => {
       const date = new Date(entry.entry_date)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       const monthName = `${date.getFullYear()}年${date.getMonth() + 1}月`
@@ -606,7 +618,7 @@ export default function AnalyticsDashboard() {
     }
 
     const end = new Date(endDate)
-    let paymentDate = new Date()
+    const paymentDate = new Date()
 
     if (client.payment_cycle_type === 'month_end') {
       // 月末締め翌月末払いの場合
@@ -1205,21 +1217,7 @@ export default function AnalyticsDashboard() {
     }, 1000)
   }
 
-  // 月別原価推移
-  const getMonthlyCostTrend = () => {
-    const filteredData = getFilteredData()
-    
-    const monthlyData: { [key: string]: number } = {}
-    
-    filteredData.forEach(entry => {
-      const month = entry.entry_date.substring(0, 7) // YYYY-MM形式
-      monthlyData[month] = (monthlyData[month] || 0) + entry.amount
-    })
-    
-    return Object.entries(monthlyData)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, total]) => ({ month, total }))
-  }
+
 
   const toggleSection = async (section: string) => {
     const newExpanded = new Set(expandedSections)
@@ -1264,7 +1262,7 @@ export default function AnalyticsDashboard() {
         setMonthlyRevenue(prev => prev.map(item => {
           if (projectData[item.projectId]) {
             const splitBillingAmounts = projectData[item.projectId]
-            const total = Object.values(splitBillingAmounts).reduce((sum: number, val: any) => sum + val, 0)
+            const total = Object.values(splitBillingAmounts).reduce((sum: number, val: number) => sum + val, 0)
             
             return {
               ...item,
@@ -1308,7 +1306,6 @@ export default function AnalyticsDashboard() {
   const stats = calculateStats()
   const projectBreakdown = getProjectCostBreakdown()
   const categoryBreakdown = getCategoryCostBreakdown()
-  const monthlyTrend = getMonthlyCostTrend()
 
   // fiscalInfoのデバッグ情報
   if (process.env.NODE_ENV === 'development' && fiscalInfo) {
@@ -1348,6 +1345,12 @@ export default function AnalyticsDashboard() {
                     project.business_number === 'OVERHEAD'
                   )
                   return !isCaddonSystem && !isOverhead
+                })
+                .sort((a, b) => {
+                  // 業務番号の昇順でソート
+                  const businessNumberA = a.business_number || ''
+                  const businessNumberB = b.business_number || ''
+                  return businessNumberA.localeCompare(businessNumberB)
                 })
                 .map((project) => (
                   <option key={project.id} value={project.id}>
@@ -2108,7 +2111,11 @@ export default function AnalyticsDashboard() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {selectedProjectDetail.categoryBreakdown?.length > 0 ? (
-                        selectedProjectDetail.categoryBreakdown.map((category: any, index: number) => (
+                        selectedProjectDetail.categoryBreakdown.map((category: {
+                          id: string
+                          name: string
+                          amount: number
+                        }, index: number) => (
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-sm text-gray-900">{category.name}</td>
                             <td className="px-4 py-2 text-sm font-medium text-gray-900">
@@ -2145,7 +2152,12 @@ export default function AnalyticsDashboard() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {selectedProjectDetail.monthlyBreakdown?.length > 0 ? (
-                        selectedProjectDetail.monthlyBreakdown.map((month: any, index: number) => (
+                        selectedProjectDetail.monthlyBreakdown.map((month: {
+                          monthKey: string
+                          month: string
+                          amount: number
+                          cumulative: number
+                        }, index: number) => (
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-sm text-gray-900">{month.month}</td>
                             <td className="px-4 py-2 text-sm font-medium text-gray-900">
@@ -2183,7 +2195,14 @@ export default function AnalyticsDashboard() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {selectedProjectDetail.recentEntries?.length > 0 ? (
-                        selectedProjectDetail.recentEntries.map((entry: any, index: number) => {
+                        selectedProjectDetail.recentEntries.map((entry: {
+                          id: string
+                          project_id: string | null
+                          entry_date: string
+                          amount: number
+                          description: string | null
+                          category_id: string | null
+                        }, index: number) => {
                           const category = categories.find(c => c.id === entry.category_id)
                           return (
                             <tr key={index} className="hover:bg-gray-50">
