@@ -3,9 +3,22 @@ import { createClient } from '@/lib/supabase-api'
 
 export async function POST(request: NextRequest) {
   try {
-    const { project_id, progress_rate, progress_date, notes } = await request.json()
+    console.log('=== API /api/progress POST 開始 ===')
+    const requestBody = await request.json()
+    console.log('リクエストボディ:', requestBody)
+
+    const { project_id, progress_rate, progress_date, notes } = requestBody
+
+    console.log('パラメータ確認:', {
+      project_id,
+      progress_rate,
+      progress_date,
+      notes,
+      progress_rate_type: typeof progress_rate
+    })
 
     if (!project_id || progress_rate === undefined || !progress_date) {
+      console.log('バリデーションエラー: 必須フィールドが不足')
       return NextResponse.json(
         { error: 'project_id, progress_rate, progress_date は必須です' },
         { status: 400 }
@@ -13,6 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient()
+    console.log('Supabaseクライアント作成完了')
 
     // 進捗率範囲チェック
     if (progress_rate < 0 || progress_rate > 100) {
@@ -31,29 +45,42 @@ export async function POST(request: NextRequest) {
       })
 
     // 進捗データを登録
+    const insertData = {
+      project_id,
+      progress_rate,
+      progress_date,
+      notes: notes || null,
+      created_by: generateUUID(),
+      created_at: new Date().toISOString(),
+    }
+
+    console.log('INSERTデータ:', insertData)
+
     const { data, error } = await supabase
       .from('project_progress')
-      .insert({
-        project_id,
-        progress_rate,
-        progress_date,
-        notes: notes || null,
-        created_by: generateUUID(),
-        created_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select('*')
       .single()
 
     if (error) {
       console.error('project_progress insert error:', error)
+      console.error('エラー詳細:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       return NextResponse.json(
         { error: '進捗の記録に失敗しました' },
         { status: 500 }
       )
     }
 
+    console.log('INSERT成功:', data)
+
     // 進捗率が100%の場合はプロジェクトを完了に更新
     if (Number(progress_rate) >= 100) {
+      console.log('進捗率100%: プロジェクトステータスを完了に更新')
       const { error: statusErr } = await supabase
         .from('projects')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -61,12 +88,21 @@ export async function POST(request: NextRequest) {
 
       if (statusErr) {
         console.error('project status update error:', statusErr)
+      } else {
+        console.log('プロジェクトステータス更新成功')
       }
     }
 
-    return NextResponse.json({ success: true, message: '進捗を記録しました', data })
+    const responseData = { success: true, message: '進捗を記録しました', data }
+    console.log('レスポンスデータ:', responseData)
+    console.log('=== API /api/progress POST 完了 ===')
+
+    return NextResponse.json(responseData)
   } catch (error) {
-    console.error('progress POST error:', error)
+    console.error('=== API /api/progress POST エラー ===')
+    console.error('エラー詳細:', error)
+    console.error('エラーメッセージ:', error instanceof Error ? error.message : '不明なエラー')
+    console.error('エラースタック:', error instanceof Error ? error.stack : 'スタックなし')
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました' },
       { status: 500 }

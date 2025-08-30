@@ -1,31 +1,88 @@
-import { createServerComponentClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import PermissionGuard from '@/components/auth/PermissionGuard'
 import ProgressManagement from '@/components/progress/ProgressManagement'
 import { TrendingUp, Calendar, CheckCircle, Clock } from 'lucide-react'
 
-export default async function Progress() {
-  const supabase = createServerComponentClient()
+interface Project {
+  id: string
+  name: string
+  business_number: string
+  status: string
+  client_name?: string
+}
 
-  const { data: { session } } = await supabase.auth.getSession()
+interface ProgressData {
+  id: string
+  project_id: string
+  progress_rate: number
+  progress_date: string
+  notes?: string
+}
 
-  if (!session) {
-    redirect('/login')
+export default function Progress() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [progressData, setProgressData] = useState<ProgressData[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const supabase = createClientComponentClient()
+
+  // データ取得関数
+  const fetchData = async () => {
+    console.log('=== データ再取得開始 ===')
+    try {
+      // プロジェクトデータの取得
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('*')
+        .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外
+        .not('name', 'ilike', '%一般管理費%')
+        .not('business_number', 'ilike', 'C%')  // CADDONシステムを除外
+        .not('name', 'ilike', '%CADDON%')
+        .order('business_number', { ascending: true })
+
+      // 進捗データの取得
+      const { data: progress } = await supabase
+        .from('project_progress')
+        .select('*')
+
+      console.log('再取得したデータ:', {
+        projectsCount: projectsData?.length,
+        progressCount: progress?.length
+      })
+
+      setProjects(projectsData || [])
+      setProgressData(progress || [])
+    } catch (error) {
+      console.error('データ取得エラー:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // プロジェクト進捗データの取得（一般管理費プロジェクトは除外）
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('*')
-    .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
-    .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
-    .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
+  // 初回データ取得
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-  // 進捗データの取得
-  const { data: progressData } = await supabase
-    .from('project_progress')
-    .select('*')
+  // 進捗更新時のコールバック
+  const handleProgressUpdate = () => {
+    console.log('=== 進捗更新コールバック実行 ===')
+    fetchData()
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -41,9 +98,10 @@ export default async function Progress() {
 
 
 
-        <ProgressManagement 
-          initialProjects={projects || []} 
-          initialProgressData={progressData || []} 
+        <ProgressManagement
+          initialProjects={projects || []}
+          initialProgressData={progressData || []}
+          onProgressUpdate={handleProgressUpdate}
         />
 
         {/* 進捗統計 */}
@@ -127,9 +185,11 @@ export default async function Progress() {
           <div className="divide-y divide-gray-200">
             {projects?.map((project) => {
               const projectProgress = progressData?.filter(p => p.project_id === project.id) || []
-              const latestProgress = projectProgress.sort((a, b) =>
-                new Date(b.progress_date).getTime() - new Date(a.progress_date).getTime()
-              )[0]
+              const latestProgress = projectProgress.sort((a, b) => {
+                const bTime = new Date((b as any).created_at || b.progress_date).getTime()
+                const aTime = new Date((a as any).created_at || a.progress_date).getTime()
+                return bTime - aTime
+              })[0]
 
               return (
                 <div key={project.id} className="p-6 hover:bg-gray-50">
@@ -199,85 +259,7 @@ export default async function Progress() {
           </div>
         </div>
 
-        {/* 進捗管理機能 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 className="text-lg font-semibold mb-4">進捗入力</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  プロジェクト
-                </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option>プロジェクトを選択...</option>
-                  {projects?.filter(p => p.status === 'in_progress' || p.status === 'planning').map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.business_number} - {project.name} ({project.status === 'in_progress' ? '進行中' : '計画中'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  進捗率 (%)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  記録日
-                </label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
-                進捗を記録
-              </button>
-            </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 className="text-lg font-semibold mb-4">完了基準設定</h3>
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">工事進行基準について</h4>
-                <p className="text-sm text-gray-600">
-                  工事進行基準では、プロジェクトの進捗に応じて収益と費用を認識します。
-                  進捗率に基づいて正確な収益計算を行うことができます。
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm">計画段階</span>
-                  <span className="text-sm text-gray-600">0%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">設計段階</span>
-                  <span className="text-sm text-gray-600">10-20%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">施工準備</span>
-                  <span className="text-sm text-gray-600">20-30%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">施工中</span>
-                  <span className="text-sm text-gray-600">30-90%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">竣工・引渡し</span>
-                  <span className="text-sm text-gray-600">90-100%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
         </PermissionGuard>
     </DashboardLayout>
