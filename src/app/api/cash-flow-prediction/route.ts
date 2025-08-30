@@ -33,7 +33,9 @@ interface CostEntry {
 interface CaddonBilling {
   id: string
   billing_month: string
-  amount: number
+  amount: number | null
+  total_amount?: number | null
+  project_id?: string | null
 }
 
 interface SplitBilling {
@@ -148,11 +150,12 @@ function calculateMonthlyRevenueFromProjects(
     }
   })
 
-  // CADDON請求も収入として計上
+  // CADDON請求も収入として計上（total_amount を優先）
   caddonBillings.forEach(billing => {
     const billingDate = new Date(billing.billing_month)
     const key = `${billingDate.getFullYear()}-${String(billingDate.getMonth() + 1).padStart(2, '0')}`
-    monthlyMap[key] = (monthlyMap[key] || 0) + (billing.amount || 0)
+    const amount = (billing.total_amount ?? billing.amount ?? 0)
+    monthlyMap[key] = (monthlyMap[key] || 0) + amount
   })
 
   // map -> MonthlyData[]
@@ -300,16 +303,28 @@ export async function GET(request: NextRequest) {
     console.log('月別収入データ:', monthlyRevenue)
     console.log('月別原価データ:', monthlyCost)
 
+    // 銀行残高履歴から最新の月末残高を取得
+    const { data: bankBalanceHistory } = await supabase
+      .from('bank_balance_history')
+      .select('*')
+      .order('balance_date', { ascending: false })
+      .limit(1)
+
     // 予測データを生成（決算月の翌月1日から開始）
     const predictions = []
     const settlementMonth = fiscalInfo.settlement_month
     // 決算月の翌月を計算（例: 決算月3月 → 開始月4月）
     const nextMonth = settlementMonth === 12 ? 1 : settlementMonth + 1
     const nextYear = settlementMonth === 12 ? fiscalInfo.fiscal_year + 1 : fiscalInfo.fiscal_year
-    let runningBalance = fiscalInfo.bank_balance
+    
+    // 銀行残高履歴から初期残高を取得、なければfiscalInfo.bank_balanceを使用
+    let runningBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
+      ? bankBalanceHistory[0].closing_balance 
+      : fiscalInfo.bank_balance
 
     console.log(`決算月: ${settlementMonth}月, 翌月: ${nextMonth}月 (${nextYear}年)`)
     console.log(`予測開始日付: ${nextYear}年${nextMonth}月1日`)
+    console.log(`初期残高: ${runningBalance} (銀行残高履歴: ${bankBalanceHistory?.[0]?.closing_balance || 'なし'}, fiscalInfo: ${fiscalInfo.bank_balance})`)
 
     for (let i = 0; i < months; i++) {
       // 決算月の翌月からiヶ月後の日付を計算

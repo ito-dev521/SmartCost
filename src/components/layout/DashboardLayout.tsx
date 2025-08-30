@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
 import {
   LogOut,
@@ -18,6 +18,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClientComponentClient()
 
   const handleSignOut = async () => {
@@ -43,7 +44,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <X className="h-6 w-6" />
             </button>
           </div>
-          <SidebarNavigation currentPath={router.pathname} />
+          <SidebarNavigation currentPath={pathname} />
           <div className="mt-auto px-4 pb-4">
             <button
               onClick={handleSignOut}
@@ -62,7 +63,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex h-16 shrink-0 items-center">
             <h1 className="text-xl font-bold text-gray-900">原価管理システム</h1>
           </div>
-          <SidebarNavigation currentPath={router.pathname} />
+          <SidebarNavigation currentPath={pathname} />
           <div className="mt-auto">
             <button
               onClick={handleSignOut}

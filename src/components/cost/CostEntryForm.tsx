@@ -5,7 +5,7 @@ import { createClientComponentClient } from '@/lib/supabase'
 import { Tables } from '@/lib/supabase'
 import { Save, Calendar, FileText, Building, Briefcase, Edit, X, Trash2, ChevronDown } from 'lucide-react'
 
-type Project = Tables<'projects'>
+type Project = Tables<'projects'> & { business_number?: string | null }
 type BudgetCategory = Tables<'budget_categories'>
 type CostEntry = Tables<'cost_entries'>
 

@@ -80,10 +80,23 @@ interface FiscalInfo {
   notes: string | null
 }
 
+interface BankBalanceHistory {
+  id: string
+  fiscal_year: number
+  balance_date: string
+  opening_balance: number
+  closing_balance: number
+  total_income: number
+  total_expense: number
+  created_at: string
+  updated_at: string
+}
+
 export default function CashFlowDashboard() {
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([])
   const [paymentData, setPaymentData] = useState<PaymentData[]>([])
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
+  const [bankBalanceHistory, setBankBalanceHistory] = useState<BankBalanceHistory[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null)
@@ -92,6 +105,7 @@ export default function CashFlowDashboard() {
   useEffect(() => {
     fetchCashFlowData()
     fetchFiscalInfo()
+    fetchBankBalanceHistory()
 
     // 支払いスケジュールを30秒ごとに自動更新
     const intervalId = setInterval(() => {
@@ -187,7 +201,10 @@ export default function CashFlowDashboard() {
           startDate: startDate.toISOString().split('T')[0],
           startMonth: startDate.getMonth() + 1
         })
-        const initialBalance = 5000000
+        // 銀行残高履歴から初期残高を取得
+        const initialBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
+          ? bankBalanceHistory[0].opening_balance 
+          : 5000000
 
         for (let i = 0; i < 12; i++) {
           const date = new Date(startDate)
@@ -216,6 +233,11 @@ export default function CashFlowDashboard() {
       const currentYear = new Date().getFullYear()
       const startDate = new Date(currentYear, 3, 1)
       
+      // 銀行残高履歴から初期残高を取得
+      const initialBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
+        ? bankBalanceHistory[0].opening_balance 
+        : 3000000
+      
       for (let i = 0; i < 12; i++) {
         const date = new Date(startDate)
         date.setMonth(startDate.getMonth() + i)
@@ -224,7 +246,7 @@ export default function CashFlowDashboard() {
           date: date.toISOString().split('T')[0],
           inflow: 15000000,
           outflow: 12000000,
-          balance: 3000000,
+          balance: initialBalance,
         })
       }
       setCashFlowData(fallbackData)
@@ -252,6 +274,32 @@ export default function CashFlowDashboard() {
       }
     } catch (error) {
       console.error('決算情報取得エラー:', error)
+    }
+  }
+
+  const fetchBankBalanceHistory = async () => {
+    try {
+      console.log('fetchBankBalanceHistory開始')
+      const response = await fetch('/api/bank-balance-history')
+      console.log('銀行残高履歴APIレスポンス:', response.status, response.ok)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('取得した銀行残高履歴:', data)
+        if (data.history) {
+          console.log('設定する銀行残高履歴:', data.history)
+          setBankBalanceHistory(data.history)
+        } else {
+          console.log('銀行残高履歴が空です')
+          setBankBalanceHistory([])
+        }
+      } else {
+        console.log('銀行残高履歴APIレスポンスがNG:', response.status)
+        setBankBalanceHistory([])
+      }
+    } catch (error) {
+      console.error('銀行残高履歴取得エラー:', error)
+      setBankBalanceHistory([])
     }
   }
 
@@ -431,17 +479,16 @@ export default function CashFlowDashboard() {
         }
 
         if (salaryData && salaryData.length > 0) {
-          // salary_entriesデータをPaymentData形式に変換
+          // salary_entriesデータをPaymentData形式に変換（payment_dateは無いのでsalary_period_endを使用）
           const paymentData: PaymentData[] = salaryData.map((entry: {
             id: string
             salary_amount: number
             salary_period_end: string
             employee_name: string
             employee_department: string | null
-            payment_date: string
           }) => {
-            const dueDate = new Date(entry.payment_date)
-            const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            const dueDateObj = new Date(entry.salary_period_end)
+            const daysUntilDue = Math.ceil((dueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
             let priority = 5
             if (daysUntilDue <= 3) priority = 10
@@ -455,7 +502,7 @@ export default function CashFlowDashboard() {
               dueDate: entry.salary_period_end,
               type: '人件費',
               priority,
-              negotiable: false, // 人件費は交渉不可
+              negotiable: false,
             }
           })
 
@@ -703,7 +750,7 @@ export default function CashFlowDashboard() {
 
       {/* 統計カード */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {/* 銀行残高 */}
+        {/* 現在の残高 */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -713,12 +760,21 @@ export default function CashFlowDashboard() {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">
-                    銀行残高
+                    今期の期首残高
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {fiscalInfo ? formatCurrency(fiscalInfo.bank_balance) : '未設定'}
+                    {bankBalanceHistory && bankBalanceHistory.length > 0 
+                      ? formatCurrency(bankBalanceHistory[0].closing_balance)
+                      : fiscalInfo 
+                        ? formatCurrency(fiscalInfo.bank_balance) 
+                        : '未設定'
+                    }
                   </dd>
-                  {fiscalInfo && (
+                  {bankBalanceHistory && bankBalanceHistory.length > 0 ? (
+                    <dd className="text-xs text-gray-500 mt-1">
+                      {new Date(bankBalanceHistory[0].balance_date).getFullYear()}年{new Date(bankBalanceHistory[0].balance_date).getMonth() + 1}月末
+                    </dd>
+                  ) : fiscalInfo && (
                     <dd className="text-xs text-gray-500 mt-1">
                       {fiscalInfo.fiscal_year}年度 第{fiscalInfo.current_period}期
                     </dd>
@@ -788,6 +844,8 @@ export default function CashFlowDashboard() {
             </div>
           </div>
         </div>
+
+
 
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">

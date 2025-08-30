@@ -715,14 +715,14 @@ export default function CaddonManagementForm({
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEdit(entry)}
-                        disabled={editingEntry}
+                        disabled={!!editingEntry}
                         className="inline-flex items-center px-2 py-1 border border-blue-300 text-xs font-medium rounded text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                       >
                         編集
                       </button>
                       <button
                         onClick={() => handleDelete(entry)}
-                        disabled={editingEntry}
+                        disabled={!!editingEntry}
                         className="inline-flex items-center px-2 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
                       >
                         削除

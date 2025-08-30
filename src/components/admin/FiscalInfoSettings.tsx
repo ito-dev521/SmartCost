@@ -114,7 +114,7 @@ export default function FiscalInfoSettings() {
           決算情報設定
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          会社の決算情報と銀行残高を設定します
+          会社の決算情報を設定します
         </p>
       </div>
       <div className="p-6 space-y-6">
@@ -178,24 +178,7 @@ export default function FiscalInfoSettings() {
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="bank_balance" className="block text-sm font-medium text-gray-700">
-              銀行残高
-            </label>
-            <input
-              id="bank_balance"
-              type="number"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={fiscalInfo.bank_balance || ''}
-              onChange={(e) => setFiscalInfo({ ...fiscalInfo, bank_balance: parseFloat(e.target.value) || 0 })}
-              placeholder="0"
-            />
-            {fiscalInfo.bank_balance && (
-              <p className="text-sm text-gray-500">
-                表示: {formatCurrency(fiscalInfo.bank_balance)}
-              </p>
-            )}
-          </div>
+          
         </div>
 
         <div className="space-y-2">
@@ -239,7 +222,6 @@ export default function FiscalInfoSettings() {
             <p>年度: {fiscalInfo.fiscal_year}年</p>
             <p>決算月: {fiscalInfo.settlement_month}月</p>
             <p>現在の期: 第{fiscalInfo.current_period}期</p>
-            <p>銀行残高: {formatCurrency(fiscalInfo.bank_balance || 0)}</p>
           </div>
         </div>
       </div>

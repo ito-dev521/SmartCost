@@ -8,16 +8,18 @@ import DailyReportCalendar from './DailyReportCalendar'
 interface DailyReportEntry {
   id?: string
   date: string
-  project_id: string
+  project_id: string | null
   work_content: string
   work_hours: number
   work_type?: 'hours' | 'time'
-  notes: string
+  notes: string | null
   created_at?: string
   updated_at?: string
-  user_id?: string
+  user_id?: string | null
   user_name?: string
   user_email?: string
+  project_name?: string
+  business_number?: string
 }
 
 interface Project {
@@ -38,11 +40,9 @@ export default function DailyReportPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [monthlyReports, setMonthlyReports] = useState<{
-    id: string
-    month: string
-    total_hours: number
-    total_projects: number
+    date: string
     entries: DailyReportEntry[]
+    totalHours: number
   }[]>([])
   const [showMonthlyView, setShowMonthlyView] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM形式
@@ -165,10 +165,6 @@ export default function DailyReportPage() {
 
   // プロジェクト毎の工数集計を計算
   const calculateProjectSummary = (reports: {
-    id: string
-    month: string
-    total_hours: number
-    total_projects: number
     entries: DailyReportEntry[]
   }[]) => {
     const projectSummary: { [key: string]: { name: string; business_number: string; totalHours: number; days: number } } = {}
@@ -233,10 +229,6 @@ export default function DailyReportPage() {
 
   // プロジェクト毎の人件費を計算
   const calculateLaborCost = async (reports: {
-    id: string
-    month: string
-    total_hours: number
-    total_projects: number
     entries: DailyReportEntry[]
   }[], userId: string, periodStart: string, periodEnd: string) => {
     const hourlyRate = await calculateHourlyRate(userId, periodStart, periodEnd)
@@ -269,9 +261,19 @@ export default function DailyReportPage() {
       })
     })
 
+    const projects = Object.values(projectSummary)
+      .map(p => ({
+        id: `${p.business_number}-${p.name}`,
+        name: p.name,
+        business_number: p.business_number,
+        total_hours: p.totalHours,
+        labor_cost: p.laborCost
+      }))
+      .sort((a, b) => b.labor_cost - a.labor_cost)
+
     return {
       hourlyRate,
-      projects: Object.values(projectSummary).sort((a, b) => b.laborCost - a.laborCost)
+      projects
     }
   }
 
@@ -456,14 +458,14 @@ export default function DailyReportPage() {
       const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
 
       // ユーザー情報とプロジェクト情報をマージ
-      const entriesWithUserInfo = data.map((entry: {
+      const entriesWithUserInfo: DailyReportEntry[] = data.map((entry: {
         id: string
         user_id: string
         project_id: string | null
         date: string
         work_content: string
         work_hours: number
-        work_type: string
+        work_type: string | null
         notes: string | null
         created_at: string
         updated_at: string
@@ -479,7 +481,8 @@ export default function DailyReportPage() {
           user_name: userName,
           user_email: userEmail,
           project_name: project?.name || '不明',
-          business_number: project?.business_number || '不明'
+          business_number: project?.business_number || '不明',
+          work_type: entry.work_type === 'time' ? 'time' : 'hours'
         }
       })
 
@@ -548,7 +551,18 @@ export default function DailyReportPage() {
       const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
 
       // ユーザー情報とプロジェクト情報をマージ
-      const entriesWithUserInfo = data.map((entry: any) => {
+      const entriesWithUserInfo: DailyReportEntry[] = data.map((entry: {
+        id: string
+        user_id: string | null
+        project_id: string | null
+        date: string
+        work_content: string
+        work_hours: number
+        work_type: string | null
+        notes: string | null
+        created_at: string
+        updated_at: string
+      }) => {
         const user = usersMap.get(entry.user_id)
         const project = projectsMap.get(entry.project_id)
         
@@ -560,7 +574,8 @@ export default function DailyReportPage() {
           user_name: userName,
           user_email: userEmail,
           project_name: project?.name || '不明',
-          business_number: project?.business_number || '不明'
+          business_number: project?.business_number || '不明',
+          work_type: entry.work_type === 'time' ? 'time' : 'hours'
         }
       })
 
@@ -753,7 +768,7 @@ export default function DailyReportPage() {
     const updatedEntries = [...entries]
 
     if (field === 'work_hours') {
-      const newHours = parseFloat(value) || 0
+      const newHours = typeof value === 'number' ? value : (parseFloat(value) || 0)
 
       // 工数管理の場合のみ、1.0人工の制限を適用
       if (workManagementType === 'hours') {
@@ -1103,7 +1118,20 @@ export default function DailyReportPage() {
         {showCalendar && (
           <div className="mt-4">
             <DailyReportCalendar
-              entries={monthlyEntries} // 月間データを使用
+              entries={monthlyEntries.map(e => ({
+                id: e.id,
+                date: e.date,
+                project_id: e.project_id ?? '',
+                work_content: e.work_content,
+                work_hours: e.work_hours,
+                work_type: e.work_type,
+                notes: e.notes ?? '',
+                created_at: e.created_at,
+                updated_at: e.updated_at,
+                user_id: e.user_id ?? undefined,
+                user_name: e.user_name,
+                user_email: e.user_email
+              }))} // 月間データを使用（カレンダー用に型整形）
               currentDate={new Date(selectedDate)}
               selectedDate={selectedDate} // 選択された日付を渡す
               onDateClick={(date) => {
@@ -1220,7 +1248,7 @@ export default function DailyReportPage() {
                       プロジェクト名
                     </label>
                     <select
-                      value={entry.project_id}
+                      value={entry.project_id ?? ''}
                       onChange={(e) => updateEntry(index, 'project_id', e.target.value)}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
@@ -1365,7 +1393,7 @@ export default function DailyReportPage() {
                     備考
                   </label>
                   <textarea
-                    value={entry.notes}
+                    value={entry.notes ?? ''}
                     onChange={(e) => updateEntry(index, 'notes', e.target.value)}
                     rows={2}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1391,7 +1419,7 @@ export default function DailyReportPage() {
                 プロジェクト名
               </label>
               <select
-                value={newEntry.project_id}
+                value={newEntry.project_id ?? ''}
                 onChange={(e) => setNewEntry({...newEntry, project_id: e.target.value})}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
@@ -1528,7 +1556,7 @@ export default function DailyReportPage() {
               備考
             </label>
             <textarea
-              value={newEntry.notes}
+              value={newEntry.notes ?? ''}
               onChange={(e) => setNewEntry({...newEntry, notes: e.target.value})}
               rows={2}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

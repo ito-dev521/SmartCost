@@ -69,7 +69,6 @@ interface BankBalanceHistory {
   closing_balance: number
   total_income: number
   total_expense: number
-  transaction_count: number
 }
 
 interface AIPrediction {
@@ -168,6 +167,9 @@ export default function AIEnhancedCashFlow() {
   const [activeTab, setActiveTab] = useState<'overview' | 'predictions' | 'analysis'>('overview')
   const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  const [monthlyRevenueTotals, setMonthlyRevenueTotals] = useState<MonthlyData[]>([])
+  const [totalIncome, setTotalIncome] = useState<number>(0)
+  const [totalExpense, setTotalExpense] = useState<number>(0)
 
   // 分析・レポートと同じ計算ロジック
   const calculateMonthlyRevenue = (
@@ -314,6 +316,62 @@ export default function AIEnhancedCashFlow() {
     }
   }
 
+  const fetchAnnualRevenueSchedule = async () => {
+    try {
+      console.log('年間入金予定表取得開始')
+      const response = await fetch('/api/annual-revenue-schedule')
+      console.log('年間入金予定表APIレスポンス:', response.status, response.ok)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('取得した年間入金予定表データ:', data)
+        return data.monthlyTotals || []
+      } else {
+        console.log('年間入金予定表APIレスポンスがNG:', response.status)
+      }
+    } catch (error) {
+      console.error('年間入金予定表取得エラー:', error)
+    }
+    return []
+  }
+
+  const createDetailedPredictionsFromAnnualRevenue = (monthlyTotals: MonthlyData[]) => {
+    // 年間入金予定表のデータを月次予測詳細の形式に変換
+    const predictions = []
+    let runningBalance = 8000000 // 今期の期首残高
+
+    monthlyTotals.forEach((revenue, index) => {
+      const month = revenue.month
+      const year = revenue.year
+      const dateString = `${year}年${month}月`
+      
+      // 仮の月間支出（実際のデータがある場合は置き換え）
+      const monthlyExpense = month === 8 ? 8958429 : month === 9 ? 200000 : month === 10 ? 100000 : month === 11 ? 200000 : month === 12 ? 200000 : 0
+      
+      runningBalance = runningBalance + revenue.amount - monthlyExpense
+
+      predictions.push({
+        date: dateString,
+        predicted_inflow: revenue.amount,
+        predicted_outflow: monthlyExpense,
+        predicted_balance: runningBalance,
+        confidence_score: 0.85,
+        risk_level: monthlyExpense > revenue.amount ? 'high' : monthlyExpense > revenue.amount * 0.8 ? 'medium' : 'low',
+        factors: {
+          seasonal_trend: 1.0,
+          historical_pattern: 1.0,
+          project_cycle: 0.8,
+          market_conditions: 1.0
+        },
+        recommendations: runningBalance < 1000000
+          ? ['資金不足のリスクがあります。支出を削減するか、収入源を増やすことを検討してください']
+          : ['安定したキャッシュフローを維持しています']
+      })
+    })
+
+    return predictions
+  }
+
   const generateAIAnalysis = async () => {
     setGenerating(true)
     try {
@@ -340,8 +398,28 @@ export default function AIEnhancedCashFlow() {
         .select('*')
         .order('billing_month')
 
-      const currentBalance = fiscalInfo?.bank_balance || 0
+      // 最新の銀行残高履歴から現在の残高を取得
+      let currentBalance = fiscalInfo?.bank_balance || 0
+      
+      // 銀行残高履歴がある場合は、最新の月末残高を使用
+      if (history && history.length > 0) {
+        const latestBalance = history[0] // 最新のデータ
+        currentBalance = latestBalance.closing_balance || currentBalance
+      }
 
+      // 予測は常にAPIから取得して一貫性を保つ
+      const currentYear = new Date().getFullYear()
+      const predictionRes = await fetch(`/api/cash-flow-prediction?fiscal_year=${currentYear}&months=12`)
+      let predData: any = null
+      if (predictionRes.ok) {
+        predData = await predictionRes.json()
+        setDetailedPredictions(predData.predictions || [])
+        setPredictionSummary(predData.summary)
+        console.log('再分析: /api/cash-flow-prediction から取得した詳細予測:', predData)
+      } else {
+        console.error('再分析時の詳細予測取得に失敗しました:', predictionRes.status)
+      }
+      
       // 分析・レポートと同じ計算ロジックを使用
       const monthlyRevenue = calculateMonthlyRevenue(
         projects || [],
@@ -349,15 +427,54 @@ export default function AIEnhancedCashFlow() {
       )
 
       const monthlyCost = calculateMonthlyCost(
-        costEntries || [],
-        projects || []
+        costEntries || []
       )
 
-      // 月間収入・支出の平均を計算
-      const totalIncome = monthlyRevenue.reduce((sum, r) => sum + r.amount, 0)
-      const totalExpense = monthlyCost.reduce((sum, c) => sum + c.amount, 0)
-      const averageMonthlyIncome = monthlyRevenue.length > 0 ? totalIncome / monthlyRevenue.length : 0
-      const averageMonthlyExpense = monthlyCost.length > 0 ? totalExpense / monthlyCost.length : 0
+      // 予測データから月毎収入合計を作成（表示の一貫性のため）
+      const monthlyRevenueTotalsFromPred: MonthlyData[] = (predData?.predictions || []).map((p: any) => {
+        // 日付は "YYYY年M月" 形式 or ISO 形式
+        if (typeof p.date === 'string' && p.date.includes('年') && p.date.includes('月')) {
+          const m = p.date.match(/(\d+)年(\d+)月/)
+          const year = m ? parseInt(m[1], 10) : new Date().getFullYear()
+          const month = m ? parseInt(m[2], 10) : 1
+          return { year, month, amount: p.predicted_inflow as number }
+        }
+        const d = new Date(p.date)
+        return { year: d.getFullYear(), month: d.getMonth() + 1, amount: p.predicted_inflow as number }
+      })
+      setMonthlyRevenueTotals(monthlyRevenueTotalsFromPred)
+      const totalIncome = monthlyRevenueTotalsFromPred.reduce((s, r) => s + r.amount, 0)
+      const totalExpense = (predData?.predictions || []).reduce((s: number, p: any) => s + (p.predicted_outflow || 0), 0)
+      setTotalIncome(totalIncome)
+      setTotalExpense(totalExpense)
+
+      // 年間入金予定表と突き合わせ（ログのみ）
+      try {
+        const annual = await fetchAnnualRevenueSchedule()
+        if (annual.length > 0) {
+          const diff = totalIncome - annual.reduce((s, r) => s + r.amount, 0)
+          console.log('年間入金予定表と予測収入の差分(ログのみ):', diff)
+        }
+      } catch (e) {
+        console.warn('年間入金予定表の照合に失敗:', e)
+      }
+      
+      // 銀行残高履歴から月間収入・支出を計算（より正確）
+      let averageMonthlyIncome = 0
+      let averageMonthlyExpense = 0
+      
+      if (history && history.length > 0) {
+        const totalIncomeFromHistory = history.reduce((sum, record) => sum + (record.total_income || 0), 0)
+        const totalExpenseFromHistory = history.reduce((sum, record) => sum + (record.total_expense || 0), 0)
+        const monthCount = history.length
+        
+        averageMonthlyIncome = monthCount > 0 ? totalIncomeFromHistory / monthCount : 0
+        averageMonthlyExpense = monthCount > 0 ? totalExpenseFromHistory / monthCount : 0
+      } else {
+        // フォールバック: プロジェクトデータから計算
+        averageMonthlyIncome = monthlyRevenue.length > 0 ? totalIncome / monthlyRevenue.length : 0
+        averageMonthlyExpense = monthlyCost.length > 0 ? totalExpense / monthlyCost.length : 0
+      }
 
       // 残存月数を計算
       const burnRate = averageMonthlyExpense > 0 ? averageMonthlyExpense : 1
@@ -755,7 +872,7 @@ export default function AIEnhancedCashFlow() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    日付
+                    年月
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     期首残高
@@ -769,16 +886,13 @@ export default function AIEnhancedCashFlow() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     支出
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    取引件数
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {history.slice(0, 10).map((record) => (
                   <tr key={record.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(record.balance_date).toLocaleDateString('ja-JP')}
+                      {new Date(record.balance_date).getFullYear()}年{new Date(record.balance_date).getMonth() + 1}月
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(record.opening_balance)}
@@ -791,9 +905,6 @@ export default function AIEnhancedCashFlow() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                       -{formatCurrency(record.total_expense)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.transaction_count}件
                     </td>
                   </tr>
                 ))}
@@ -808,8 +919,8 @@ export default function AIEnhancedCashFlow() {
       {/* 詳細予測タブ */}
       {activeTab === 'predictions' && (
         <div className="space-y-6">
-          {/* 予測サマリー */}
-          {predictionSummary && (
+          {/* サマリー（AI分析結果がなくても詳細予測があれば表示） */}
+          {(detailedPredictions.length > 0 || aiAnalysisResult) && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
@@ -823,7 +934,11 @@ export default function AIEnhancedCashFlow() {
                           予測総収入
                         </dt>
                         <dd className="text-lg font-medium text-gray-900">
-                          {formatCurrency(predictionSummary.total_predicted_inflow)}
+                          {formatCurrency(
+                            detailedPredictions.length > 0
+                              ? detailedPredictions.reduce((sum, p) => sum + p.predicted_inflow, 0)
+                              : 0
+                          )}
                         </dd>
                       </dl>
                     </div>
@@ -843,7 +958,11 @@ export default function AIEnhancedCashFlow() {
                           予測総支出
                         </dt>
                         <dd className="text-lg font-medium text-gray-900">
-                          {formatCurrency(predictionSummary.total_predicted_outflow)}
+                          {formatCurrency(
+                            detailedPredictions.length > 0
+                              ? detailedPredictions.reduce((sum, p) => sum + p.predicted_outflow, 0)
+                              : 0
+                          )}
                         </dd>
                       </dl>
                     </div>
@@ -863,7 +982,11 @@ export default function AIEnhancedCashFlow() {
                           純キャッシュフロー
                         </dt>
                         <dd className="text-lg font-medium text-gray-900">
-                          {formatCurrency(predictionSummary.net_cash_flow)}
+                          {formatCurrency(
+                            detailedPredictions.length > 0
+                              ? detailedPredictions.reduce((sum, p) => sum + (p.predicted_inflow - p.predicted_outflow), 0)
+                              : 0
+                          )}
                         </dd>
                       </dl>
                     </div>
@@ -883,7 +1006,9 @@ export default function AIEnhancedCashFlow() {
                           高リスク月数
                         </dt>
                         <dd className="text-lg font-medium text-gray-900">
-                          {predictionSummary.high_risk_months}ヶ月
+                          {detailedPredictions.length > 0
+                            ? `${detailedPredictions.filter(p => p.risk_level === 'high').length}ヶ月`
+                            : '0ヶ月'}
                         </dd>
                       </dl>
                     </div>
@@ -893,12 +1018,12 @@ export default function AIEnhancedCashFlow() {
             </div>
           )}
 
-          {/* 詳細予測グラフ */}
+          {/* 月次予測詳細グラフ */}
           {detailedPredictions.length > 0 && (
             <div className="bg-white shadow rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
                 <LineChart className="h-5 w-5" />
-                キャッシュフロー詳細予測（決算月の翌月から）
+                月次予測詳細グラフ
               </h3>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1264,8 +1389,7 @@ export default function AIEnhancedCashFlow() {
             </div>
           )}
 
-          {/* フォールバックは削除: AI分析実行前は表示しない */}
-          {!aiAnalysisResult && null}
+          {/* フォールバック不要 */}
         </div>
       )}
     </div>

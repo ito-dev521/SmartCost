@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// GET: 銀行残高履歴を取得（実データ）
+// GET: 銀行残高履歴を取得
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient(
@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
             const cookieStore = await cookies()
             return cookieStore.getAll()
           },
-          async setAll(cookiesToSet) {
+          async setAll(cookiesToSet: any[]) {
             const cookieStore = await cookies()
-            cookiesToSet.forEach(({ name, value, options }) => {
+            cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options: any }) => {
               cookieStore.set(name, value, options)
             })
           },
@@ -24,31 +24,24 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    // クエリパラメータ（年度や件数の絞り込み）
-    const { searchParams } = new URL(request.url)
-    const fiscalYear = searchParams.get('fiscal_year')
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit') as string, 10) : undefined
-
-    let query = supabase
+    const { data: history, error } = await supabase
       .from('bank_balance_history')
       .select('*')
-      .order('balance_date', { ascending: true })
-
-    if (fiscalYear) {
-      query = query.eq('fiscal_year', parseInt(fiscalYear, 10))
-    }
-    if (limit && Number.isFinite(limit)) {
-      query = query.limit(limit)
-    }
-
-    const { data, error } = await query
+      .order('balance_date', { ascending: false })
 
     if (error) {
-      console.error('bank_balance_history 取得エラー:', error)
-      return NextResponse.json({ error: 'データ取得に失敗しました' }, { status: 500 })
+      console.error('銀行残高履歴取得エラー:', error)
+      return NextResponse.json(
+        { error: 'データの取得に失敗しました' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ history: data || [], total: data?.length || 0 })
+    return NextResponse.json({
+      history: history || [],
+      total: history?.length || 0
+    })
+
   } catch (error) {
     console.error('銀行残高履歴APIエラー:', error)
     return NextResponse.json(
@@ -58,10 +51,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: 新しい銀行残高履歴を作成（実データ）
+// POST: 新しい銀行残高履歴を作成
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+
+    // 総支出を自動計算
+    const openingBalance = body.opening_balance || 0
+    const totalIncome = body.total_income || 0
+    const closingBalance = body.closing_balance || 0
+    const totalExpense = openingBalance + totalIncome - closingBalance
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,9 +71,9 @@ export async function POST(request: NextRequest) {
             const cookieStore = await cookies()
             return cookieStore.getAll()
           },
-          async setAll(cookiesToSet) {
+          async setAll(cookiesToSet: any[]) {
             const cookieStore = await cookies()
-            cookiesToSet.forEach(({ name, value, options }) => {
+            cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options: any }) => {
               cookieStore.set(name, value, options)
             })
           },
@@ -82,9 +81,54 @@ export async function POST(request: NextRequest) {
       }
     )
 
+    // 重複チェック（年月のみ）
+    const monthYear = body.balance_date.substring(0, 7) // 年月のみ（例：2025-08）
+    
+    // 年月の範囲を正しく計算
+    const year = parseInt(body.balance_date.substring(0, 4))
+    const month = parseInt(body.balance_date.substring(5, 7))
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    
+    const startDate = `${body.balance_date.substring(0, 7)}-01`
+    const endDate = `${nextYear.toString().padStart(4, '0')}-${nextMonth.toString().padStart(2, '0')}-01`
+    
+    const { data: existingData, error: checkError } = await supabase
+      .from('bank_balance_history')
+      .select('id')
+      .gte('balance_date', startDate)
+      .lt('balance_date', endDate)
+
+    if (checkError) {
+      console.error('重複チェックエラー:', checkError)
+      console.error('重複チェック詳細:', {
+        monthYear,
+        balanceDate: body.balance_date,
+        fiscalYear: body.fiscal_year,
+        startDate,
+        endDate
+      })
+      return NextResponse.json({ 
+        error: '重複チェックに失敗しました',
+        details: checkError.message 
+      }, { status: 500 })
+    }
+
+    if (existingData && existingData.length > 0) {
+      console.log('重複データ検出:', existingData)
+      return NextResponse.json({ 
+        error: '同じ年月のデータは既に存在します',
+        monthYear,
+        existingCount: existingData.length
+      }, { status: 400 })
+    }
+
     const { data, error } = await supabase
       .from('bank_balance_history')
-      .insert([body])
+      .insert([{
+        ...body,
+        total_expense: totalExpense
+      }])
       .select('*')
 
     if (error) {
@@ -95,6 +139,154 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: '銀行残高履歴を作成しました', history: data?.[0] })
   } catch (error) {
     console.error('銀行残高履歴作成APIエラー:', error)
+    return NextResponse.json(
+      { error: 'サーバーエラーが発生しました' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT: 銀行残高履歴を更新
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+
+    // 総支出を自動計算
+    const openingBalance = body.opening_balance || 0
+    const totalIncome = body.total_income || 0
+    const closingBalance = body.closing_balance || 0
+    const totalExpense = openingBalance + totalIncome - closingBalance
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
+          },
+          async setAll(cookiesToSet: any[]) {
+            const cookieStore = await cookies()
+            cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options: any }) => {
+              cookieStore.set(name, value, options)
+            })
+          },
+        },
+      }
+    )
+
+    // 重複チェック（年月のみ、自分以外）
+    const monthYear = body.balance_date.substring(0, 7) // 年月のみ（例：2025-08）
+    
+    // 年月の範囲を正しく計算
+    const year = parseInt(body.balance_date.substring(0, 4))
+    const month = parseInt(body.balance_date.substring(5, 7))
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    
+    const startDate = `${body.balance_date.substring(0, 7)}-01`
+    const endDate = `${nextYear.toString().padStart(4, '0')}-${nextMonth.toString().padStart(2, '0')}-01`
+    
+    const { data: existingData, error: checkError } = await supabase
+      .from('bank_balance_history')
+      .select('id')
+      .gte('balance_date', startDate)
+      .lt('balance_date', endDate)
+      .neq('id', body.id)
+
+    if (checkError) {
+      console.error('重複チェックエラー:', checkError)
+      console.error('重複チェック詳細:', {
+        monthYear,
+        balanceDate: body.balance_date,
+        fiscalYear: body.fiscal_year,
+        recordId: body.id,
+        startDate,
+        endDate
+      })
+      return NextResponse.json({ 
+        error: '重複チェックに失敗しました',
+        details: checkError.message 
+      }, { status: 500 })
+    }
+
+    if (existingData && existingData.length > 0) {
+      console.log('重複データ検出:', existingData)
+      return NextResponse.json({ 
+        error: '同じ年月のデータは既に存在します',
+        monthYear,
+        existingCount: existingData.length
+      }, { status: 400 })
+    }
+
+    const { data, error } = await supabase
+      .from('bank_balance_history')
+      .update({
+        ...body,
+        total_expense: totalExpense,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', body.id)
+      .select('*')
+
+    if (error) {
+      console.error('bank_balance_history 更新エラー:', error)
+      return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 })
+    }
+
+    return NextResponse.json({ message: '銀行残高履歴を更新しました', history: data?.[0] })
+  } catch (error) {
+    console.error('銀行残高履歴更新APIエラー:', error)
+    return NextResponse.json(
+      { error: 'サーバーエラーが発生しました' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE: 銀行残高履歴を削除
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'IDが必要です' }, { status: 400 })
+    }
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
+          },
+          async setAll(cookiesToSet: any[]) {
+            const cookieStore = await cookies()
+            cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options: any }) => {
+              cookieStore.set(name, value, options)
+            })
+          },
+        },
+      }
+    )
+
+    const { error } = await supabase
+      .from('bank_balance_history')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('bank_balance_history 削除エラー:', error)
+      return NextResponse.json({ error: '削除に失敗しました' }, { status: 500 })
+    }
+
+    return NextResponse.json({ message: '銀行残高履歴を削除しました' })
+  } catch (error) {
+    console.error('銀行残高履歴削除APIエラー:', error)
     return NextResponse.json(
       { error: 'サーバーエラーが発生しました' },
       { status: 500 }

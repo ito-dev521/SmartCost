@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@/lib/supabase'
 import { Client } from '@/types/database'
 import { Building2, Phone, MapPin, FileText, Save, X } from 'lucide-react'
 
@@ -29,6 +30,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([])
   const [isLoadingAddress, setIsLoadingAddress] = useState(false)
+  const supabase = createClientComponentClient()
 
   const [formData, setFormData] = useState<ClientFormData>({
     name: client?.name || '',

@@ -31,12 +31,11 @@ export default function BankBalanceHistoryManager() {
   const [isAdding, setIsAdding] = useState(false)
   const [formData, setFormData] = useState<Partial<BankBalanceHistory>>({
     fiscal_year: new Date().getFullYear(),
-    balance_date: new Date().toISOString().split('T')[0],
+    balance_date: new Date().toISOString().substring(0, 7) + '-01',
     opening_balance: 0,
     closing_balance: 0,
     total_income: 0,
     total_expense: 0,
-    transaction_count: 0,
   })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -63,9 +62,23 @@ export default function BankBalanceHistoryManager() {
   }
 
   const handleSave = async () => {
-    if (!formData.fiscal_year || !formData.balance_date) {
-      setMessage({ type: 'error', text: '年度と日付は必須です' })
+    if (!formData.fiscal_year || !formData.balance_date || !formData.opening_balance) {
+      setMessage({ type: 'error', text: '年度、年月、月初残高は必須です' })
       return
+    }
+
+    // 重複チェック（編集時は除外）
+    if (!editing) {
+      const monthYear = formData.balance_date.substring(0, 7) // 年月のみ（例：2025-08）
+      const isDuplicate = history.some(record => {
+        const recordMonthYear = record.balance_date.substring(0, 7) // 年月のみ
+        return recordMonthYear === monthYear
+      })
+
+      if (isDuplicate) {
+        setMessage({ type: 'error', text: '同じ年月のデータは既に存在します' })
+        return
+      }
     }
 
     setSaving(true)
@@ -73,7 +86,9 @@ export default function BankBalanceHistoryManager() {
 
     try {
       const method = editing ? 'PUT' : 'POST'
-      const body = editing ? { ...formData, id: editing.id } : formData
+      // total_expenseは自動計算されるため、送信しない
+      const { total_expense, ...dataToSend } = formData
+      const body = editing ? { ...dataToSend, id: editing.id } : dataToSend
 
       const response = await fetch('/api/bank-balance-history', {
         method,
@@ -90,7 +105,17 @@ export default function BankBalanceHistoryManager() {
         handleCancel()
       } else {
         const error = await response.json()
-        setMessage({ type: 'error', text: error.error || '保存に失敗しました' })
+        let errorMessage = error.error || '保存に失敗しました'
+        
+        // 詳細なエラー情報がある場合は追加
+        if (error.details) {
+          errorMessage += ` (詳細: ${error.details})`
+        }
+        if (error.monthYear) {
+          errorMessage += ` (対象年月: ${error.monthYear})`
+        }
+        
+        setMessage({ type: 'error', text: errorMessage })
       }
     } catch (error) {
       console.error('保存エラー:', error)
@@ -109,12 +134,11 @@ export default function BankBalanceHistoryManager() {
     setIsAdding(true)
     setFormData({
       fiscal_year: new Date().getFullYear(),
-      balance_date: new Date().toISOString().split('T')[0],
+      balance_date: new Date().toISOString().substring(0, 7) + '-01',
       opening_balance: 0,
       closing_balance: 0,
       total_income: 0,
       total_expense: 0,
-      transaction_count: 0,
     })
   }
 
@@ -161,8 +185,24 @@ export default function BankBalanceHistoryManager() {
     return new Date(date).toLocaleDateString('ja-JP', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
     })
+  }
+
+  const formatNumberInput = (value: number | undefined): string => {
+    if (value === undefined || value === null) return ''
+    return value.toLocaleString('ja-JP')
+  }
+
+  const parseNumberInput = (value: string): number => {
+    if (!value) return 0
+    return parseFloat(value.replace(/,/g, '')) || 0
+  }
+
+  const calculateTotalExpense = (): number => {
+    const openingBalance = formData.opening_balance || 0
+    const totalIncome = formData.total_income || 0
+    const closingBalance = formData.closing_balance || 0
+    return openingBalance + totalIncome - closingBalance
   }
 
   if (loading) {
@@ -192,7 +232,8 @@ export default function BankBalanceHistoryManager() {
           </button>
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          銀行残高の履歴データを管理します。AI分析の精度向上に活用されます。
+          銀行残高の履歴データを管理します。過去の残高変動パターンを蓄積することで、
+          AI分析の精度が大幅に向上し、より正確な収支予測や資金計画の立案が可能になります。
         </p>
       </div>
 
@@ -229,58 +270,56 @@ export default function BankBalanceHistoryManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">日付</label>
+                <label className="block text-sm font-medium text-gray-700">年月</label>
                 <input
-                  type="date"
+                  type="month"
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.balance_date || ''}
-                  onChange={(e) => setFormData({ ...formData, balance_date: e.target.value })}
+                  value={formData.balance_date ? formData.balance_date.substring(0, 7) : ''}
+                  onChange={(e) => setFormData({ ...formData, balance_date: e.target.value + '-01' })}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">期首残高</label>
+                <label className="block text-sm font-medium text-gray-700">月初残高</label>
                 <input
-                  type="number"
+                  type="text"
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.opening_balance || ''}
-                  onChange={(e) => setFormData({ ...formData, opening_balance: parseFloat(e.target.value) || 0 })}
+                  value={formatNumberInput(formData.opening_balance)}
+                  onChange={(e) => setFormData({ ...formData, opening_balance: parseNumberInput(e.target.value) })}
+                  placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">期末残高</label>
+                <label className="block text-sm font-medium text-gray-700">月末残高</label>
                 <input
-                  type="number"
+                  type="text"
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.closing_balance || ''}
-                  onChange={(e) => setFormData({ ...formData, closing_balance: parseFloat(e.target.value) || 0 })}
+                  value={formatNumberInput(formData.closing_balance)}
+                  onChange={(e) => setFormData({ ...formData, closing_balance: parseNumberInput(e.target.value) })}
+                  placeholder="0"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">総収入</label>
                 <input
-                  type="number"
+                  type="text"
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.total_income || ''}
-                  onChange={(e) => setFormData({ ...formData, total_income: parseFloat(e.target.value) || 0 })}
+                  value={formatNumberInput(formData.total_income)}
+                  onChange={(e) => setFormData({ ...formData, total_income: parseNumberInput(e.target.value) })}
+                  placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">総支出</label>
+                <label className="block text-sm font-medium text-gray-700">総支出（自動計算）</label>
                 <input
-                  type="number"
-                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.total_expense || ''}
-                  onChange={(e) => setFormData({ ...formData, total_expense: parseFloat(e.target.value) || 0 })}
+                  type="text"
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                  value={formatNumberInput(calculateTotalExpense())}
+                  readOnly
+                  placeholder="自動計算"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">取引件数</label>
-                <input
-                  type="number"
-                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.transaction_count || ''}
-                  onChange={(e) => setFormData({ ...formData, transaction_count: parseInt(e.target.value) || 0 })}
-                />
+                <p className="mt-1 text-xs text-gray-500">
+                  月初残高 + 総収入 - 月末残高で自動計算されます
+                </p>
               </div>
             </div>
             <div className="mt-4 flex justify-end space-x-2">
@@ -318,25 +357,22 @@ export default function BankBalanceHistoryManager() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  日付
+                  年月
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   年度
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  期首残高
+                  月初残高
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  期末残高
+                  月末残高
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   収入
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   支出
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  取引件数
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   操作
@@ -346,7 +382,7 @@ export default function BankBalanceHistoryManager() {
             <tbody className="bg-white divide-y divide-gray-200">
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
                     履歴データがありません
                   </td>
                 </tr>
@@ -354,7 +390,7 @@ export default function BankBalanceHistoryManager() {
                 history.map((record) => (
                   <tr key={record.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(record.balance_date)}
+                      {record.fiscal_year}年{new Date(record.balance_date).getMonth() + 1}月
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {record.fiscal_year}年
@@ -370,9 +406,6 @@ export default function BankBalanceHistoryManager() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                       -{formatCurrency(record.total_expense)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.transaction_count}件
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
