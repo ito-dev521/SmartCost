@@ -36,6 +36,12 @@ interface CaddonBilling {
   amount: number
 }
 
+interface SplitBilling {
+  project_id: string
+  billing_month: string
+  amount: number
+}
+
 interface FiscalInfo {
   id: string
   fiscal_year: number
@@ -52,15 +58,59 @@ interface MonthlyData {
 }
 
 // 年間入金予定表の月毎の金額を計算する関数
+// 支払サイクルを基に入金予定日を算出
+function calculatePaymentDateServer(endDate: string, client: Client): Date {
+  if (!endDate || !client?.payment_cycle_type) {
+    return new Date(endDate || new Date())
+  }
+
+  const end = new Date(endDate)
+  const paymentDate = new Date()
+
+  if (client.payment_cycle_type === 'month_end') {
+    const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+    const targetYear = end.getFullYear()
+    const targetMonth = end.getMonth() + paymentMonthOffset
+    const finalYear = targetMonth >= 12 ? targetYear + Math.floor(targetMonth / 12) : targetYear
+    const finalMonth = targetMonth >= 12 ? targetMonth % 12 : targetMonth
+    paymentDate.setFullYear(finalYear)
+    paymentDate.setMonth(finalMonth)
+    paymentDate.setDate(new Date(finalYear, finalMonth + 1, 0).getDate())
+  } else if (client.payment_cycle_type === 'specific_date') {
+    const closingDay = client.payment_cycle_closing_day || 25
+    const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+    const paymentDay = client.payment_cycle_payment_day || 15
+
+    if (end.getDate() <= closingDay) {
+      paymentDate.setFullYear(end.getFullYear())
+      paymentDate.setMonth(end.getMonth() + paymentMonthOffset)
+      paymentDate.setDate(paymentDay)
+    } else {
+      paymentDate.setFullYear(end.getFullYear())
+      paymentDate.setMonth(end.getMonth() + paymentMonthOffset + 1)
+      paymentDate.setDate(paymentDay)
+    }
+  }
+
+  return paymentDate
+}
+
 function calculateMonthlyRevenueFromProjects(
   projects: Project[],
   clients: Client[],
   caddonBillings: CaddonBilling[],
-  fiscalInfo: FiscalInfo
+  fiscalInfo: FiscalInfo,
+  splitBillings: SplitBilling[]
 ): MonthlyData[] {
-  const monthlyRevenue: MonthlyData[] = []
+  const monthlyMap: { [key: string]: number } = {}
 
-  // 一般管理費とCADDONシステムを除外したプロジェクトを取得
+  // 分割入金データをプロジェクト単位にまとめる
+  const projectIdToSplit: { [pid: string]: { [monthKey: string]: number } } = {}
+  splitBillings.forEach(sb => {
+    if (!projectIdToSplit[sb.project_id]) projectIdToSplit[sb.project_id] = {}
+    projectIdToSplit[sb.project_id][sb.billing_month] = (projectIdToSplit[sb.project_id][sb.billing_month] || 0) + (sb.amount || 0)
+  })
+
   const filteredProjects = projects.filter(project => {
     const isCaddonSystem = (
       (project.business_number && project.business_number.startsWith('C')) ||
@@ -73,109 +123,49 @@ function calculateMonthlyRevenueFromProjects(
     return !isCaddonSystem && !isOverhead
   })
 
-  // 各プロジェクトの月毎の入金予定を計算
   filteredProjects.forEach(project => {
-    if (project.contract_amount && project.contract_amount > 0) {
-      // プロジェクトの開始日と終了日を基に収入を計上
-      if (project.start_date && project.end_date) {
-        const startDate = new Date(project.start_date)
-        const endDate = new Date(project.end_date)
-        
-        // プロジェクト期間中の各月に収入を分散
-        const startMonth = startDate.getMonth() + 1
-        const startYear = startDate.getFullYear()
-        const endMonth = endDate.getMonth() + 1
-        const endYear = endDate.getFullYear()
-        
-        // 月数計算
-        let monthCount = 0
-        let currentYear = startYear
-        let currentMonth = startMonth
-        
-        while (
-          (currentYear < endYear) || 
-          (currentYear === endYear && currentMonth <= endMonth)
-        ) {
-          monthCount++
-          currentMonth++
-          if (currentMonth > 12) {
-            currentMonth = 1
-            currentYear++
-          }
-        }
-        
-        // 月額収入を計算（契約金額を月数で割る）
-        const monthlyAmount = project.contract_amount / monthCount
-        
-        // 各月に収入を計上
-        currentYear = startYear
-        currentMonth = startMonth
-        
-        for (let i = 0; i < monthCount; i++) {
-          const existingData = monthlyRevenue.find(
-            r => r.month === currentMonth && r.year === currentYear
-          )
+    if (!(project.contract_amount && project.contract_amount > 0)) return
 
-          if (existingData) {
-            existingData.amount += monthlyAmount
-          } else {
-            monthlyRevenue.push({
-              month: currentMonth,
-              year: currentYear,
-              amount: monthlyAmount
-            })
-          }
-          
-          currentMonth++
-          if (currentMonth > 12) {
-            currentMonth = 1
-            currentYear++
-          }
-        }
-      } else if (project.contract_amount) {
-        // 開始日・終了日が設定されていない場合は、現在の年度に収入として計上
-        const currentYear = fiscalInfo.fiscal_year
-        const currentMonth = fiscalInfo.current_period || 1
-        
-        const existingData = monthlyRevenue.find(
-          r => r.month === currentMonth && r.year === currentYear
-        )
+    // 分割入金がある場合はそれを優先
+    const split = projectIdToSplit[project.id]
+    if (split && Object.keys(split).length > 0) {
+      Object.entries(split).forEach(([monthKey, amount]) => {
+        monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + (amount || 0)
+      })
+      return
+    }
 
-        if (existingData) {
-          existingData.amount += project.contract_amount
-        } else {
-          monthlyRevenue.push({
-            month: currentMonth,
-            year: currentYear,
-            amount: project.contract_amount
-          })
-        }
-      }
+    // 分割入金がなければ支払サイクルで単月計上
+    if (project.end_date) {
+      const client = clients.find(c => c.name === project.client_name)
+      const payDate = calculatePaymentDateServer(project.end_date, client as Client)
+      const mKey = `${payDate.getFullYear()}-${String(payDate.getMonth() + 1).padStart(2, '0')}`
+      monthlyMap[mKey] = (monthlyMap[mKey] || 0) + (project.contract_amount || 0)
+    } else {
+      // 終了日がない場合は現在の会計期間に計上
+      const mKey = `${fiscalInfo.fiscal_year}-${String(fiscalInfo.current_period || 1).padStart(2, '0')}`
+      monthlyMap[mKey] = (monthlyMap[mKey] || 0) + (project.contract_amount || 0)
     }
   })
 
   // CADDON請求も収入として計上
   caddonBillings.forEach(billing => {
     const billingDate = new Date(billing.billing_month)
-    const month = billingDate.getMonth() + 1
-    const year = billingDate.getFullYear()
+    const key = `${billingDate.getFullYear()}-${String(billingDate.getMonth() + 1).padStart(2, '0')}`
+    monthlyMap[key] = (monthlyMap[key] || 0) + (billing.amount || 0)
+  })
 
-    const existingData = monthlyRevenue.find(
-      r => r.month === month && r.year === year
-    )
-
-    if (existingData) {
-      existingData.amount += billing.amount
-    } else {
-      monthlyRevenue.push({
-        month,
-        year,
-        amount: billing.amount
-      })
+  // map -> MonthlyData[]
+  const result: MonthlyData[] = Object.entries(monthlyMap).map(([key, amount]) => {
+    const [yearStr, monthStr] = key.split('-')
+    return {
+      year: parseInt(yearStr, 10),
+      month: parseInt(monthStr, 10),
+      amount,
     }
   })
 
-  return monthlyRevenue
+  return result
 }
 
 // 月別原価を計算する関数
@@ -262,6 +252,11 @@ export async function GET(request: NextRequest) {
       .select('*')
       .order('billing_month')
 
+    // 分割入金データを取得（全プロジェクト）
+    const { data: splitBillings } = await supabase
+      .from('split_billing')
+      .select('project_id, billing_month, amount')
+
     // クッキーから決算情報を取得
     const allCookies = await cookies()
     const fiscalInfoCookie = allCookies.get('fiscal-info')
@@ -294,7 +289,8 @@ export async function GET(request: NextRequest) {
       projects || [],
       clients || [],
       caddonBillings || [],
-      fiscalInfo
+      fiscalInfo,
+      splitBillings || []
     )
 
     const monthlyCost = calculateMonthlyCost(

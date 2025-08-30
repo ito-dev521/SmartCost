@@ -30,6 +30,37 @@ interface CashFlowData {
   balance: number
 }
 
+// AI分析結果の型（下部コンポーネントと同等）
+interface AIAnalysisResult {
+  riskAnalysis: {
+    highRiskPeriods: {
+      months: string[]
+      riskFactors: string[]
+      severity: 'high' | 'medium' | 'low'
+      recommendations: string[]
+    }
+    seasonalRisks: {
+      winterRisk: boolean
+      yearEndRisk: boolean
+      fiscalYearEndRisk: boolean
+      riskFactors: string[]
+      recommendations: string[]
+    }
+  }
+  growthOpportunities: {
+    highGrowthMonths: string[]
+    potentialProjects: string[]
+    marketTrends: string[]
+    recommendations: string[]
+  }
+  overallAssessment: {
+    riskLevel: 'low' | 'medium' | 'high'
+    confidence: number
+    summary: string
+    keyActions: string[]
+  }
+}
+
 interface PaymentData {
   id: string
   vendor: string
@@ -55,6 +86,8 @@ export default function CashFlowDashboard() {
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
 
   useEffect(() => {
     fetchCashFlowData()
@@ -70,6 +103,50 @@ export default function CashFlowDashboard() {
       clearInterval(intervalId)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 予測データと決算情報が揃ったらAI分析を自動実行
+  useEffect(() => {
+    if (cashFlowData.length > 0 && fiscalInfo && !aiLoading) {
+      runAIAnalysis(cashFlowData, fiscalInfo)
+    }
+  }, [cashFlowData, fiscalInfo])
+
+  const runAIAnalysis = async (data: CashFlowData[], fi: FiscalInfo) => {
+    try {
+      setAiLoading(true)
+      const supabase = createClientComponentClient()
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('*')
+        .order('business_number', { ascending: true })
+
+      const response = await fetch('/api/ai-cash-flow-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          predictions: data.map(d => ({
+            date: d.date,
+            predicted_inflow: d.inflow,
+            predicted_outflow: d.outflow,
+            predicted_balance: d.balance,
+          })),
+          projects: projects || [],
+          fiscalInfo: fi
+        })
+      })
+
+      if (response.ok) {
+        const res = await response.json()
+        setAiResult(res.analysis as AIAnalysisResult)
+      } else {
+        console.error('AI分析APIエラー:', response.status)
+      }
+    } catch (e) {
+      console.error('AI分析実行エラー:', e)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const fetchCashFlowData = async () => {
     try {
@@ -782,44 +859,68 @@ export default function CashFlowDashboard() {
             AI分析・予測
           </h3>
           <div className="space-y-4">
-            <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
-              <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-red-800">
-                  資金ショートリスク
-                </p>
-                <p className="text-sm text-red-700">
-                  3ヶ月後に資金ショートの可能性があります（信頼度: 78%）。
-                  早期の資金調達をお勧めします。
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-              <TrendingDown className="h-5 w-5 text-yellow-400 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">
-                  支払い最適化提案
-                </p>
-                <p className="text-sm text-yellow-700">
-                  B測量事務所への支払いを1週間延期することで、
-                  キャッシュフローが改善されます。
-                </p>
-              </div>
-            </div>
+            {aiResult ? (
+              <>
+                {/* 資金ショートリスク / 全体評価 */}
+                <div className={`flex items-start space-x-3 p-3 rounded-lg ${aiResult.overallAssessment.riskLevel === 'high' ? 'bg-red-50' : aiResult.overallAssessment.riskLevel === 'medium' ? 'bg-yellow-50' : 'bg-blue-50'}`}>
+                  <AlertTriangle className={`h-5 w-5 mt-0.5 ${aiResult.overallAssessment.riskLevel === 'high' ? 'text-red-400' : aiResult.overallAssessment.riskLevel === 'medium' ? 'text-yellow-400' : 'text-blue-400'}`} />
+                  <div>
+                    <p className={`text-sm font-medium ${aiResult.overallAssessment.riskLevel === 'high' ? 'text-red-800' : aiResult.overallAssessment.riskLevel === 'medium' ? 'text-yellow-800' : 'text-blue-800'}`}>
+                      リスク評価（信頼度: {(aiResult.overallAssessment.confidence * 100).toFixed(0)}%）
+                    </p>
+                    <p className={`text-sm ${aiResult.overallAssessment.riskLevel === 'high' ? 'text-red-700' : aiResult.overallAssessment.riskLevel === 'medium' ? 'text-yellow-700' : 'text-blue-700'}`}>
+                      {aiResult.overallAssessment.summary}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-blue-400 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">
-                  収入予測
-                </p>
-                <p className="text-sm text-blue-700">
-                  来月の売上入金は過去データから1,800万円と予測されます。
-                  契約完了プロジェクトからの入金が見込まれます。
-                </p>
-              </div>
-            </div>
+                {/* 支払い最適化提案 / キーアクション or リスク対策 */}
+                {(aiResult.overallAssessment.keyActions.length > 0 || aiResult.riskAnalysis.highRiskPeriods.recommendations.length > 0) && (
+                  <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
+                    <TrendingDown className="h-5 w-5 text-yellow-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800">支払い最適化提案</p>
+                      <ul className="list-disc pl-5 text-sm text-yellow-700 space-y-1">
+                        {(aiResult.overallAssessment.keyActions.length > 0 ? aiResult.overallAssessment.keyActions : aiResult.riskAnalysis.highRiskPeriods.recommendations).map((action, idx) => (
+                          <li key={idx}>{action}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* 収入予測 / 成長機会 */}
+                <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-blue-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">収入・成長機会</p>
+                    <p className="text-sm text-blue-700">
+                      {aiResult.growthOpportunities.highGrowthMonths.length > 0
+                        ? `高成長月: ${aiResult.growthOpportunities.highGrowthMonths.join(', ')}`
+                        : '高成長月は検出されていません。'}
+                    </p>
+                    {aiResult.growthOpportunities.recommendations.length > 0 && (
+                      <ul className="list-disc pl-5 text-sm text-blue-700 space-y-1">
+                        {aiResult.growthOpportunities.recommendations.map((rec, idx) => (
+                          <li key={idx}>{rec}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* フォールバック（読み込み中/未実行） */}
+                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <Brain className="h-5 w-5 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">AI分析を準備中</p>
+                    <p className="text-sm text-gray-600">予測データを取得後に自動で分析結果を表示します。</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
