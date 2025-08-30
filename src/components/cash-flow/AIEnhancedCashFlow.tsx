@@ -335,10 +335,10 @@ export default function AIEnhancedCashFlow() {
     return []
   }
 
-  const createDetailedPredictionsFromAnnualRevenue = (monthlyTotals: MonthlyData[]) => {
-    // 年間入金予定表のデータを月次予測詳細の形式に変換
-    const predictions = []
-    let runningBalance = 8000000 // 今期の期首残高
+      const createDetailedPredictionsFromAnnualRevenue = (monthlyTotals: MonthlyData[]) => {
+      // 年間入金予定表のデータを月次予測詳細の形式に変換
+      const predictions: DetailedCashFlowPrediction[] = []
+      let runningBalance = 8000000 // 今期の期首残高
 
     monthlyTotals.forEach((revenue, index) => {
       const month = revenue.month
@@ -452,7 +452,7 @@ export default function AIEnhancedCashFlow() {
       try {
         const annual = await fetchAnnualRevenueSchedule()
         if (annual.length > 0) {
-          const diff = totalIncome - annual.reduce((s, r) => s + r.amount, 0)
+          const diff = totalIncome - annual.reduce((s: number, r: any) => s + r.amount, 0)
           console.log('年間入金予定表と予測収入の差分(ログのみ):', diff)
         }
       } catch (e) {
