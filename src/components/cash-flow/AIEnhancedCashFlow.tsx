@@ -844,7 +844,7 @@ export default function AIEnhancedCashFlow() {
                                prediction.risk_level === 'medium' ? '中リスク' : '低リスク'}
                             </span>
                             <span className="text-xs text-gray-500">
-                              信頼度: {prediction.confidence}%
+                              信頼度: {Math.round(prediction.confidence)}%
                             </span>
                           </div>
                         </div>
@@ -852,7 +852,9 @@ export default function AIEnhancedCashFlow() {
                           <strong>推奨アクション:</strong> {prediction.recommended_action}
                         </p>
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>予測残高: {formatCurrency(prediction.predicted_balance)}</span>
+                          <span className={prediction.predicted_balance < 0 ? 'text-red-600' : ''}>
+                            予測残高: {formatCurrency(prediction.predicted_balance)}
+                          </span>
                           <span>期間: {prediction.time_horizon}</span>
                         </div>
                       </div>
