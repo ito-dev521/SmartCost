@@ -38,11 +38,11 @@ export default function DashboardOverview() {
     try {
       setLoading(true)
       
-      // 1. プロジェクト統計を取得
+      // 1. プロジェクト統計を取得（CADDONも含める）
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
-        .select('id, status, contract_amount')
-        .neq('business_number', 'IP')  // 一般管理費プロジェクトは除外
+        .select('id, status, contract_amount, business_number, name')
+        .neq('business_number', 'IP')  // 一般管理費プロジェクトは除外（CADDONは除外しない）
         .not('name', 'ilike', '%一般管理費%')
 
       if (projectsError) {
@@ -90,7 +90,23 @@ export default function DashboardOverview() {
       const totalProjects = projects?.length || 0
       const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
       const activeProjects = projects?.filter(p => p.status === 'in_progress').length || 0
-      const totalContractAmount = projects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
+      // CADDONシステムの月次請求（caddon_billing.total_amount）も契約金額相当として加算
+      let totalContractAmount = projects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
+
+      try {
+        const { data: caddonBillings, error: caddonError } = await supabase
+          .from('caddon_billing')
+          .select('total_amount')
+
+        if (caddonError) {
+          console.error('CADDON請求取得エラー:', caddonError)
+        } else {
+          const caddonTotal = (caddonBillings || []).reduce((sum, b) => sum + (b.total_amount || 0), 0)
+          totalContractAmount += caddonTotal
+        }
+      } catch (e) {
+        console.error('CADDON合算処理エラー:', e)
+      }
       
       // 原価合計を計算
       const totalCost = costEntries?.reduce((sum, entry) => sum + (entry.amount || 0), 0) || 0
