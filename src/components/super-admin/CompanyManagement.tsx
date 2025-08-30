@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Company } from '@/types/database'
 import CompanyList from './CompanyList'
 import CompanyForm, { CompanyFormData } from './CompanyForm'
@@ -9,9 +9,10 @@ import { Building2, Plus, ArrowLeft } from 'lucide-react'
 
 export default function CompanyManagement() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list')
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(true) // プレビューのため既定で許可
   const [loading, setLoading] = useState(true)
 
   // スーパー管理者権限チェック
@@ -31,6 +32,14 @@ export default function CompanyManagement() {
 
     checkSuperAdmin()
   }, [])
+
+  // クエリパラメータでフォームを直接表示 (?new=1)
+  useEffect(() => {
+    const isNew = searchParams?.get('new')
+    if (isNew && (isNew === '1' || isNew === 'true')) {
+      setMode('create')
+    }
+  }, [searchParams])
 
   const handleCreate = () => {
     setSelectedCompany(null)

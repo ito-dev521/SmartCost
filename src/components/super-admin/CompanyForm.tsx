@@ -13,6 +13,10 @@ interface CompanyFormProps {
 
 export interface CompanyFormData {
   name: string
+  contact_name?: string
+  email?: string
+  address?: string
+  phone?: string
 }
 
 export default function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
@@ -22,6 +26,10 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
 
   const [formData, setFormData] = useState<CompanyFormData>({
     name: company?.name || '',
+    contact_name: (company as any)?.contact_name || '',
+    email: (company as any)?.email || '',
+    address: (company as any)?.address || '',
+    phone: (company as any)?.phone || ''
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,6 +44,10 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
     }
     if (formData.name.trim().length < 2) {
       setSubmitError('法人名は2文字以上で入力してください')
+      return false
+    }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setSubmitError('メールアドレスの形式が正しくありません')
       return false
     }
     return true
@@ -118,6 +130,72 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
           <p className="mt-1 text-sm text-gray-500">
             正式な法人名を入力してください（例：株式会社○○建設、○○株式会社）
           </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* 担当者名 */}
+          <div>
+            <label htmlFor="contact_name" className="block text-sm font-medium text-gray-700 mb-2">
+              担当者名
+            </label>
+            <input
+              type="text"
+              id="contact_name"
+              name="contact_name"
+              value={formData.contact_name || ''}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="山田 太郎"
+            />
+          </div>
+
+          {/* メールアドレス */}
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              メールアドレス
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email || ''}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="contact@example.com"
+            />
+          </div>
+        </div>
+
+        {/* 住所 */}
+        <div>
+          <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+            住所
+          </label>
+          <input
+            type="text"
+            id="address"
+            name="address"
+            value={formData.address || ''}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="東京都千代田区丸の内1-1-1"
+          />
+        </div>
+
+        {/* 電話番号 */}
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+            電話番号
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value={formData.phone || ''}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="03-1234-5678"
+          />
         </div>
 
         {/* 作成・更新日時（表示のみ） */}

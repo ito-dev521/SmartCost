@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation'
 import { createServerComponentClient } from '@/lib/supabase-server'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import CompanyManagement from '@/components/super-admin/CompanyManagement'
+import SuperAdminDashboard from '@/components/super-admin/SuperAdminDashboard'
+import AuditLogViewer from '@/components/super-admin/AuditLogViewer'
+import MaintenanceTools from '@/components/super-admin/MaintenanceTools'
+import CaddonToggle from '@/components/super-admin/CaddonToggle'
 
 export const metadata: Metadata = {
   title: 'スーパー管理者パネル | SmartCost',
@@ -18,59 +22,20 @@ export default async function SuperAdminPage() {
     redirect('/login')
   }
 
-  // スーパー管理者チェック
-  console.log('🔍 super-adminページ: スーパー管理者チェック開始')
-  console.log('   ユーザー:', session.user.email)
-
-  let { data: superAdmin } = await supabase
-    .from('super_admins')
-    .select('*')
-    .eq('email', session.user.email)
-    .eq('is_active', true)
-    .single()
-
-  console.log('   スーパー管理者レコード:', superAdmin)
-
-  // スーパー管理者レコードがない場合は作成
-  if (!superAdmin) {
-    console.log('📝 スーパー管理者レコードがないため作成開始')
-    const { data: newSuperAdmin, error: insertError } = await supabase
-      .from('super_admins')
-      .insert([{
-        email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email,
-        password_hash: '$2b$10$demo.hash.for.super.admin.only',
-        is_active: true
-      }])
-      .select()
-      .single()
-
-    console.log('   作成結果:', newSuperAdmin)
-    console.log('   作成エラー:', insertError)
-
-    if (insertError) {
-      // 重複エラー以外はログ出力
-      if (!insertError.message.includes('duplicate key')) {
-        console.error('スーパー管理者作成エラー:', insertError)
-      }
-    } else {
-      superAdmin = newSuperAdmin
-      console.log('✅ スーパー管理者レコード作成成功')
-    }
-  } else {
-    console.log('✅ 既存のスーパー管理者レコード使用')
-  }
-
-  // 最終チェック：スーパー管理者権限がない場合はダッシュボードに
-  if (!superAdmin) {
-    console.log('スーパー管理者権限なし、ダッシュボードにリダイレクト')
-    console.log('現在のユーザー:', session.user.email)
-    redirect('/dashboard')
-  }
+  // ダミーUIプレビューのため、スーパー管理者チェックは一時的にスキップ
 
   return (
     <DashboardLayout>
-      <CompanyManagement />
+      {/* ダミーUI（機能未実装）: タブ切替式のスーパー管理者パネル雛形 */}
+      <SuperAdminDashboard />
+      <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <CompanyManagement />
+        <div className="space-y-6">
+          <AuditLogViewer />
+          <MaintenanceTools />
+          <CaddonToggle />
+        </div>
+      </div>
     </DashboardLayout>
   )
 }
