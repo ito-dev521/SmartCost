@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
     console.log('fiscal-info GET called')
 
     // テスト用：決算情報をクッキーに保存して取得
-    const allCookies = cookies().getAll()
+    const cookieStore = await cookies()
+    const allCookies = cookieStore.getAll()
     console.log('All cookies:', allCookies.map(c => c.name))
 
     const fiscalInfoCookie = allCookies.find(cookie => cookie.name === 'fiscal-info')
@@ -70,7 +71,8 @@ export async function POST(request: NextRequest) {
     console.log('Setting fiscal info to cookie:', fiscalInfo)
 
     // クッキーに保存（7日間有効）
-    cookies().set('fiscal-info', JSON.stringify(fiscalInfo), {
+    const cookieStore = await cookies()
+    cookieStore.set('fiscal-info', JSON.stringify(fiscalInfo), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -299,8 +299,7 @@ export async function POST(request: NextRequest) {
       console.error('❌ /api/users: 認証ユーザー作成エラー:', {
         error: authError,
         message: authError.message,
-        status: authError.status,
-        details: authError.details
+        status: (authError as any).status,
       })
       return NextResponse.json(
         { error: `認証ユーザーの作成に失敗しました: ${authError.message}` },

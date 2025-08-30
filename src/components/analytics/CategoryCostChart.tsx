@@ -8,6 +8,8 @@ import {
   Tooltip,
   Legend,
   ArcElement,
+  type ChartOptions,
+  type TooltipItem,
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 
@@ -399,7 +401,7 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
   }
 
   // 棒グラフのオプション
-  const barOptions = {
+  const barOptions: ChartOptions<'bar'> = {
     responsive: true,
     interaction: {
       mode: 'index' as const,
@@ -414,26 +416,23 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
         text: 'カテゴリ別原価分析',
         font: {
           size: 16,
-          weight: 'bold',
+          weight: 700,
         },
       },
       tooltip: {
         callbacks: {
-          label: function(context: {
-            dataset: {
-              label: string
-            }
-            label: string
-            parsed: {
-              y: number
-            }
-          }) {
-            if (context.dataset.label === '原価（円）') {
-              return `${context.label}: ${Math.round(context.parsed.y).toLocaleString('ja-JP')}円`
+          label: function(context: TooltipItem<'bar'>) {
+            const dsLabel = context.dataset.label ?? ''
+            const label = context.label ?? ''
+            const yVal = typeof context.parsed === 'object' && context.parsed !== null ? (context.parsed as any).y : context.parsed
+            if (dsLabel === '原価（円）') {
+              const num = typeof yVal === 'number' ? yVal : Number(yVal)
+              return `${label}: ${Math.round(num).toLocaleString('ja-JP')}円`
             } else {
-              return `${context.label}: ${context.parsed.y}件`
+              const num = typeof yVal === 'number' ? yVal : Number(yVal)
+              return `${label}: ${num}件`
             }
-          }
+          },
         }
       }
     },
@@ -447,8 +446,9 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
           text: '原価（円）',
         },
         ticks: {
-          callback: function(value: number) {
-            return value.toLocaleString('ja-JP') + '円'
+          callback: function(value) {
+            const num = typeof value === 'number' ? value : Number(value)
+            return num.toLocaleString('ja-JP') + '円'
           }
         }
       },
@@ -468,7 +468,7 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
   }
 
   // 円グラフのオプション
-  const doughnutOptions = {
+  const doughnutOptions: ChartOptions<'doughnut'> = {
     responsive: true,
     plugins: {
       legend: {
@@ -479,22 +479,19 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
         text: 'カテゴリ別原価割合',
         font: {
           size: 16,
-          weight: 'bold',
+          weight: 700,
         },
       },
       tooltip: {
         callbacks: {
-          label: function(context: {
-            dataset: {
-              data: number[]
-            }
-            label: string
-            parsed: number
-          }) {
-            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-            const percentage = ((context.parsed / total) * 100).toFixed(1)
-            return `${context.label}: ${Math.round(context.parsed).toLocaleString('ja-JP') + '円'} (${percentage}%)`
-          }
+          label: function(context: TooltipItem<'doughnut'>) {
+            const dataArr = (context.dataset.data as number[]) || []
+            const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+            const parsed = typeof context.parsed === 'number' ? context.parsed : Number(context.parsed)
+            const percentage = total > 0 ? ((parsed / total) * 100).toFixed(1) : '0.0'
+            const label = context.label ?? ''
+            return `${label}: ${Math.round(parsed).toLocaleString('ja-JP')}円 (${percentage}%)`
+          },
         }
       }
     }
@@ -631,11 +628,8 @@ const CategoryCostChart: React.FC<CategoryCostChartProps> = ({ categoryData, cos
             return categoryMatch
           })}
           selectedProject={selectedProject}
-          projects={costEntries?.reduce((acc: {
-            id: string | null
-            name: string
-          }[], entry) => {
-            if (entry.project && !acc.find(p => p.id === entry.project_id)) {
+          projects={costEntries?.reduce((acc: { id: string; name: string }[], entry) => {
+            if (entry.project && entry.project_id && !acc.find(p => p.id === entry.project_id)) {
               acc.push({ id: entry.project_id, name: entry.project.name })
             }
             return acc

@@ -3,10 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('🔍 /api/users/[id]: DELETEリクエスト受信', { userId: params.id })
+    const { id } = await params
+    console.log('🔍 /api/users/[id]: DELETEリクエスト受信', { userId: id })
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
@@ -68,7 +69,7 @@ export async function DELETE(
     const { data: targetUser, error: targetError } = await supabase
       .from('users')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (targetError || !targetUser) {
@@ -106,7 +107,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('users')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (deleteError) {
       console.error('❌ /api/users/[id]: ユーザーテーブル削除エラー:', deleteError)
@@ -118,7 +119,7 @@ export async function DELETE(
 
     // Supabaseの認証システムからもユーザーを削除
     try {
-      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(params.id)
+      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id)
       if (authDeleteError) {
         console.warn('⚠️ /api/users/[id]: 認証ユーザー削除エラー（テーブルは削除済み）:', authDeleteError)
         // 認証ユーザーの削除に失敗しても、テーブルは削除されているので警告のみ
@@ -132,7 +133,7 @@ export async function DELETE(
     console.log('✅ /api/users/[id]: ユーザー削除完了')
     return NextResponse.json({
       message: 'ユーザーが正常に削除されました',
-      deletedUserId: params.id
+      deletedUserId: id
     })
 
   } catch (error) {

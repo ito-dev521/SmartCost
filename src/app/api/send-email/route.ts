@@ -18,8 +18,18 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // メール送信（Supabaseのメール機能を使用）
-    const { data, error } = await supabase.auth.admin.sendRawEmail({
+    // メール送信（ダミー: 実運用では外部メールサービスを利用してください）
+    // SupabaseのGoTrue Admin APIには sendRawEmail はありません。ここではログ出力のみ行います。
+    const data = null
+    const error = null
+    console.log('【メール送信(ログのみ)】宛先:', email)
+    console.log('件名: アカウント作成完了のお知らせ')
+    console.log('本文(HTML/テキスト)は省略')
+    /* 実運用の例:
+       await fetch(process.env.MAIL_WEBHOOK_URL!, { method: 'POST', body: JSON.stringify({ to: email, subject, html, text }) })
+    */
+    /*
+    await sendEmailWithYourProvider({
       to: email,
       subject: 'アカウント作成完了のお知らせ',
       html: `
@@ -79,6 +89,7 @@ ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login
 このメールは自動送信されています。返信はできません。
       `
     })
+    */
 
     if (error) {
       console.error('メール送信エラー:', error)

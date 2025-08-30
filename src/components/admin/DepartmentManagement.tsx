@@ -320,7 +320,7 @@ export default function DepartmentManagement() {
                       {department.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {getParentName(department.parent_id)}
+                      {getParentName(department.parent_id ?? null)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(department.created_at).toLocaleDateString('ja-JP')}

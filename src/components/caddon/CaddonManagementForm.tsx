@@ -43,6 +43,8 @@ export default function CaddonManagementForm({
   const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
   const [loadingEntries, setLoadingEntries] = useState(false)
   const [creatingProject, setCreatingProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState<string>('')
+  const [newProjectClientId, setNewProjectClientId] = useState<string>('')
 
   // CADDONプロジェクトを特定
   const caddonProject = projects.find(p => p.name.includes('CADDON') || p.name.includes('caddon'))
@@ -270,19 +272,20 @@ export default function CaddonManagementForm({
       await fetchCaddonBillings()
     } catch (error) {
       console.error('保存エラー:', error)
+      const err = (error ?? {}) as { message?: string; details?: string; hint?: string; code?: string }
       console.error('エラー詳細:', {
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-        code: error?.code
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code
       })
       
       let errorMessage = 'データの保存に失敗しました'
-      if (error && typeof error === 'object' && 'message' in error) {
-        errorMessage += `\n\nエラー詳細: ${error.message}`
+      if (err?.message) {
+        errorMessage += `\n\nエラー詳細: ${err.message}`
       }
-      if (error && typeof error === 'object' && 'details' in error) {
-        errorMessage += `\n\n詳細: ${error.details}`
+      if (err?.details) {
+        errorMessage += `\n\n詳細: ${err.details}`
       }
       
       alert(errorMessage)

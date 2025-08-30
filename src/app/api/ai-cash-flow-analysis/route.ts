@@ -47,6 +47,11 @@ interface AIAnalysisResult {
   }
 }
 
+// 追加: 厳格な型
+type Severity = 'low' | 'medium' | 'high'
+interface HighRiskPeriods { months: string[]; riskFactors: string[]; severity: Severity; recommendations: string[] }
+interface SeasonalRisks { winterRisk: boolean; yearEndRisk: boolean; fiscalYearEndRisk: boolean; riskFactors: string[]; recommendations: string[] }
+
 export async function POST(request: NextRequest) {
   try {
     console.log('AI Cash Flow Analysis API called')
@@ -91,10 +96,10 @@ async function performAIAnalysis(
 ): Promise<AIAnalysisResult> {
   
   // 高リスク期間の検知
-  const highRiskPeriods = analyzeHighRiskPeriods(predictions)
+  const highRiskPeriods: HighRiskPeriods = analyzeHighRiskPeriods(predictions)
   
   // 季節性リスクの検知
-  const seasonalRisks = analyzeSeasonalRisks(predictions, fiscalInfo)
+  const seasonalRisks: SeasonalRisks = analyzeSeasonalRisks(predictions, fiscalInfo)
   
   // 成長機会の検知
   const growthOpportunities = analyzeGrowthOpportunities(predictions, projects)
@@ -112,7 +117,7 @@ async function performAIAnalysis(
   }
 }
 
-function analyzeHighRiskPeriods(predictions: CashFlowPrediction[]) {
+function analyzeHighRiskPeriods(predictions: CashFlowPrediction[]): HighRiskPeriods {
   const highRiskMonths: string[] = []
   const riskFactors: string[] = []
   const recommendations: string[] = []
@@ -250,19 +255,8 @@ function analyzeGrowthOpportunities(predictions: CashFlowPrediction[], projects:
 
 function analyzeOverallRisk(
   predictions: CashFlowPrediction[],
-  highRiskPeriods: {
-    months: string[]
-    riskFactors: string[]
-    severity: 'high' | 'medium' | 'low'
-    recommendations: string[]
-  },
-  seasonalRisks: {
-    winterRisk: boolean
-    yearEndRisk: boolean
-    fiscalYearEndRisk: boolean
-    riskFactors: string[]
-    recommendations: string[]
-  }
+  highRiskPeriods: HighRiskPeriods,
+  seasonalRisks: SeasonalRisks
 ) {
   let riskScore = 0
 
@@ -276,7 +270,7 @@ function analyzeOverallRisk(
   if (seasonalRisks.fiscalYearEndRisk) riskScore += 1
 
   // 全体的なリスクレベルの判定
-  let riskLevel: 'low' | 'medium' | 'high' = 'low'
+  let riskLevel: Severity = 'low'
   if (riskScore >= 4) riskLevel = 'high'
   else if (riskScore >= 2) riskLevel = 'medium'
 
@@ -289,19 +283,13 @@ function analyzeOverallRisk(
 
   if (riskLevel === 'high') {
     summary = '資金管理において高リスクの状況が検知されています。即座の対応が必要です。'
-    keyActions.push('緊急資金調達の検討')
-    keyActions.push('支出削減の即座実施')
-    keyActions.push('収入増加策の検討')
+    keyActions.push('緊急資金調達の検討','支出削減の即座実施','収入増加策の検討')
   } else if (riskLevel === 'medium') {
     summary = '資金管理において中程度のリスクが検知されています。注意深い監視が必要です。'
-    keyActions.push('月次資金計画の見直し')
-    keyActions.push('リスク要因の詳細分析')
-    keyActions.push('予防的対策の実施')
+    keyActions.push('月次資金計画の見直し','リスク要因の詳細分析','予防的対策の実施')
   } else {
     summary = '資金管理において安定した状況を維持しています。継続的な監視を推奨します。'
-    keyActions.push('定期的な資金状況の確認')
-    keyActions.push('成長機会の積極的検討')
-    keyActions.push('効率化の継続')
+    keyActions.push('定期的な資金状況の確認','成長機会の積極的検討','効率化の継続')
   }
 
   return {

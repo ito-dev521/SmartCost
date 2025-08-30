@@ -144,9 +144,9 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">プロジェクトを選択...</option>
-              {projects?.filter(p => p.status === 'in_progress' || p.status === 'planning').map(project => (
+              {projects?.filter(p => p.status === 'in_progress' || p.status === 'planning' || p.status === 'completed').map(project => (
                 <option key={project.id} value={project.id}>
-                  {project.business_number} - {project.name} ({project.status === 'in_progress' ? '進行中' : '計画中'})
+                  {project.business_number} - {project.name} ({project.status === 'in_progress' ? '進行中' : project.status === 'planning' ? '計画中' : '完了'})
                 </option>
               ))}
             </select>

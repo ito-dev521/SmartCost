@@ -10,13 +10,15 @@ interface PermissionGuardProps {
   requiredRole?: 'user' | 'manager' | 'admin'
   requiredPermission?: string
   fallback?: React.ReactNode
+  projectId?: string
 }
 
 export default function PermissionGuard({ 
   children, 
   requiredRole = 'user',
   requiredPermission,
-  fallback 
+  fallback,
+  projectId
 }: PermissionGuardProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,8 +38,18 @@ export default function PermissionGuard({
         let permission = false
 
         if (requiredPermission) {
-          // 特定の権限をチェック
-          switch (requiredPermission) {
+          // プロジェクト単位の権限チェック（read/write/admin）
+          if (projectId && ['read', 'write', 'admin'].includes(requiredPermission)) {
+            if (requiredPermission === 'read') {
+              permission = await permissionChecker.canViewProject(user.id, projectId)
+            } else if (requiredPermission === 'write') {
+              permission = await permissionChecker.canEditProject(user.id, projectId)
+            } else if (requiredPermission === 'admin') {
+              permission = await permissionChecker.canAdminProject(user.id, projectId)
+            }
+          } else {
+            // グローバル権限チェック
+            switch (requiredPermission) {
             case 'canManageProjects':
               permission = await permissionChecker.canManageProjects(user.id)
               break
@@ -76,6 +88,7 @@ export default function PermissionGuard({
               break
             default:
               permission = false
+            }
           }
         } else {
           // ロールベースの権限チェック
@@ -104,7 +117,7 @@ export default function PermissionGuard({
     }
 
     checkPermission()
-  }, [requiredRole, requiredPermission, router, supabase.auth])
+  }, [requiredRole, requiredPermission, projectId, router, supabase.auth])
 
   if (loading) {
     return (

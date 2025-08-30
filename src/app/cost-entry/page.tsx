@@ -15,7 +15,7 @@ export default async function CostEntry() {
   // サーバーサイドでプロジェクトデータを取得（一般管理費プロジェクトのみ除外）
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, name, business_number, status, created_at, updated_at')
+    .select('id, name, business_number, status, created_at, updated_at, client_name, contract_amount, start_date, end_date, completion_method, progress_calculation_method, company_id')
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート

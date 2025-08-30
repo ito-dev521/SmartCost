@@ -236,6 +236,14 @@ export default function AnalyticsDashboard() {
     end_date: string | null
     client_name: string | null
     status: string
+    // 追加: 詳細表示用
+    categoryBreakdown?: { id: string; name: string; amount: number }[]
+    monthlyBreakdown?: { monthKey: string; month: string; amount: number; cumulative: number }[]
+    recentEntries?: { id: string; project_id: string | null; entry_date: string; amount: number; description: string | null; category_id: string | null }[]
+    // 追加: 一覧テーブルで使う値
+    total?: number
+    profit?: number
+    profitMargin?: number
   } | null>(null)
   const [showProjectModal, setShowProjectModal] = useState(false)
 
@@ -1261,15 +1269,14 @@ export default function AnalyticsDashboard() {
         // 各プロジェクトに分割入金データを設定
         setMonthlyRevenue(prev => prev.map(item => {
           if (projectData[item.projectId]) {
-            const splitBillingAmounts = projectData[item.projectId]
-            const total = Object.values(splitBillingAmounts).reduce((sum: number, val: number) => sum + val, 0)
-            
+            const splitBillingAmounts = projectData[item.projectId] as { [month: string]: number }
+            const total: number = Object.values(splitBillingAmounts).reduce((sum: number, val: number) => sum + val, 0)
             return {
               ...item,
               splitBillingAmounts,
               isSplitBilling: true,
               totalRevenue: total
-            }
+            } as MonthlyRevenue
           }
           return item
         }))
@@ -1601,9 +1608,20 @@ export default function AnalyticsDashboard() {
                       onClick={() => {
                         const detailData = getProjectDetailData(item.project.id)
                         setSelectedProjectDetail({
-                          ...item,
+                          id: item.project.id,
+                          name: item.project.name,
+                          business_number: item.project.business_number,
+                          contract_amount: item.project.contract_amount,
+                          start_date: item.project.start_date,
+                          end_date: item.project.end_date,
+                          client_name: item.project.client_name,
+                          status: item.project.status,
+                          total: item.total,
+                          profit: item.profit,
+                          profitMargin: item.profitMargin,
                           categoryBreakdown: detailData?.categoryBreakdown,
-                          monthlyBreakdown: detailData?.monthlyBreakdown
+                          monthlyBreakdown: detailData?.monthlyBreakdown,
+                          recentEntries: detailData?.recentEntries
                         })
                         setShowProjectModal(true)
                       }}
@@ -2016,7 +2034,7 @@ export default function AnalyticsDashboard() {
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                プロジェクト詳細: {selectedProjectDetail.project.name}
+                プロジェクト詳細: {selectedProjectDetail.name}
               </h3>
               <button
                 onClick={() => setShowProjectModal(false)}
@@ -2036,31 +2054,31 @@ export default function AnalyticsDashboard() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">プロジェクト名:</span>
-                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.name}</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">業務番号:</span>
-                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.business_number}</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.business_number}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">ステータス:</span>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        selectedProjectDetail.project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        selectedProjectDetail.project.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                        selectedProjectDetail.project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
-                        selectedProjectDetail.project.status === 'on_hold' ? 'bg-gray-100 text-gray-800' :
+                        selectedProjectDetail.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        selectedProjectDetail.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        selectedProjectDetail.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                        selectedProjectDetail.status === 'on_hold' ? 'bg-gray-100 text-gray-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {selectedProjectDetail.project.status === 'completed' ? '完了' :
-                         selectedProjectDetail.project.status === 'in_progress' ? '進行中' :
-                         selectedProjectDetail.project.status === 'planning' ? '計画中' :
-                         selectedProjectDetail.project.status === 'on_hold' ? '保留中' : '中止'}
+                        {selectedProjectDetail.status === 'completed' ? '完了' :
+                         selectedProjectDetail.status === 'in_progress' ? '進行中' :
+                         selectedProjectDetail.status === 'planning' ? '計画中' :
+                         selectedProjectDetail.status === 'on_hold' ? '保留中' : '中止'}
                       </span>
                     </div>
-                    {selectedProjectDetail.project.client_name && (
+                    {selectedProjectDetail.client_name && (
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">クライアント:</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.project.client_name}</span>
+                        <span className="text-sm font-medium text-gray-900">{selectedProjectDetail.client_name}</span>
                       </div>
                     )}
                   </div>
@@ -2072,25 +2090,25 @@ export default function AnalyticsDashboard() {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">契約金額:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {selectedProjectDetail.contractAmount > 0 ? formatCurrency(selectedProjectDetail.contractAmount) : '-'}
+                        {(selectedProjectDetail.contract_amount ?? 0) > 0 ? formatCurrency(selectedProjectDetail.contract_amount || 0) : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">原価合計:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {formatCurrency(selectedProjectDetail.total)}
+                        {formatCurrency(selectedProjectDetail.total || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">利益:</span>
-                      <span className={`text-sm font-medium ${selectedProjectDetail.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {selectedProjectDetail.contractAmount > 0 ? formatCurrency(selectedProjectDetail.profit) : '-'}
+                      <span className={`text-sm font-medium ${ (selectedProjectDetail.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(selectedProjectDetail.contract_amount ?? 0) > 0 ? formatCurrency(selectedProjectDetail.profit || 0) : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">利益率:</span>
-                      <span className={`text-sm font-medium ${selectedProjectDetail.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {selectedProjectDetail.contractAmount > 0 ? `${selectedProjectDetail.profitMargin.toFixed(1)}%` : '-'}
+                      <span className={`text-sm font-medium ${(selectedProjectDetail.profitMargin ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(selectedProjectDetail.contract_amount ?? 0) > 0 ? `${(selectedProjectDetail.profitMargin ?? 0).toFixed(1)}%` : '-'}
                       </span>
                     </div>
                   </div>
@@ -2110,8 +2128,8 @@ export default function AnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedProjectDetail.categoryBreakdown?.length > 0 ? (
-                        selectedProjectDetail.categoryBreakdown.map((category: {
+                      {(selectedProjectDetail.categoryBreakdown?.length ?? 0) > 0 ? (
+                        (selectedProjectDetail.categoryBreakdown ?? []).map((category: {
                           id: string
                           name: string
                           amount: number
@@ -2122,7 +2140,7 @@ export default function AnalyticsDashboard() {
                               {formatCurrency(category.amount)}
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
-                              {selectedProjectDetail.total > 0 ? ((category.amount / selectedProjectDetail.total) * 100).toFixed(1) : 0}%
+                              {(selectedProjectDetail.total ?? 0) > 0 ? ((category.amount / (selectedProjectDetail.total || 1)) * 100).toFixed(1) : 0}%
                             </td>
                           </tr>
                         ))
@@ -2151,8 +2169,8 @@ export default function AnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedProjectDetail.monthlyBreakdown?.length > 0 ? (
-                        selectedProjectDetail.monthlyBreakdown.map((month: {
+                      {(selectedProjectDetail.monthlyBreakdown?.length ?? 0) > 0 ? (
+                        (selectedProjectDetail.monthlyBreakdown ?? []).map((month: {
                           monthKey: string
                           month: string
                           amount: number
@@ -2194,8 +2212,8 @@ export default function AnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedProjectDetail.recentEntries?.length > 0 ? (
-                        selectedProjectDetail.recentEntries.map((entry: {
+                      {(selectedProjectDetail.recentEntries?.length ?? 0) > 0 ? (
+                        (selectedProjectDetail.recentEntries ?? []).map((entry: {
                           id: string
                           project_id: string | null
                           entry_date: string

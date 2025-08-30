@@ -7,21 +7,21 @@ export async function POST(request: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies })
     
     // ユーザー認証チェック（クッキーまたはBearerトークン）
-    let user = null
+    let user: { id?: string } | null = null
     let authError = null
     
     // まずクッキーでの認証を試行
     const { data: cookieUser, error: cookieError } = await supabase.auth.getUser()
-    if (cookieUser && !cookieError) {
-      user = cookieUser
+    if (cookieUser?.user && !cookieError) {
+      user = { id: cookieUser.user.id }
     } else {
       // Bearerトークンでの認証を試行
       const authHeader = request.headers.get('authorization')
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7)
         const { data: tokenUser, error: tokenError } = await supabase.auth.getUser(token)
-        if (tokenUser && !tokenError) {
-          user = tokenUser
+        if (tokenUser?.user && !tokenError) {
+          user = { id: tokenUser.user.id }
         } else {
           authError = tokenError
         }
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       project_id: projectId,
       billing_month: month,
       amount: amount as number,
-      created_by: user.id,
+      created_by: user?.id || null,
       created_at: new Date().toISOString()
     }))
 

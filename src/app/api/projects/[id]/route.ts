@@ -113,6 +113,49 @@ export async function PUT(
       return NextResponse.json({ error: 'プロジェクトの更新に失敗しました' }, { status: 500 })
     }
 
+    // ステータスが完了になった場合は進捗率100%を自動記録
+    if (status === 'completed') {
+      try {
+        // 簡易UUID生成（認証未接続環境向けの暫定対応）
+        const generateUUID = () =>
+          'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = (Math.random() * 16) | 0
+            const v = c === 'x' ? r : (r & 0x3) | 0x8
+            return v.toString(16)
+          })
+
+        // 既に100%が記録されているか確認
+        const { data: latest } = await supabase
+          .from('project_progress')
+          .select('*')
+          .eq('project_id', id)
+          .order('progress_date', { ascending: false })
+          .limit(1)
+
+        const latestRate = latest && latest.length > 0 ? (latest[0].progress_rate || 0) : 0
+        if (latestRate < 100) {
+          const today = new Date().toISOString().split('T')[0]
+          const { error: insertError } = await supabase
+            .from('project_progress')
+            .insert({
+              project_id: id,
+              progress_rate: 100,
+              progress_date: today,
+              created_by: generateUUID(),
+              created_at: new Date().toISOString(),
+            })
+            .select()
+            .single()
+
+          if (insertError) {
+            console.error('progress 100% 自動登録エラー:', insertError)
+          }
+        }
+      } catch (e) {
+        console.error('進捗100%の自動記録に失敗:', e)
+      }
+    }
+
     console.log('✅ /api/projects/[id] PUT: プロジェクト更新成功:', data)
     return NextResponse.json({ project: data })
   } catch (error) {
