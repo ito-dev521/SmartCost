@@ -38,6 +38,14 @@ interface CaddonBilling {
   project_id?: string | null
 }
 
+interface ProjectProgressRow {
+  project_id: string
+  progress_percent: number | null
+  expected_end_date: string | null
+}
+
+type MonthKey = string // 'YYYY-MM'
+
 interface SplitBilling {
   project_id: string
   billing_month: string
@@ -260,6 +268,11 @@ export async function GET(request: NextRequest) {
       .from('split_billing')
       .select('project_id, billing_month, amount')
 
+    // 進捗データを取得（存在するテーブル名に合わせてください）
+    const { data: progressRows } = await supabase
+      .from('project_progress')
+      .select('project_id, progress_percent, expected_end_date')
+
     // クッキーから決算情報を取得
     const allCookies = await cookies()
     const fiscalInfoCookie = allCookies.get('fiscal-info')
@@ -326,6 +339,15 @@ export async function GET(request: NextRequest) {
     console.log(`予測開始日付: ${nextYear}年${nextMonth}月1日`)
     console.log(`初期残高: ${runningBalance} (銀行残高履歴: ${bankBalanceHistory?.[0]?.closing_balance || 'なし'}, fiscalInfo: ${fiscalInfo.bank_balance})`)
 
+    // 進捗データをプロジェクトID -> 進捗 へ変換
+    const projectIdToProgress: Record<string, { progress: number; expectedEnd: Date | null }> = {}
+    ;(progressRows || []).forEach((row: any) => {
+      projectIdToProgress[row.project_id] = {
+        progress: Math.min(Math.max(row.progress_percent ?? 0, 0), 100),
+        expectedEnd: row.expected_end_date ? new Date(row.expected_end_date) : null
+      }
+    })
+
     for (let i = 0; i < months; i++) {
       // 決算月の翌月からiヶ月後の日付を計算
       let targetYear = nextYear
@@ -359,12 +381,67 @@ export async function GET(request: NextRequest) {
       const predictedOutflow = costData?.amount || 0
       runningBalance = runningBalance + predictedInflow - predictedOutflow
 
+      // 信頼度の重み付け
+      // 1) 予測根拠: 分割入金/終了日/CADDON請求の有無で重み
+      // 2) 進捗率: progress_percent
+      // 3) 終了日と対象月の距離: 予定通り終わる確率
+      // 簡易実装: month毎の代表プロジェクトの指標を平均化
+      const monthKey: MonthKey = `${year}-${String(month).padStart(2, '0')}`
+      const monthProjects = (projects || []).filter(p => {
+        // 対象月に入金予定があるか（分割入金 or 終了日支払）
+        const splits = (splitBillings || []).filter(sb => sb.project_id === p.id && sb.billing_month === monthKey)
+        const hasSplit = splits.length > 0
+        const payDate = p.end_date ? calculatePaymentDateServer(p.end_date as string, (clients || []).find(c => c.name === p.client_name) as any) : null
+        const payKey = payDate ? `${payDate.getFullYear()}-${String(payDate.getMonth() + 1).padStart(2, '0')}` : ''
+        const hasEndPay = !!p.end_date && payKey === monthKey
+        const isCaddon = (p.business_number && p.business_number.startsWith('C')) || (p.name && p.name.includes('CADDON'))
+        return hasSplit || hasEndPay || isCaddon
+      })
+
+      let basisWeight = 0
+      let progressWeight = 0
+      let finishWeight = 0
+      if (monthProjects.length > 0) {
+        monthProjects.forEach(p => {
+          const splits = (splitBillings || []).filter(sb => sb.project_id === p.id && sb.billing_month === monthKey)
+          const hasSplit = splits.length > 0
+          const isCaddon = (p.business_number && p.business_number.startsWith('C')) || (p.name && p.name.includes('CADDON'))
+          const payDate = p.end_date ? calculatePaymentDateServer(p.end_date as string, (clients || []).find(c => c.name === p.client_name) as any) : null
+          const payKey = payDate ? `${payDate.getFullYear()}-${String(payDate.getMonth() + 1).padStart(2, '0')}` : ''
+          const hasEndPay = !!p.end_date && payKey === monthKey
+          // 根拠: 分割入金(1.0) / 終了日(0.9) / CADDON(1.0) を最大で採用
+          const basis = hasSplit ? 1.0 : hasEndPay ? 0.9 : isCaddon ? 1.0 : 0.6
+          basisWeight += basis
+
+          // 進捗: 0..1
+          const prg = projectIdToProgress[p.id]?.progress ?? 50
+          progressWeight += prg / 100
+
+          // 予定通り終わる確率（終了日との差が小さいほど高い）
+          const expEnd = projectIdToProgress[p.id]?.expectedEnd
+          if (expEnd) {
+            const diffMonths = Math.abs((expEnd.getFullYear() - year) * 12 + (expEnd.getMonth() + 1 - month))
+            const finish = 1 / (1 + diffMonths / 3) // 差3ヶ月で約0.5
+            finishWeight += finish
+          } else {
+            finishWeight += 0.7
+          }
+        })
+        basisWeight /= monthProjects.length
+        progressWeight /= monthProjects.length
+        finishWeight /= monthProjects.length
+      } else {
+        basisWeight = 0.7; progressWeight = 0.7; finishWeight = 0.7
+      }
+
+      const confidence = Math.max(0.4, Math.min(0.98, 0.4 * basisWeight + 0.35 * progressWeight + 0.25 * finishWeight))
+
       predictions.push({
         date: dateString,
         predicted_inflow: Math.round(predictedInflow),
         predicted_outflow: Math.round(predictedOutflow),
         predicted_balance: Math.round(runningBalance),
-        confidence_score: 0.85,
+        confidence_score: confidence,
         risk_level: predictedOutflow > predictedInflow ? 'high' : predictedOutflow > predictedInflow * 0.8 ? 'medium' : 'low',
         factors: {
           seasonal_trend: 1.0,
