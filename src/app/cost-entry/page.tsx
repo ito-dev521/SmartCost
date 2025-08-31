@@ -12,13 +12,27 @@ export default async function CostEntry() {
     redirect('/login')
   }
 
+  // 会社スコープ（クッキー）
+  const cookiesHeader = (await import('next/headers')).cookies
+  const store: any = await (cookiesHeader as any)()
+  const scopeCompanyId = store.get('scope_company_id')?.value
+
   // サーバーサイドでプロジェクトデータを取得（一般管理費プロジェクトのみ除外）
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, name, business_number, status, created_at, updated_at, client_name, contract_amount, start_date, end_date, completion_method, progress_calculation_method, company_id')
+    .select('id, name, business_number, status, created_at, updated_at, client_name, contract_amount, start_date, end_date, completion_method, progress_calculation_method, company_id, client_id')
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
+
+  let filteredProjects = projects || []
+  if (scopeCompanyId) {
+    const { data: clientRows } = await supabase
+      .from('clients')
+      .select('id, company_id')
+    const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
+    filteredProjects = filteredProjects.filter(p => p.company_id === scopeCompanyId || (p.client_id && clientCompanyMap[p.client_id] === scopeCompanyId))
+  }
 
   console.log('=== 原価入力ページのプロジェクトデータ ===')
   projects?.forEach((project, index) => {
@@ -33,7 +47,7 @@ export default async function CostEntry() {
   console.log(`総プロジェクト数: ${projects?.length || 0}`)
 
   // CADDONシステムのプロジェクトが存在するかチェック
-  const hasCaddonSystem = projects?.some(p => p.business_number?.startsWith('C') || p.name?.includes('CADDON'))
+  const hasCaddonSystem = filteredProjects?.some(p => p.business_number?.startsWith('C') || p.name?.includes('CADDON'))
   console.log(`CADDONシステムプロジェクト有無: ${hasCaddonSystem ? 'あり' : 'なし'}`)
 
   if (!hasCaddonSystem) {
@@ -62,7 +76,7 @@ export default async function CostEntry() {
   return (
     <DashboardLayout>
       <CostEntryForm 
-        initialProjects={projects || []}
+        initialProjects={filteredProjects || []}
         initialCategories={categories || []}
         initialCostEntries={costEntries || []}
       />

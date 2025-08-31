@@ -15,7 +15,24 @@ export default function AuthForm() {
       console.log('🔐 AuthForm: 認証状態変更', event, session?.user?.email)
       if (event === 'SIGNED_IN' && session) {
         console.log('✅ ログイン成功:', session.user.email)
-        window.location.href = '/projects'
+        // ユーザーのロールを確認してリダイレクト先を決定
+        (async () => {
+          try {
+            const { data: userRow } = await supabase
+              .from('users')
+              .select('role')
+              .eq('id', session.user.id)
+              .single()
+            const role = (userRow as any)?.role
+            if (role === 'admin') {
+              window.location.href = '/super-admin'
+            } else {
+              window.location.href = '/projects'
+            }
+          } catch {
+            window.location.href = '/projects'
+          }
+        })()
       }
     })
 

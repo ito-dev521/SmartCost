@@ -43,15 +43,25 @@ export default async function CaddonPage() {
   // プロジェクトデータを取得
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, name')
-    .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
+    .select('id, name, company_id, client_id')
+    .order('business_number', { ascending: true })
+
+  // 会社スコープでプロジェクトを絞り込み
+  let filteredProjects = projects || []
+  if (userCompanyId) {
+    const { data: clientRows } = await supabase
+      .from('clients')
+      .select('id, company_id')
+    const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
+    filteredProjects = filteredProjects.filter(p => p.company_id === userCompanyId || (p.client_id && clientCompanyMap[p.client_id] === userCompanyId))
+  }
 
   return (
     <DashboardLayout>
       <PermissionGuard requiredPermission="canManageCaddon">
         <CaddonManagementForm
           initialClients={clients || []}
-          initialProjects={projects || []}
+          initialProjects={filteredProjects || []}
         />
       </PermissionGuard>
     </DashboardLayout>

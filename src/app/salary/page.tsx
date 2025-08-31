@@ -6,6 +6,10 @@ import PermissionGuard from '@/components/auth/PermissionGuard'
 
 export default async function SalaryEntry() {
   const supabase = createServerComponentClient()
+  // 会社スコープ
+  const cookiesHeader = (await import('next/headers')).cookies
+  const store: any = await (cookiesHeader as any)()
+  const scopeCompanyId = store.get('scope_company_id')?.value
 
   const { data: { session } } = await supabase.auth.getSession()
 
@@ -22,7 +26,8 @@ export default async function SalaryEntry() {
   // ユーザーデータを取得（結合なし）
   const { data: usersData, error: usersError } = await supabase
     .from('users')
-    .select('id, name, department_id')
+    .select('id, name, department_id, company_id')
+    .match(scopeCompanyId ? { company_id: scopeCompanyId } : {})
     .order('name')
 
   // エラーチェック
@@ -49,10 +54,19 @@ export default async function SalaryEntry() {
   // プロジェクトデータを取得（一般管理費プロジェクトは除外）
   const { data: projectsData } = await supabase
     .from('projects')
-    .select('id, name, status, created_at, updated_at')
+    .select('id, name, status, created_at, updated_at, company_id, client_id')
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('name')
+
+  let filteredProjects = projectsData || []
+  if (scopeCompanyId) {
+    const { data: clientRows } = await supabase
+      .from('clients')
+      .select('id, company_id')
+    const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
+    filteredProjects = filteredProjects.filter(p => p.company_id === scopeCompanyId || (p.client_id && clientCompanyMap[p.client_id] === scopeCompanyId))
+  }
 
   // プロジェクトデータを正しい形式に変換
   const projects = projectsData?.map(project => ({
@@ -76,7 +90,13 @@ export default async function SalaryEntry() {
         <SalaryEntryForm
           initialUsers={users || []}
           initialDepartments={departments || []}
-          initialProjects={projects || []}
+          initialProjects={(filteredProjects?.map(project => ({
+            id: project.id,
+            name: project.name,
+            status: project.status,
+            created_at: project.created_at,
+            updated_at: project.updated_at
+          })) || [])}
           initialCategories={categories || []}
         />
       </PermissionGuard>

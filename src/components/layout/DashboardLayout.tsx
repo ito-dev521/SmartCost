@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
 import {
@@ -21,6 +21,36 @@ export default function DashboardLayout({ children, hideSidebar = false }: Dashb
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClientComponentClient()
+
+  // 会社スコープのURL付与（全ページ共通）
+  useEffect(() => {
+    try {
+      const protectedPrefixes = [
+        '/dashboard',
+        '/projects',
+        '/clients',
+        '/cost-entry',
+        '/cash-flow',
+        '/progress',
+        '/analytics',
+        '/admin',
+        '/super-admin',
+        '/users',
+        '/daily-report',
+        '/salary',
+        '/caddon'
+      ]
+      if (!protectedPrefixes.some(p => pathname?.startsWith(p))) return
+      const m = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+      const cid = m ? decodeURIComponent(m[1]) : ''
+      if (!cid) return
+      const url = new URL(window.location.href)
+      if (!url.searchParams.get('companyId')) {
+        url.searchParams.set('companyId', cid)
+        router.replace(url.pathname + url.search)
+      }
+    } catch {}
+  }, [router, pathname])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()

@@ -8,7 +8,17 @@ export default async function Login() {
   const { data: { session } } = await supabase.auth.getSession()
   
   if (session) {
-    redirect('/projects')
+    // ロールに応じて既ログイン時の着地点を変更
+    const { data: current } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+    if ((current as any)?.role === 'admin') {
+      redirect('/super-admin')
+    } else {
+      redirect('/projects')
+    }
   }
 
   return <AuthForm />

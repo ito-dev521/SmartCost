@@ -7,6 +7,7 @@ import SuperAdminDashboard from '@/components/super-admin/SuperAdminDashboard'
 import AuditLogViewer from '@/components/super-admin/AuditLogViewer'
 import MaintenanceTools from '@/components/super-admin/MaintenanceTools'
 import { headers } from 'next/headers'
+import LogoutButton from '@/components/super-admin/LogoutButton'
 
 export const metadata: Metadata = {
   title: 'スーパー管理者パネル | SmartCost',
@@ -68,13 +69,20 @@ export default async function SuperAdminPage() {
   return (
     <DashboardLayout hideSidebar>
       {/* ダミーUI（機能未実装）: タブ切替式のスーパー管理者パネル雛形 */}
-      <SuperAdminDashboard />
+      <div className="mb-4">
+        <SuperAdminDashboard />
+      </div>
       <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
         <CompanyManagement />
         <div className="space-y-6">
           <AuditLogViewer />
           <MaintenanceTools />
         </div>
+      </div>
+
+      {/* 下中央固定のログアウトボタン */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 transform">
+        <LogoutButton />
       </div>
     </DashboardLayout>
   )

@@ -27,8 +27,7 @@ export default function SuperAdminDashboard() {
   const cards = [
     { title: '登録法人', value: metrics ? String(metrics.companyCount) : '—', icon: Building2, color: 'text-blue-600', bg: 'bg-blue-50', note: '' },
     { title: '監査ログ(24h)', value: metrics ? String(metrics.auditCount) : '—', icon: Activity, color: 'text-green-600', bg: 'bg-green-50', note: '' },
-    { title: 'DBサイズ', value: metrics && metrics.dbSizeMb != null ? `${metrics.dbSizeMb} MB` : '—', icon: Database, color: 'text-purple-600', bg: 'bg-purple-50', note: metrics && metrics.dbSizeMb == null ? '未対応' : '' },
-    { title: 'CADDON連携', value: metrics ? (metrics.caddonLinked ? '有効' : '無効') : '—', icon: Monitor, color: 'text-orange-600', bg: 'bg-orange-50', note: '' }
+    { title: 'DBサイズ', value: metrics && metrics.dbSizeMb != null ? `${metrics.dbSizeMb} MB` : '—', icon: Database, color: 'text-purple-600', bg: 'bg-purple-50', note: metrics && metrics.dbSizeMb == null ? '未対応' : '' }
   ]
 
   return (

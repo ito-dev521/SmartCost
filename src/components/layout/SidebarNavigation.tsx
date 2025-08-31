@@ -14,6 +14,7 @@ import {
   Shield,
   Monitor
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface NavigationItem {
   href: string
@@ -40,7 +41,7 @@ const defaultNavigationItems: NavigationItem[] = [
   { href: '/users', label: 'ユーザー管理', icon: Users },
   { href: '/caddon', label: 'CADDON管理', icon: Monitor },
   { href: '/admin', label: '管理者パネル', icon: Settings },
-  { href: '/super-admin', label: 'スーパー管理者パネル', icon: Shield },
+  // スーパー管理者ページはサイドバーに含めない（独立ページ）
 ]
 
 export default function SidebarNavigation({
@@ -48,20 +49,19 @@ export default function SidebarNavigation({
   navigationItems = defaultNavigationItems,
   currentPath
 }: SidebarNavigationProps) {
-    const appendCompanyId = (href: string) => {
+    const router = useRouter()
+    const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
       try {
-        if (typeof document === 'undefined') return href
-        const m = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+        const isModified = e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button === 1
+        if (isModified) return
+        const m = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
         const cid = m ? decodeURIComponent(m[1]) : ''
-        if (!cid) return href
+        if (!cid) return
+        e.preventDefault()
         const url = new URL(href, window.location.origin)
-        if (!url.searchParams.get('companyId')) {
-          url.searchParams.set('companyId', cid)
-        }
-        return url.pathname + (url.search ? url.search : '')
-      } catch {
-        return href
-      }
+        if (!url.searchParams.get('companyId')) url.searchParams.set('companyId', cid)
+        router.push(url.pathname + (url.search ? url.search : ''))
+      } catch {}
     }
     return (
     <div className="flex-1">
@@ -82,7 +82,8 @@ export default function SidebarNavigation({
           return (
             <a
               key={item.href}
-              href={appendCompanyId(item.href)}
+              href={item.href}
+              onClick={(e) => onNavClick(e, item.href)}
               className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
                 isActive
                   ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'

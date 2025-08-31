@@ -34,27 +34,44 @@ export default function Progress() {
   const fetchData = async () => {
     console.log('=== データ再取得開始 ===')
     try {
-      // プロジェクトデータの取得
-      const { data: projectsData } = await supabase
+      const cidMatch = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+      const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
+
+      // プロジェクトデータの取得（会社スコープ）
+      let { data: projRows } = await supabase
         .from('projects')
-        .select('*')
-        .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外
+        .select('id, company_id, client_id, name, business_number, status, client_name')
+        .neq('business_number', 'IP')
         .not('name', 'ilike', '%一般管理費%')
-        .not('business_number', 'ilike', 'C%')  // CADDONシステムを除外
+        .not('business_number', 'ilike', 'C%')
         .not('name', 'ilike', '%CADDON%')
         .order('business_number', { ascending: true })
 
-      // 進捗データの取得
-      const { data: progress } = await supabase
-        .from('project_progress')
-        .select('*')
+      if (cid) {
+        const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
+        let clientCompanyMap: Record<string, string> = {}
+        if (clientIds.length > 0) {
+          const { data: clientRows } = await supabase
+            .from('clients')
+            .select('id, company_id')
+            .in('id', clientIds)
+          clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
+        }
+        projRows = (projRows || []).filter(p => p.company_id === cid || (p.client_id && clientCompanyMap[p.client_id as string] === cid)) as any
+      }
+
+      // 進捗データの取得（APIで会社スコープ適用）
+      const progressEndpoint = `/api/progress${cid ? `?companyId=${encodeURIComponent(cid)}` : ''}`
+      const progressRes = await fetch(progressEndpoint)
+      const progressJson = await progressRes.json()
+      const progress = progressJson.data
 
       console.log('再取得したデータ:', {
-        projectsCount: projectsData?.length,
+        projectsCount: (projRows as any)?.length,
         progressCount: progress?.length
       })
 
-      setProjects(projectsData || [])
+      setProjects((projRows as any) || [])
       setProgressData(progress || [])
     } catch (error) {
       console.error('データ取得エラー:', error)

@@ -307,6 +307,8 @@ export default function CashFlowDashboard() {
   const fetchPaymentDataOnly = async () => {
     try {
       const supabase = createClientComponentClient()
+      const cidMatch = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
+      const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
 
       // 今後30日以内の支払い予定を取得
       const today = new Date()
@@ -319,22 +321,26 @@ export default function CashFlowDashboard() {
       })
 
       // cost_entriesからデータを取得
-      const { data: costEntries, error: costError } = await supabase
+      let costQuery = supabase
         .from('cost_entries')
-        .select(`id, amount, entry_date, entry_type, company_name, description, project_id`)
+        .select(`id, amount, entry_date, entry_type, company_name, description, project_id, company_id`)
         .gte('entry_date', today.toISOString().split('T')[0])
         .lte('entry_date', thirtyDaysLater.toISOString().split('T')[0])
         .order('entry_date', { ascending: true })
         .limit(10)
+      if (cid) costQuery = costQuery.eq('company_id', cid)
+      const { data: costEntries, error: costError } = await costQuery
 
       // salary_entriesからデータを取得
-      const { data: salaryData, error: salaryError } = await supabase
+      let salaryQuery = supabase
         .from('salary_entries')
-        .select(`id, salary_amount, salary_period_end, employee_name, employee_department, notes, created_at`)
+        .select(`id, salary_amount, salary_period_end, employee_name, employee_department, notes, created_at, company_id`)
         .gte('salary_period_end', today.toISOString().split('T')[0])
         .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
         .order('salary_period_end', { ascending: true })
         .limit(10)
+      if (cid) salaryQuery = salaryQuery.eq('company_id', cid)
+      const { data: salaryData, error: salaryError } = await salaryQuery
 
       if (costError && salaryError) {
         console.error('支払いデータ自動更新エラー:', { costError, salaryError })

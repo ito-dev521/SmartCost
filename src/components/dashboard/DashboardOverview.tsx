@@ -38,16 +38,29 @@ export default function DashboardOverview() {
     try {
       setLoading(true)
       
+      // 会社スコープ
+      const cidMatch = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
+      const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
+
       // 1. プロジェクト統計を取得（CADDONも含める）
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
-        .select('id, status, contract_amount, business_number, name')
+        .select('id, status, contract_amount, business_number, name, company_id, client_id')
         .neq('business_number', 'IP')  // 一般管理費プロジェクトは除外（CADDONは除外しない）
         .not('name', 'ilike', '%一般管理費%')
 
       if (projectsError) {
         console.error('プロジェクト取得エラー:', projectsError)
         throw projectsError
+      }
+
+      let filteredProjects = projects || []
+      if (cid) {
+        const { data: clientRows } = await supabase
+          .from('clients')
+          .select('id, company_id')
+        const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
+        filteredProjects = filteredProjects.filter(p => p.company_id === cid || (p.client_id && clientCompanyMap[p.client_id] === cid))
       }
 
       // 2. 原価データを取得
@@ -87,11 +100,11 @@ export default function DashboardOverview() {
       }
 
       // 統計情報を計算
-      const totalProjects = projects?.length || 0
-      const completedProjects = projects?.filter(p => p.status === 'completed').length || 0
-      const activeProjects = projects?.filter(p => p.status === 'in_progress').length || 0
+      const totalProjects = filteredProjects?.length || 0
+      const completedProjects = filteredProjects?.filter(p => p.status === 'completed').length || 0
+      const activeProjects = filteredProjects?.filter(p => p.status === 'in_progress').length || 0
       // CADDONシステムの月次請求（caddon_billing.total_amount）も契約金額相当として加算
-      let totalContractAmount = projects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
+      let totalContractAmount = filteredProjects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
 
       try {
         const { data: caddonBillings, error: caddonError } = await supabase
@@ -115,8 +128,16 @@ export default function DashboardOverview() {
       const monthlyReports = dailyReports?.length || 0
       
       // ユーザー統計
-      const totalUsers = users?.length || 0
-      const adminUsers = users?.filter(u => u.role === 'admin').length || 0
+      let totalUsers = users?.length || 0
+      let adminUsers = users?.filter(u => u.role === 'admin').length || 0
+      if (cid) {
+        const { data: usersByCompany } = await supabase
+          .from('users')
+          .select('id, role, company_id')
+          .eq('company_id', cid)
+        totalUsers = usersByCompany?.length || 0
+        adminUsers = (usersByCompany || []).filter(u => u.role === 'admin').length || 0
+      }
 
       setStats({
         totalProjects,

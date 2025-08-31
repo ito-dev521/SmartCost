@@ -51,7 +51,7 @@ export default async function CompanyDetail({ params }: { params: Promise<{ id: 
   const projects = countDirect + countViaClient
 
   return (
-    <DashboardLayout>
+    <DashboardLayout hideSidebar>
       <div className="space-y-6">
         <div>
           <Link href="/super-admin" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
@@ -67,17 +67,17 @@ export default async function CompanyDetail({ params }: { params: Promise<{ id: 
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">ユーザー数</p>
             <p className="text-2xl font-bold">{users}</p>
-            <Link href={`/users?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">ユーザー一覧</Link>
+            <p className="text-xs text-gray-500 mt-2">スーパー管理者からは直接リンクしません</p>
           </div>
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">クライアント数</p>
             <p className="text-2xl font-bold">{clients}</p>
-            <Link href={`/clients?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">クライアント一覧</Link>
+            <p className="text-xs text-gray-500 mt-2">スーパー管理者からは直接リンクしません</p>
           </div>
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">プロジェクト数</p>
             <p className="text-2xl font-bold">{projects}</p>
-            <Link href={`/projects?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">プロジェクト一覧</Link>
+            <p className="text-xs text-gray-500 mt-2">スーパー管理者からは直接リンクしません</p>
           </div>
         </div>
 
