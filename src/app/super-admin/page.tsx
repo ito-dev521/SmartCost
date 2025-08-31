@@ -6,7 +6,6 @@ import CompanyManagement from '@/components/super-admin/CompanyManagement'
 import SuperAdminDashboard from '@/components/super-admin/SuperAdminDashboard'
 import AuditLogViewer from '@/components/super-admin/AuditLogViewer'
 import MaintenanceTools from '@/components/super-admin/MaintenanceTools'
-import CaddonToggle from '@/components/super-admin/CaddonToggle'
 import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
@@ -75,7 +74,6 @@ export default async function SuperAdminPage() {
         <div className="space-y-6">
           <AuditLogViewer />
           <MaintenanceTools />
-          <CaddonToggle />
         </div>
       </div>
     </DashboardLayout>

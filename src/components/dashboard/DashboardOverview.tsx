@@ -331,7 +331,18 @@ export default function DashboardOverview() {
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">クイックアクション</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {quickActions.map((action, index) => (
+          {quickActions
+            .filter(a => {
+              if (a.href === '/caddon') {
+                try {
+                  const m = typeof document !== 'undefined' ? document.cookie.match(/company_caddon_enabled=([^;]+)/) : null
+                  const on = m ? m[1] !== 'false' : true
+                  return on
+                } catch { return true }
+              }
+              return true
+            })
+            .map((action, index) => (
             <Link
               key={index}
               href={action.href}

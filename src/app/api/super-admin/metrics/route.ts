@@ -23,6 +23,21 @@ export async function GET(_request: NextRequest) {
       auditCount = 0
     }
 
+    // CADDON有効フラグ（admin_settings テーブルがある前提。無ければtrue）
+    let caddonEnabled = true
+    try {
+      const { data } = await supabase
+        .from('admin_settings')
+        .select('caddon_enabled')
+        .limit(1)
+        .single()
+      if (data && typeof (data as any).caddon_enabled === 'boolean') {
+        caddonEnabled = (data as any).caddon_enabled
+      }
+    } catch {
+      caddonEnabled = true
+    }
+
     // DBサイズ: Supabase REST では直接取れないため未対応→将来用にnull
     const dbSizeMb: number | null = null
 
@@ -34,7 +49,7 @@ export async function GET(_request: NextRequest) {
       companyCount: companyCount || 0,
       auditCount,
       dbSizeMb,
-      caddonLinked: true
+      caddonLinked: caddonEnabled
     })
   } catch (error) {
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })

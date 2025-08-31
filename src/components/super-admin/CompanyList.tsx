@@ -249,6 +249,12 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                       {((company as any)._counts?.projects) || 0}件
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">CADDON</span>
+                    <span className={`font-medium ${((company as any)._settings?.caddon_enabled ?? true) ? 'text-teal-700' : 'text-gray-500'}`}>
+                      {((company as any)._settings?.caddon_enabled ?? true) ? '有効' : '無効'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* 作成日 */}

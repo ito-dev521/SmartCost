@@ -79,7 +79,7 @@ export default function CompanyManagement() {
       // ページをリロードして最新のデータを表示
       window.location.reload()
     } catch (error) {
-      throw error
+      alert(error instanceof Error ? error.message : '保存に失敗しました')
     }
   }
 

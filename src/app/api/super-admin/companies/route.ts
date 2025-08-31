@@ -59,6 +59,13 @@ export async function GET(request: NextRequest) {
       if (cid) projMap[cid] = (projMap[cid] || 0) + 1
     })
 
+    // 会社設定（CADDON）
+    const { data: cs, error: csError } = await supabase.from('company_settings').select('company_id, caddon_enabled')
+    if (csError) {
+      console.error('company_settings 取得エラー:', csError)
+    }
+    const csMap = Object.fromEntries((cs || []).map(r => [r.company_id, r.caddon_enabled]))
+
     const enriched = (companies || []).map(c => ({
       ...c,
       _counts: {
@@ -66,7 +73,8 @@ export async function GET(request: NextRequest) {
         users: userMap[c.id] || 0,
         clients: clientMap[c.id] || 0,
         projects: projMap[c.id] || 0,
-      }
+      },
+      _settings: { caddon_enabled: csMap[c.id] !== undefined ? csMap[c.id] : false }
     }))
 
     return NextResponse.json({ companies: enriched })
@@ -82,7 +90,7 @@ export async function POST(request: NextRequest) {
     // ダミーUIプレビューのため、認証・権限チェックは一時的にスキップ
 
     const body = await request.json()
-    const { name, contact_name, email, address, phone } = body
+    const { name, contact_name, email, address, phone, caddon_enabled } = body
 
     // バリデーション
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -108,6 +116,17 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('法人作成エラー:', error)
       return NextResponse.json({ error: '法人の作成に失敗しました' }, { status: 500 })
+    }
+
+    // 会社設定（CADDON有効/無効）: 新規はtrueで作成
+    if (company?.id) {
+      const { error: csUpsertError } = await supabase
+        .from('company_settings')
+        .upsert({ company_id: company.id, caddon_enabled: typeof caddon_enabled === 'boolean' ? caddon_enabled : true }, { onConflict: 'company_id' })
+      if (csUpsertError) {
+        console.error('会社設定の作成/更新エラー:', csUpsertError)
+        return NextResponse.json({ error: '会社設定の保存に失敗しました。DBマイグレーション（company_settings）を適用してください。' }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ company }, { status: 201 })

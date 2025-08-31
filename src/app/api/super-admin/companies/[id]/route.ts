@@ -59,7 +59,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { name, contact_name, email, address, phone } = body
+    const { name, contact_name, email, address, phone, caddon_enabled } = body
 
     // バリデーション
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -87,6 +87,17 @@ export async function PUT(
       }
       console.error('法人更新エラー:', error)
       return NextResponse.json({ error: '法人の更新に失敗しました' }, { status: 500 })
+    }
+
+    // 会社設定（CADDON）
+    if (typeof caddon_enabled === 'boolean') {
+      const { error: upsertErr } = await supabase
+        .from('company_settings')
+        .upsert({ company_id: id, caddon_enabled }, { onConflict: 'company_id' })
+      if (upsertErr) {
+        console.error('会社設定保存エラー:', upsertErr)
+        return NextResponse.json({ error: '会社設定の保存に失敗しました。DBマイグレーション（company_settings）を適用してください。' }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ company })

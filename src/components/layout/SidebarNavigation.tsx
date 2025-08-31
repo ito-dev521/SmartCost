@@ -54,6 +54,16 @@ export default function SidebarNavigation({
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = currentPath === item.href
+          // CADDONリンクは会社設定が無効なら非表示（簡易：クッキーで判定）
+          if (item.href === '/caddon') {
+            try {
+              if (typeof document !== 'undefined') {
+                const m = document.cookie.match(/company_caddon_enabled=([^;]+)/)
+                const on = m ? m[1] !== 'false' : true
+                if (!on) return null
+              }
+            } catch {}
+          }
           return (
             <a
               key={item.href}

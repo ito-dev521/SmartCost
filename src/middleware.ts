@@ -1,7 +1,43 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { cookies } from 'next/headers'
 
 export async function middleware(request: NextRequest) {
+  // 会社単位のCADDONガード: セッションからcompany_idを取得し company_settings を参照
+  try {
+    if (request.nextUrl.pathname.startsWith('/caddon')) {
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() { return request.cookies.getAll() },
+            setAll() {}
+          }
+        }
+      )
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id
+      if (userId) {
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', userId)
+          .single()
+        const companyId = (userRow as any)?.company_id
+        if (companyId) {
+          const { data: cs } = await supabase
+            .from('company_settings')
+            .select('caddon_enabled')
+            .eq('company_id', companyId)
+            .single()
+          if (cs && cs.caddon_enabled === false) {
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          }
+        }
+      }
+    }
+  } catch {}
   // 開発用: Supabase 未設定（placeholder）の場合は認証チェックをスキップ
   const isPlaceholderSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
   if (isPlaceholderSupabase) {

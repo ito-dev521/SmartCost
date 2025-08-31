@@ -17,6 +17,7 @@ export interface CompanyFormData {
   email?: string
   address?: string
   phone?: string
+  caddon_enabled?: boolean
 }
 
 export default function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
@@ -29,12 +30,18 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
     contact_name: (company as any)?.contact_name || '',
     email: (company as any)?.email || '',
     address: (company as any)?.address || '',
-    phone: (company as any)?.phone || ''
+    phone: (company as any)?.phone || '',
+    caddon_enabled: (company as any)?._settings?.caddon_enabled ?? true
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target
+    setFormData(prev => ({ ...prev, [name]: checked }))
   }
 
   const validateForm = (): boolean => {
@@ -164,6 +171,16 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
               placeholder="contact@example.com"
             />
           </div>
+        </div>
+        {/* CADDON システム */}
+        <div className="flex items-center justify-between p-3 border rounded-md">
+          <div>
+            <p className="text-sm font-medium text-gray-700">CADDONシステムを有効にする</p>
+            <p className="text-xs text-gray-500">無効にするとCADDON関連機能はこの法人では使用できません。</p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer">
+            <input type="checkbox" name="caddon_enabled" checked={!!formData.caddon_enabled} onChange={handleToggle} className="h-4 w-4" />
+          </label>
         </div>
 
         {/* 住所 */}
