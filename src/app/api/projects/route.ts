@@ -9,6 +9,13 @@ export async function GET(request: NextRequest) {
     // 認証チェック（デバッグ用に一時的に無効化）
     console.log('🔍 /api/projects: 認証チェック開始')
 
+    // Supabase 未設定（placeholder）の場合はスタブを返して UI を動かす
+    const isPlaceholderSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
+    if (isPlaceholderSupabase) {
+      console.log('🔧 /api/projects: placeholder 環境のためスタブデータを返却')
+      return NextResponse.json({ projects: [] })
+    }
+
     // サービスロールキーを使用してSupabaseクライアントを作成
     const supabase = createClient()
     console.log('📋 /api/projects: Supabaseクライアント作成完了')
