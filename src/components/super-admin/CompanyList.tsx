@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Company } from '@/types/database'
-import { Building2, Users, Briefcase, FolderOpen, Plus, Search, Edit, Trash2, Eye } from 'lucide-react'
+import { Building2, Users, Briefcase, FolderOpen, Plus, Search, Edit, Trash2 } from 'lucide-react'
 
 interface CompanyListProps {
   onEdit?: (company: Company) => void
@@ -189,9 +189,17 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           {filteredCompanies.map((company) => (
-            <div key={company.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+            <div
+              key={company.id}
+              className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={() => window.location.assign(`/super-admin/companies/${company.id}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.assign(`/super-admin/companies/${company.id}`) } }}
+              aria-label={`法人「${company.name}」の詳細を表示`}
+            >
               <div className="p-6">
                 {/* ヘッダー */}
                 <div className="flex items-start justify-between mb-4">
@@ -202,16 +210,9 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                     </h3>
                   </div>
                   <div className="flex space-x-1">
-                    <button
-                      onClick={() => window.location.assign(`/super-admin/companies/${company.id}`)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="詳細"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
                     {onEdit && (
                       <button
-                        onClick={() => onEdit(company)}
+                        onClick={(e) => { e.stopPropagation(); onEdit(company) }}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title="編集"
                       >
@@ -219,7 +220,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                       </button>
                     )}
                     <button
-                      onClick={() => handleDelete(company.id, company.name)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(company.id, company.name) }}
                       className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                       title="削除"
                     >
