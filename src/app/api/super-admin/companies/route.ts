@@ -7,24 +7,48 @@ export async function GET(request: NextRequest) {
     const supabase = createClient()
     // ダミーUIプレビューのため、認証・権限チェックは一時的にスキップ
 
-    // 全法人の一覧を取得
-    const { data: companies, error } = await supabase
+    // 1) 法人の基本情報を取得
+    const { data: companies, error: compError } = await supabase
       .from('companies')
-      .select(`
-        *,
-        departments:departments(count),
-        users:users(count),
-        clients:clients(count),
-        projects:projects(count)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('法人取得エラー:', error)
+    if (compError) {
+      console.error('法人取得エラー:', compError)
       return NextResponse.json({ error: '法人の取得に失敗しました' }, { status: 500 })
     }
 
-    return NextResponse.json({ companies })
+    const companyIds = (companies || []).map(c => c.id)
+
+    // 2) 関連テーブルの件数をグルーピングで取得（FKリレーションが未設定でもOK）
+    type CountRow = { company_id: string; count: number }
+    const fetchCounts = async (table: string): Promise<Record<string, number>> => {
+      const { data } = await supabase
+        .from(table)
+        .select('company_id, count:company_id', { count: 'exact' }) as unknown as { data: CountRow[] | null }
+      const map: Record<string, number> = {}
+      ;(data || []).forEach(r => { if (r.company_id) map[r.company_id] = (map[r.company_id] || 0) + 1 })
+      return map
+    }
+
+    const [deptMap, userMap, clientMap, projMap] = await Promise.all([
+      fetchCounts('departments'),
+      fetchCounts('users'),
+      fetchCounts('clients'),
+      fetchCounts('projects'),
+    ])
+
+    const enriched = (companies || []).map(c => ({
+      ...c,
+      _counts: {
+        departments: deptMap[c.id] || 0,
+        users: userMap[c.id] || 0,
+        clients: clientMap[c.id] || 0,
+        projects: projMap[c.id] || 0,
+      }
+    }))
+
+    return NextResponse.json({ companies: enriched })
   } catch (error) {
     console.error('法人取得エラー:', error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })

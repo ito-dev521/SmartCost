@@ -124,7 +124,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-green-600">総ユーザー数</p>
               <p className="text-2xl font-bold text-green-900">
-                {companies.reduce((sum, company) => sum + ((company as any).users?.[0]?.count || 0), 0)}
+                {companies.reduce((sum, company) => sum + (((company as any)._counts?.users) || 0), 0)}
               </p>
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-purple-600">総クライアント数</p>
               <p className="text-2xl font-bold text-purple-900">
-                {companies.reduce((sum, company) => sum + ((company as any).clients?.[0]?.count || 0), 0)}
+                {companies.reduce((sum, company) => sum + (((company as any)._counts?.clients) || 0), 0)}
               </p>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
             <div>
               <p className="text-sm text-orange-600">総プロジェクト数</p>
               <p className="text-2xl font-bold text-orange-900">
-                {companies.reduce((sum, company) => sum + ((company as any).projects?.[0]?.count || 0), 0)}
+                {companies.reduce((sum, company) => sum + (((company as any)._counts?.projects) || 0), 0)}
               </p>
             </div>
           </div>
@@ -195,10 +195,10 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
               <div className="p-6">
                 {/* ヘッダー */}
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center">
+                  <div className="flex items-center min-w-0 flex-1">
                     <Building2 className="h-6 w-6 text-blue-600 mr-2" />
-                    <h3 className="text-lg font-semibold text-gray-900 truncate">
-                      {company.name}
+                    <h3 className="text-lg font-semibold text-gray-900 truncate" title={company.name}>
+                      <span className="truncate inline-block max-w-full">{company.name}</span>
                     </h3>
                   </div>
                   <div className="flex space-x-1">
@@ -233,19 +233,19 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">ユーザー数</span>
                     <span className="font-medium text-gray-900">
-                      {(company as any).users?.[0]?.count || 0}人
+                      {((company as any)._counts?.users) || 0}人
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">クライアント数</span>
                     <span className="font-medium text-gray-900">
-                      {(company as any).clients?.[0]?.count || 0}社
+                      {((company as any)._counts?.clients) || 0}社
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">プロジェクト数</span>
                     <span className="font-medium text-gray-900">
-                      {(company as any).projects?.[0]?.count || 0}件
+                      {((company as any)._counts?.projects) || 0}件
                     </span>
                   </div>
                 </div>

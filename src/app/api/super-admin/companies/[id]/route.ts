@@ -13,16 +13,10 @@ export async function GET(
 
     const { id } = await params
 
-    // 法人詳細を取得
+    // 法人詳細を取得（関連件数は個別に集計）
     const { data: company, error } = await supabase
       .from('companies')
-      .select(`
-        *,
-        departments(count),
-        users(count),
-        clients(count),
-        projects(count)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -34,7 +28,20 @@ export async function GET(
       return NextResponse.json({ error: '法人の取得に失敗しました' }, { status: 500 })
     }
 
-    return NextResponse.json({ company })
+    // 件数集計
+    const agg = async (table: string) => {
+      const { count } = await supabase
+        .from(table)
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', id)
+      return count || 0
+    }
+
+    const [departments, users, clients, projects] = await Promise.all([
+      agg('departments'), agg('users'), agg('clients'), agg('projects')
+    ])
+
+    return NextResponse.json({ company: { ...company, _counts: { departments, users, clients, projects } } })
   } catch (error) {
     console.error('法人取得エラー:', error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
