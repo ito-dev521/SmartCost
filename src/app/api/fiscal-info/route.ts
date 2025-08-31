@@ -5,6 +5,10 @@ import { cookies } from 'next/headers'
 export async function GET(request: NextRequest) {
   try {
     console.log('fiscal-info GET called')
+    const url = new URL(request.url)
+    const list = url.searchParams.get('list')
+    const yearParam = url.searchParams.get('year')
+    const clearView = url.searchParams.get('clearView')
 
     // テスト用：決算情報をクッキーに保存して取得
     const cookieStore = await cookies()
@@ -12,6 +16,7 @@ export async function GET(request: NextRequest) {
     console.log('All cookies:', allCookies.map(c => c.name))
 
     const fiscalInfoCookie = allCookies.find(cookie => cookie.name === 'fiscal-info')
+    const viewYearCookie = allCookies.find(cookie => cookie.name === 'fiscal-view-year')
     console.log('fiscal-info cookie found:', !!fiscalInfoCookie)
 
     let fiscalInfo
@@ -39,8 +44,57 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('Returning fiscal info:', fiscalInfo)
-    return NextResponse.json({ fiscalInfo })
+    // 年度一覧が要求された場合
+    if (list === 'years') {
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          cookies: {
+            async getAll() { const store = await cookies(); return store.getAll() },
+            async setAll() {}
+          }
+        }
+      )
+      const { data } = await supabase
+        .from('fiscal_info')
+        .select('fiscal_year')
+        .order('fiscal_year', { ascending: false })
+
+      const currentYear = fiscalInfo.fiscal_year
+      const years = (data || []).map(d => d.fiscal_year).filter((y: number) => y < currentYear)
+      return NextResponse.json({ years, current: currentYear })
+    }
+
+    // 年度切替の要求
+    if (yearParam) {
+      const y = Number(yearParam)
+      const res = NextResponse.json({ fiscalInfo: { ...fiscalInfo, fiscal_year: y }, readonly: true })
+      const cookieStore = await cookies()
+      cookieStore.set('fiscal-view-year', String(y), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+      })
+      return res
+    }
+
+    // 閲覧年度のクリア
+    if (clearView) {
+      const res = NextResponse.json({ fiscalInfo, readonly: false })
+      const cookieStore = await cookies()
+      cookieStore.set('fiscal-view-year', '', { maxAge: 0 })
+      return res
+    }
+
+    // 閲覧年度クッキーがあれば上書き
+    const viewYear = viewYearCookie ? Number(viewYearCookie.value) : null
+    const readonly = Boolean(viewYear && viewYear !== fiscalInfo.fiscal_year)
+    const returned = viewYear ? { ...fiscalInfo, fiscal_year: viewYear } : fiscalInfo
+
+    console.log('Returning fiscal info:', returned)
+    return NextResponse.json({ fiscalInfo: returned, readonly })
   } catch (error) {
     console.error('GET: 決算情報取得エラー:', error)
     return NextResponse.json({

@@ -269,6 +269,27 @@ export class PermissionChecker {
 // 権限チェックのインスタンス
 export const permissionChecker = new PermissionChecker()
 
+// 過年度編集禁止の簡易ガード（API層で使用）
+export const assertWritableFiscalYear = async () => {
+  try {
+    const { cookies } = await import('next/headers')
+    const store = await cookies()
+    const viewYear = store.get('fiscal-view-year')?.value
+    const fiCookie = store.get('fiscal-info')?.value
+    let currentYear: number | null = null
+    if (fiCookie) {
+      try { currentYear = JSON.parse(fiCookie).fiscal_year || null } catch {}
+    }
+    if (viewYear && currentYear && Number(viewYear) !== currentYear) {
+      const err = new Error('READ_ONLY_FISCAL_YEAR') as any
+      err.status = 403
+      throw err
+    }
+  } catch {
+    // ヘッダが使えない環境ではスキップ（API個別で対処）
+  }
+}
+
 // Reactコンポーネント用のフック
 export async function usePermissions(userId: string) {
   return {

@@ -90,12 +90,22 @@ export async function GET(request: NextRequest) {
       splitBillings: splitBillings?.length || 0
     })
 
-    // 現在の年度を取得
-    const currentYear = new Date().getFullYear()
+    // 閲覧年度の取得（クッキー fiscal-view-year があれば優先）
+    const cookieStore = await cookies()
+    const viewYearCookie = cookieStore.get('fiscal-view-year')
+    const currentYear = viewYearCookie ? parseInt(viewYearCookie.value, 10) : new Date().getFullYear()
     const currentMonth = new Date().getMonth() + 1
 
-    // 今期の範囲を決定（4月〜翌年3月）
-    const fiscalStartMonth = 4
+    // 決算情報から年度開始月を決定（決算月の翌月）
+    const fiCookie = cookieStore.get('fiscal-info')
+    let settlementMonth = 3
+    if (fiCookie) {
+      try {
+        const fi = JSON.parse(fiCookie.value)
+        settlementMonth = fi.settlement_month || 3
+      } catch {}
+    }
+    const fiscalStartMonth = settlementMonth + 1
     const fiscalEndMonth = 3
 
     // 月毎の収入データを初期化
