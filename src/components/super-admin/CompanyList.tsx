@@ -203,7 +203,7 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                   </div>
                   <div className="flex space-x-1">
                     <button
-                      onClick={() => console.log('法人詳細:', company.id)}
+                      onClick={() => window.location.assign(`/super-admin/companies/${company.id}`)}
                       className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                       title="詳細"
                     >

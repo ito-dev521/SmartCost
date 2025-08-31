@@ -31,12 +31,33 @@ export async function GET(request: NextRequest) {
       return map
     }
 
-    const [deptMap, userMap, clientMap, projMap] = await Promise.all([
+    // プロジェクト件数は company_id が null のデータがあるため、client 経由でも補完
+    const [deptMap, userMap, clientMap] = await Promise.all([
       fetchCounts('departments'),
       fetchCounts('users'),
       fetchCounts('clients'),
-      fetchCounts('projects'),
     ])
+
+    // projects は company_id または clients.company_id を用いて集計
+    const { data: projRows } = await supabase
+      .from('projects')
+      .select('company_id, client_id')
+
+    const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
+    let clientCompanyMap: Record<string, string> = {}
+    if (clientIds.length > 0) {
+      const { data: clientRows } = await supabase
+        .from('clients')
+        .select('id, company_id')
+        .in('id', clientIds)
+      clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
+    }
+
+    const projMap: Record<string, number> = {}
+    ;(projRows || []).forEach(r => {
+      const cid = r.company_id || clientCompanyMap[r.client_id as string]
+      if (cid) projMap[cid] = (projMap[cid] || 0) + 1
+    })
 
     const enriched = (companies || []).map(c => ({
       ...c,
