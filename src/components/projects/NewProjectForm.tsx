@@ -77,7 +77,10 @@ export default function NewProjectForm() {
           console.log('🔑 NewProjectForm: 認証トークンをヘッダーに追加')
         }
 
-        const response = await fetch('/api/clients', {
+        const cidMatch = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+        const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
+        const clientsEndpoint = `/api/clients${cid ? `?companyId=${encodeURIComponent(cid)}` : ''}`
+        const response = await fetch(clientsEndpoint, {
           method: 'GET',
           headers,
         })
@@ -235,7 +238,8 @@ export default function NewProjectForm() {
         console.log('✅ NewProjectForm: プロジェクト作成成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
-        router.push('/projects')
+        const dest = cid ? `/projects?companyId=${encodeURIComponent(cid)}` : '/projects'
+        router.push(dest)
         router.refresh()
 
       } catch (error) {
@@ -269,7 +273,7 @@ export default function NewProjectForm() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b">
         <Link
-          href="/projects"
+          href={(() => { const m=document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/); const c=m?decodeURIComponent(m[1]):''; return c?`/projects?companyId=${encodeURIComponent(c)}`:'/projects' })()}
           className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 mr-2" />
@@ -501,7 +505,7 @@ export default function NewProjectForm() {
         {/* 送信ボタン */}
         <div className="flex justify-end space-x-4 pt-6 border-t">
           <Link
-            href="/projects"
+            href={(() => { const m=document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/); const c=m?decodeURIComponent(m[1]):''; return c?`/projects?companyId=${encodeURIComponent(c)}`:'/projects' })()}
             className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
             キャンセル

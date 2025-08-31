@@ -66,7 +66,7 @@ export default async function SuperAdminPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout hideSidebar>
       {/* ダミーUI（機能未実装）: タブ切替式のスーパー管理者パネル雛形 */}
       <SuperAdminDashboard />
       <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">

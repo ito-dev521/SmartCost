@@ -71,13 +71,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '権限がありません' }, { status: 403 })
     }
 
-    // クライアント一覧を取得（company_idフィルタなしで全件取得）
-    console.log('🔍 /api/clients: company_idフィルタなしで全件取得')
+    // companyId クエリでフィルタ
+    const { searchParams } = new URL(request.url)
+    let companyId = searchParams.get('companyId')
+    if (!companyId) {
+      const cookieHeader = request.headers.get('cookie') || ''
+      const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
+      if (m) companyId = decodeURIComponent(m[1])
+    }
+    console.log('🔍 /api/clients: 取得フィルタ companyId=', companyId)
 
-    const { data: clients, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('name', { ascending: true })
+    let query = supabase.from('clients').select('*').order('name', { ascending: true })
+    if (companyId) {
+      query = query.eq('company_id', companyId)
+    }
+
+    const { data: clients, error } = await query
 
     if (error) {
       console.error('クライアント取得エラー:', error)

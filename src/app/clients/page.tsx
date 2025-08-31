@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createServerComponentClient } from '@/lib/supabase-server'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import ClientManagement from '@/components/clients/ClientManagement'
+import { headers } from 'next/headers'
 
 import PermissionGuard from '@/components/auth/PermissionGuard'
 

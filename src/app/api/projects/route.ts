@@ -26,16 +26,55 @@ export async function GET(request: NextRequest) {
     // リクエストヘッダーをログ出力
     console.log('📋 /api/projects: リクエストヘッダー:', Object.fromEntries(request.headers.entries()))
 
+    // クエリから companyId を取得
+    const { searchParams } = new URL(request.url)
+    let companyId = searchParams.get('companyId')
+    if (!companyId) {
+      const cookieHeader = request.headers.get('cookie') || ''
+      const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
+      if (m) companyId = decodeURIComponent(m[1])
+    }
+
     // プロジェクト一覧を取得（一般管理費プロジェクトとCADDONシステムは除外）
     console.log('🔍 /api/projects: プロジェクト一覧取得開始')
-    const { data: projects, error } = await supabase
+    let query = supabase
       .from('projects')
       .select('*')
-      .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
-      .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
-      .not('business_number', 'ilike', 'C%')  // CADDONシステムを除外（業務番号がCで始まる）
-      .not('name', 'ilike', '%CADDON%')  // CADDONシステムを除外（プロジェクト名にCADDONが含まれる）
-      .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
+      .neq('business_number', 'IP')
+      .not('name', 'ilike', '%一般管理費%')
+      .not('business_number', 'ilike', 'C%')
+      .not('name', 'ilike', '%CADDON%')
+      .order('business_number', { ascending: true })
+
+    if (companyId) {
+      // company_id 直付 or clients.company_id 経由のいずれかに紐づくもののみ返す
+      // まず projects の client_id を集め、clients を引いて companyId を判別
+      const { data: projRows } = await supabase
+        .from('projects')
+        .select('id, company_id, client_id')
+      const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
+      let clientCompanyIds: Record<string, string> = {}
+      if (clientIds.length > 0) {
+        const { data: clientRows } = await supabase
+          .from('clients')
+          .select('id, company_id')
+          .in('id', clientIds)
+        clientCompanyIds = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
+      }
+      // 会社に属さないID集合を後でフィルタ用に使うため、取得後に絞り込み
+      const { data: allProjects, error } = await query
+      if (error) {
+        console.error('❌ /api/projects: プロジェクト取得エラー:', error)
+        return NextResponse.json({ error: 'プロジェクトの取得に失敗しました' }, { status: 500 })
+      }
+      const filtered = (allProjects || []).filter(p => {
+        return p.company_id === companyId || (p.client_id && clientCompanyIds[p.client_id] === companyId)
+      })
+      console.log('✅ /api/projects: フィルタ後件数:', filtered.length)
+      return NextResponse.json({ projects: filtered })
+    }
+
+    const { data: projects, error } = await query
 
     if (error) {
       console.error('❌ /api/projects: プロジェクト取得エラー:', error)

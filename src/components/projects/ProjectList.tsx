@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
 import { AdminGuard } from '@/components/auth/PermissionGuard'
 import {
@@ -44,10 +45,11 @@ export default function ProjectList() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const supabase = createClientComponentClient()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     fetchProjects()
-  }, [])
+  }, [searchParams])
 
   const fetchProjects = async () => {
     try {
@@ -68,7 +70,9 @@ export default function ProjectList() {
       }
 
       // APIエンドポイントからプロジェクトを取得
-      const response = await fetch('/api/projects', {
+      const companyId = searchParams?.get('companyId') || ''
+      const endpoint = `/api/projects${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''}`
+      const response = await fetch(endpoint, {
         method: 'GET',
         headers,
       })

@@ -67,17 +67,17 @@ export default async function CompanyDetail({ params }: { params: Promise<{ id: 
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">ユーザー数</p>
             <p className="text-2xl font-bold">{users}</p>
-            <Link href="/users" className="text-blue-600 text-sm underline mt-2 inline-block">ユーザー一覧</Link>
+            <Link href={`/users?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">ユーザー一覧</Link>
           </div>
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">クライアント数</p>
             <p className="text-2xl font-bold">{clients}</p>
-            <Link href="/clients" className="text-blue-600 text-sm underline mt-2 inline-block">クライアント一覧</Link>
+            <Link href={`/clients?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">クライアント一覧</Link>
           </div>
           <div className="bg-white border rounded-lg p-4">
             <p className="text-sm text-gray-600">プロジェクト数</p>
             <p className="text-2xl font-bold">{projects}</p>
-            <Link href="/projects" className="text-blue-600 text-sm underline mt-2 inline-block">プロジェクト一覧</Link>
+            <Link href={`/projects?companyId=${id}`} className="text-blue-600 text-sm underline mt-2 inline-block">プロジェクト一覧</Link>
           </div>
         </div>
 

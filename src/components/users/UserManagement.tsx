@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
 import { User, Department } from '@/types/database'
 import UserForm from './UserForm'
@@ -31,11 +32,12 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<User | null>(null)
   const supabase = createClientComponentClient()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     fetchUsers()
     fetchDepartments()
-  }, [])
+  }, [searchParams])
 
   const fetchUsers = async () => {
     try {
@@ -54,7 +56,9 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
       console.log('🔑 UserManagement: アクセストークン取得成功')
 
-      const response = await fetch('/api/users', {
+      const companyId = searchParams?.get('companyId') || ''
+      const endpoint = `/api/users${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''}`
+      const response = await fetch(endpoint, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

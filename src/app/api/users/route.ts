@@ -114,11 +114,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // ユーザー一覧取得
-    const { data: users, error: usersError } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // ユーザー一覧取得（companyIdクエリ対応）
+    const { searchParams } = new URL(request.url)
+    let companyId = searchParams.get('companyId')
+    if (!companyId) {
+      const cookieHeader = request.headers.get('cookie') || ''
+      const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
+      if (m) companyId = decodeURIComponent(m[1])
+    }
+    let userQuery = supabase.from('users').select('*').order('created_at', { ascending: false })
+    if (companyId) {
+      userQuery = userQuery.eq('company_id', companyId)
+    }
+    const { data: users, error: usersError } = await userQuery
 
     if (usersError) {
       console.error('Users fetch error:', usersError)

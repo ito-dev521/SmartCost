@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Client } from '@/types/database'
 import { Building2, Phone, MapPin, Plus, Search, Edit, Trash2 } from 'lucide-react'
 import { createClientComponentClient } from '@/lib/supabase'
@@ -23,6 +23,7 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const supabase = createClientComponentClient()
+  const searchParams = useSearchParams()
 
   // クライアント一覧を取得
   useEffect(() => {
@@ -41,7 +42,9 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
           headers['Authorization'] = `Bearer ${session.access_token}`
         }
 
-        const response = await fetch('/api/clients', {
+        const companyId = searchParams?.get('companyId') || ''
+        const endpoint = `/api/clients${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''}`
+        const response = await fetch(endpoint, {
           method: 'GET',
           headers,
           credentials: 'include'
@@ -62,7 +65,7 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
     }
 
     fetchClients()
-  }, [])
+  }, [searchParams])
 
   // 検索フィルター
   const filteredClients = clients.filter(client =>

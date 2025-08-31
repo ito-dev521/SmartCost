@@ -132,7 +132,10 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           headers['Authorization'] = `Bearer ${session.access_token}`
         }
 
-        const response = await fetch('/api/clients', {
+        const cidMatch = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+        const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
+        const clientsEndpoint = `/api/clients${cid ? `?companyId=${encodeURIComponent(cid)}` : ''}`
+        const response = await fetch(clientsEndpoint, {
           method: 'GET',
           headers,
         })
@@ -240,7 +243,9 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
         console.log('✅ ProjectEditForm: プロジェクト更新成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
-        router.push('/projects')
+        const cidMatch2 = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
+        const cid2 = cidMatch2 ? decodeURIComponent(cidMatch2[1]) : ''
+        router.push(cid2 ? `/projects?companyId=${encodeURIComponent(cid2)}` : '/projects')
         router.refresh()
 
       } catch (error) {
@@ -300,7 +305,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
         </div>
         <div className="mt-4">
           <Link
-            href="/projects"
+            href={(() => { const m=document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/); const c=m?decodeURIComponent(m[1]):''; return c?`/projects?companyId=${encodeURIComponent(c)}`:'/projects' })()}
             className="text-blue-600 hover:text-blue-800"
           >
             ← プロジェクト一覧に戻る
@@ -315,7 +320,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b">
         <Link
-          href="/projects"
+          href={(() => { const m=document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/); const c=m?decodeURIComponent(m[1]):''; return c?`/projects?companyId=${encodeURIComponent(c)}`:'/projects' })()}
           className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 mr-2" />

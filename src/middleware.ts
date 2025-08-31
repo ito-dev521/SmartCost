@@ -3,6 +3,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
 export async function middleware(request: NextRequest) {
+  // URLのcompanyIdを検出してクッキーに保存（会社スコープの永続化）
+  try {
+    const url = new URL(request.url)
+    const companyId = url.searchParams.get('companyId')
+    if (companyId) {
+      const res = NextResponse.next({ request: { headers: request.headers } })
+      res.cookies.set('scope_company_id', companyId, { path: '/', httpOnly: false, sameSite: 'lax' })
+      return res
+    }
+  } catch {}
   // 会社単位のCADDONガード: セッションからcompany_idを取得し company_settings を参照
   try {
     if (request.nextUrl.pathname.startsWith('/caddon')) {
