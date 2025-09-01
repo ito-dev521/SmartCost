@@ -111,7 +111,7 @@ async function deleteItoUser() {
     }
 
     console.log('\n📋 使用可能なログイン情報:')
-    console.log('   メール: superadmin@example.com')
+    console.log('   メール: genka_ad@ii-stylelab.com')
     console.log('   パスワード: admin')
     console.log('   super-adminページ: http://localhost:3000/super-admin')
 

@@ -186,6 +186,10 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
   }
 
   const filteredUsers = users.filter(user => {
+    // スーパー管理者は除外
+    if (user.role === 'superadmin') {
+      return false
+    }
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesRole = roleFilter === 'all' || user.role === roleFilter
@@ -194,6 +198,7 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
   const roleConfig = {
     admin: { label: '管理者', color: 'bg-purple-100 text-purple-800' },
+    superadmin: { label: 'スーパー管理者', color: 'bg-red-100 text-red-800' },
     manager: { label: 'マネージャー', color: 'bg-blue-100 text-blue-800' },
     user: { label: '一般ユーザー', color: 'bg-green-100 text-green-800' },
     viewer: { label: 'ビューアー', color: 'bg-gray-100 text-gray-800' }
@@ -241,7 +246,7 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">総ユーザー数</p>
-              <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role !== 'superadmin').length}</p>
             </div>
           </div>
         </div>
@@ -326,8 +331,8 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-lg font-medium text-gray-900">{user.name}</h4>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleConfig[user.role as keyof typeof roleConfig].color}`}>
-                        {roleConfig[user.role as keyof typeof roleConfig].label}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleConfig[user.role as keyof typeof roleConfig]?.color || 'bg-gray-100 text-gray-800'}`}>
+                        {roleConfig[user.role as keyof typeof roleConfig]?.label || user.role}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">

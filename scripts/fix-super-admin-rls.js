@@ -19,7 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 async function fixSuperAdminRLS() {
-  const email = 'superadmin@example.com'
+  const email = 'genka_ad@ii-stylelab.com'
 
   try {
     console.log('🔧 RLSポリシーの問題を修正中...')

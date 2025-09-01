@@ -19,7 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 async function fixSuperAdminTable() {
-  const email = 'superadmin@example.com'
+  const email = 'genka_ad@ii-stylelab.com'
 
   try {
     console.log('🔧 スーパー管理者テーブル修正を開始...')

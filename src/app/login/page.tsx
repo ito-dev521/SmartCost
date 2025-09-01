@@ -14,7 +14,7 @@ export default async function Login() {
       .select('role')
       .eq('id', session.user.id)
       .single()
-    if ((current as any)?.role === 'admin') {
+    if ((current as any)?.role === 'superadmin') {
       redirect('/super-admin')
     } else {
       redirect('/projects')

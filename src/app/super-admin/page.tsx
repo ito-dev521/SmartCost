@@ -40,7 +40,7 @@ export default async function SuperAdminPage() {
           .select('role')
           .eq('id', user.id)
           .single()
-        if (userRow?.role === 'admin') {
+        if (userRow?.role === 'superadmin') {
           isSuperAdmin = true
         }
       }
@@ -59,7 +59,9 @@ export default async function SuperAdminPage() {
       }
 
       if (!isSuperAdmin) {
-        redirect('/dashboard')
+        // スーパー管理者以外のアクセスは強制ログアウト
+        console.log('❌ SuperAdminページ: スーパー管理者権限なし、強制ログアウト')
+        redirect('/signout')
       }
     } catch {
       // 失敗時は通して、UI側で機能はAPIガードで保護

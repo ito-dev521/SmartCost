@@ -330,10 +330,14 @@ export async function GET(request: NextRequest) {
     const nextMonth = settlementMonth === 12 ? 1 : settlementMonth + 1
     const nextYear = settlementMonth === 12 ? fiscalInfo.fiscal_year + 1 : fiscalInfo.fiscal_year
     
-    // 銀行残高履歴から初期残高を取得、なければfiscalInfo.bank_balanceを使用
-    let runningBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
-      ? bankBalanceHistory[0].closing_balance 
-      : fiscalInfo.bank_balance
+    // 決算月の月末残高を初期残高として使用（6月の残高は決算月の月末残高）
+    let runningBalance = 0
+    if (bankBalanceHistory && bankBalanceHistory.length > 0) {
+      // 決算月の月末残高を使用（6月の残高は決算月の月末残高）
+      runningBalance = bankBalanceHistory[0].closing_balance
+    } else {
+      runningBalance = fiscalInfo.bank_balance
+    }
 
     console.log(`決算月: ${settlementMonth}月, 翌月: ${nextMonth}月 (${nextYear}年)`)
     console.log(`予測開始日付: ${nextYear}年${nextMonth}月1日`)

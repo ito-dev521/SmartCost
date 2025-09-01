@@ -16,7 +16,7 @@ export default function AuthForm() {
       if (event === 'SIGNED_IN' && session) {
         console.log('✅ ログイン成功:', session.user.email)
         // ユーザーのロールを確認してリダイレクト先を決定
-        (async () => {
+        void (async () => {
           try {
             const { data: userRow } = await supabase
               .from('users')
@@ -24,7 +24,7 @@ export default function AuthForm() {
               .eq('id', session.user.id)
               .single()
             const role = (userRow as any)?.role
-            if (role === 'admin') {
+            if (role === 'superadmin') {
               window.location.href = '/super-admin'
             } else {
               window.location.href = '/projects'

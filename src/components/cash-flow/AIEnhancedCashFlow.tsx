@@ -170,6 +170,55 @@ export default function AIEnhancedCashFlow() {
   const [monthlyRevenueTotals, setMonthlyRevenueTotals] = useState<MonthlyData[]>([])
   const [totalIncome, setTotalIncome] = useState<number>(0)
   const [totalExpense, setTotalExpense] = useState<number>(0)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
+
+  // 年間入金予定表と同じ入金予定日計算関数
+  const calculatePaymentDate = (endDate: string, client: any): Date => {
+    if (!endDate || !client.payment_cycle_type) {
+      return new Date(endDate || new Date())
+    }
+
+    const end = new Date(endDate)
+    const paymentDate = new Date()
+
+    if (client.payment_cycle_type === 'month_end') {
+      // 月末締め翌月末払いの場合
+      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+      
+      // 完了月から支払い月オフセット分を加算
+      const targetYear = end.getFullYear()
+      const targetMonth = end.getMonth() + paymentMonthOffset
+      
+      // 年をまたぐ場合の処理
+      const finalYear = targetMonth >= 12 ? targetYear + Math.floor(targetMonth / 12) : targetYear
+      const finalMonth = targetMonth >= 12 ? targetMonth % 12 : targetMonth
+      
+      paymentDate.setFullYear(finalYear)
+      paymentDate.setMonth(finalMonth)
+      paymentDate.setDate(new Date(finalYear, finalMonth + 1, 0).getDate()) // その月の末日
+      
+    } else if (client.payment_cycle_type === 'specific_date') {
+      // 特定日締めの場合
+      const closingDay = client.payment_cycle_closing_day || 25
+      const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
+      const paymentDay = client.payment_cycle_payment_day || 15
+
+      if (end.getDate() <= closingDay) {
+        // 締め日以前の場合は当月締め
+        paymentDate.setFullYear(end.getFullYear())
+        paymentDate.setMonth(end.getMonth() + paymentMonthOffset)
+        paymentDate.setDate(paymentDay)
+      } else {
+        // 締め日以降の場合は翌月締め
+        paymentDate.setFullYear(end.getFullYear())
+        paymentDate.setMonth(end.getMonth() + paymentMonthOffset + 1)
+        paymentDate.setDate(paymentDay)
+      }
+    }
+
+    return paymentDate
+  }
 
   // 分析・レポートと同じ計算ロジック
   const calculateMonthlyRevenue = (
@@ -273,7 +322,8 @@ export default function AIEnhancedCashFlow() {
     await Promise.all([
       fetchFiscalInfo(),
       fetchBankBalanceHistory(),
-      fetchDetailedPredictions()
+      fetchDetailedPredictions(),
+      fetchProjectsAndCaddon()
     ])
     setLoading(false)
   }
@@ -299,6 +349,47 @@ export default function AIEnhancedCashFlow() {
       }
     } catch (error) {
       console.error('銀行残高履歴取得エラー:', error)
+    }
+  }
+
+    const fetchProjectsAndCaddon = async () => {
+    try {
+      const supabase = createClientComponentClient()
+      
+      // プロジェクトデータを取得
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('*')
+        .order('business_number', { ascending: true })
+      
+      // CADDON請求データを取得
+      const { data: caddonData } = await supabase
+        .from('caddon_billing')
+        .select('*')
+        .order('billing_month')
+      
+      setProjects(projectsData || [])
+      setCaddonBillings(caddonData || [])
+      
+      // 年間入金予定表の年間合計金額を直接取得
+      try {
+        const response = await fetch('/api/annual-revenue-total')
+        if (response.ok) {
+          const data = await response.json()
+          const annualTotal = data.annualTotal || 0
+          setTotalIncome(annualTotal)
+          console.log('年間入金予定表から取得した年間合計:', annualTotal)
+        } else {
+          console.error('年間入金予定表APIエラー:', response.status)
+          setTotalIncome(0)
+        }
+      } catch (error) {
+        console.error('年間入金予定表取得エラー:', error)
+        setTotalIncome(0)
+      }
+      
+    } catch (error) {
+      console.error('プロジェクト・CADDONデータ取得エラー:', error)
     }
   }
 
@@ -338,7 +429,18 @@ export default function AIEnhancedCashFlow() {
       const createDetailedPredictionsFromAnnualRevenue = (monthlyTotals: MonthlyData[]) => {
       // 年間入金予定表のデータを月次予測詳細の形式に変換
       const predictions: DetailedCashFlowPrediction[] = []
-      let runningBalance = 8000000 // 今期の期首残高
+      
+      // 現在の残高を計算（銀行残高履歴の最新データから）
+      let currentBalance = fiscalInfo?.bank_balance || 0
+      if (history && history.length > 0) {
+        const latestBalance = history[0]
+        currentBalance = latestBalance.closing_balance || currentBalance
+        const currentMonthIncome = latestBalance.total_income || 0
+        const currentMonthExpense = latestBalance.total_expense || 0
+        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+      }
+      
+      let runningBalance = currentBalance // 現在の残高
 
     monthlyTotals.forEach((revenue, index) => {
       const month = revenue.month
@@ -401,10 +503,17 @@ export default function AIEnhancedCashFlow() {
       // 最新の銀行残高履歴から現在の残高を取得
       let currentBalance = fiscalInfo?.bank_balance || 0
       
-      // 銀行残高履歴がある場合は、最新の月末残高を使用
+      // 銀行残高履歴がある場合は、最新の月末残高から現在の残高を計算
       if (history && history.length > 0) {
         const latestBalance = history[0] // 最新のデータ
         currentBalance = latestBalance.closing_balance || currentBalance
+        
+        // 今月の実際の収支を加減算
+        const currentMonthIncome = latestBalance.total_income || 0
+        const currentMonthExpense = latestBalance.total_expense || 0
+        
+        // 月末残高に今月の収支を加減算して現在の残高を計算
+        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
       }
 
       // 予測は常にAPIから取得して一貫性を保つ
@@ -430,22 +539,50 @@ export default function AIEnhancedCashFlow() {
         costEntries || []
       )
 
-      // 予測データから月毎収入合計を作成（表示の一貫性のため）
-      const monthlyRevenueTotalsFromPred: MonthlyData[] = (predData?.predictions || []).map((p: any) => {
-        // 日付は "YYYY年M月" 形式 or ISO 形式
-        if (typeof p.date === 'string' && p.date.includes('年') && p.date.includes('月')) {
-          const m = p.date.match(/(\d+)年(\d+)月/)
-          const year = m ? parseInt(m[1], 10) : new Date().getFullYear()
-          const month = m ? parseInt(m[2], 10) : 1
-          return { year, month, amount: p.predicted_inflow as number }
+      // 年間入金予定表から正確な年間合計を取得
+      try {
+        const response = await fetch('/api/annual-revenue-total')
+        if (response.ok) {
+          const data = await response.json()
+          const annualTotal = data.annualTotal || 0
+          setTotalIncome(annualTotal)
+          console.log('再分析: 年間入金予定表から取得した年間合計:', annualTotal)
+        } else {
+          console.error('再分析: 年間入金予定表APIエラー:', response.status)
+          // フォールバック: 予測データから計算
+          const monthlyRevenueTotalsFromPred: MonthlyData[] = (predData?.predictions || []).map((p: any) => {
+            if (typeof p.date === 'string' && p.date.includes('年') && p.date.includes('月')) {
+              const m = p.date.match(/(\d+)年(\d+)月/)
+              const year = m ? parseInt(m[1], 10) : new Date().getFullYear()
+              const month = m ? parseInt(m[2], 10) : 1
+              return { year, month, amount: p.predicted_inflow as number }
+            }
+            const d = new Date(p.date)
+            return { year: d.getFullYear(), month: d.getMonth() + 1, amount: p.predicted_inflow as number }
+          })
+          setMonthlyRevenueTotals(monthlyRevenueTotalsFromPred)
+          const totalIncome = monthlyRevenueTotalsFromPred.reduce((s, r) => s + r.amount, 0)
+          setTotalIncome(totalIncome)
         }
-        const d = new Date(p.date)
-        return { year: d.getFullYear(), month: d.getMonth() + 1, amount: p.predicted_inflow as number }
-      })
-      setMonthlyRevenueTotals(monthlyRevenueTotalsFromPred)
-      const totalIncome = monthlyRevenueTotalsFromPred.reduce((s, r) => s + r.amount, 0)
+      } catch (error) {
+        console.error('再分析: 年間入金予定表取得エラー:', error)
+        // フォールバック: 予測データから計算
+        const monthlyRevenueTotalsFromPred: MonthlyData[] = (predData?.predictions || []).map((p: any) => {
+          if (typeof p.date === 'string' && p.date.includes('年') && p.date.includes('月')) {
+            const m = p.date.match(/(\d+)年(\d+)月/)
+            const year = m ? parseInt(m[1], 10) : new Date().getFullYear()
+            const month = m ? parseInt(m[2], 10) : 1
+            return { year, month, amount: p.predicted_inflow as number }
+          }
+          const d = new Date(p.date)
+          return { year: d.getFullYear(), month: d.getMonth() + 1, amount: p.predicted_inflow as number }
+        })
+        setMonthlyRevenueTotals(monthlyRevenueTotalsFromPred)
+        const totalIncome = monthlyRevenueTotalsFromPred.reduce((s, r) => s + r.amount, 0)
+        setTotalIncome(totalIncome)
+      }
+
       const totalExpense = (predData?.predictions || []).reduce((s: number, p: any) => s + (p.predicted_outflow || 0), 0)
-      setTotalIncome(totalIncome)
       setTotalExpense(totalExpense)
 
       // 年間入金予定表と突き合わせ（ログのみ）
@@ -936,11 +1073,7 @@ export default function AIEnhancedCashFlow() {
                           予測総収入
                         </dt>
                         <dd className="text-lg font-medium text-gray-900">
-                          {formatCurrency(
-                            detailedPredictions.length > 0
-                              ? detailedPredictions.reduce((sum, p) => sum + p.predicted_inflow, 0)
-                              : 0
-                          )}
+                          {formatCurrency(totalIncome)}
                         </dd>
                       </dl>
                     </div>

@@ -21,7 +21,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 async function testAuthentication() {
-  const email = 'superadmin@example.com'
+  const email = 'genka_ad@ii-stylelab.com'
   const password = 'admin'
 
   try {

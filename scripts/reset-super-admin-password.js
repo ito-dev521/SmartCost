@@ -21,8 +21,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 async function resetSuperAdminPassword() {
-  const email = 'superadmin@example.com'
-  const newPassword = 'admin'
+  const email = 'genka_ad@ii-stylelab.com'
+  const newPassword = 'ZIpNAlJQ_t8b'
 
   try {
     console.log('🔍 スーパー管理者ユーザーの作成/更新中...')
@@ -46,7 +46,7 @@ async function resetSuperAdminPassword() {
         console.log('1. Supabaseダッシュボードを開く')
         console.log('2. Authentication → Users に移動')
         console.log(`3. ${email} のユーザーを探す`)
-        console.log('4. パスワードを "admin" に設定')
+        console.log('4. パスワードを 指定値 に設定')
 
       } else {
         console.error('❌ ユーザー作成エラー:', createError.message)
@@ -83,8 +83,8 @@ async function resetSuperAdminPassword() {
     console.log('\n📋 ログイン情報:')
     console.log(`   メール: ${email}`)
     console.log(`   パスワード: ${newPassword}`)
-    console.log(`   ログインURL: http://localhost:3001/login`)
-    console.log(`   スーパー管理者パネル: http://localhost:3001/super-admin`)
+    console.log(`   ログインURL: http://localhost:3000/login`)
+    console.log(`   スーパー管理者パネル: http://localhost:3000/super-admin`)
 
   } catch (error) {
     console.error('❌ エラーが発生しました:', error.message)

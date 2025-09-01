@@ -92,7 +92,7 @@ INSERT INTO departments (company_id, name, parent_id) VALUES
   ((SELECT id FROM companies WHERE name = 'サンプル建設コンサルタント株式会社'), '営業部', (SELECT id FROM departments WHERE name = '本社'));
 
 INSERT INTO super_admins (email, name, password_hash) VALUES
-  ('superadmin@example.com', 'スーパー管理者', '$2b$10$dummy.hash.for.demo.purposes.only');
+  ('genka_ad@ii-stylelab.com', 'スーパー管理者', '$2b$10$dummy.hash.for.demo.purposes.only');
 
 -- ステップ4: インデックス作成
 CREATE INDEX idx_projects_company_id ON projects(company_id);

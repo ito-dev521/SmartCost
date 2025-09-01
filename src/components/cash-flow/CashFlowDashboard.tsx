@@ -98,7 +98,6 @@ export default function CashFlowDashboard() {
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null)
   const [bankBalanceHistory, setBankBalanceHistory] = useState<BankBalanceHistory[]>([])
   const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
 
@@ -106,16 +105,17 @@ export default function CashFlowDashboard() {
     fetchCashFlowData()
     fetchFiscalInfo()
     fetchBankBalanceHistory()
+    fetchPaymentDataOnly() // 初回のみ実行
 
-    // 支払いスケジュールを30秒ごとに自動更新
-    const intervalId = setInterval(() => {
-      fetchPaymentDataOnly()
-    }, 30000) // 30秒間隔
+    // 自動更新を無効化（手動更新に変更）
+    // const intervalId = setInterval(() => {
+    //   fetchPaymentDataOnly()
+    // }, 30000) // 30秒間隔
 
     // クリーンアップ関数
-    return () => {
-      clearInterval(intervalId)
-    }
+    // return () => {
+    //   clearInterval(intervalId)
+    // }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 予測データと決算情報が揃ったらAI分析を自動実行
@@ -168,9 +168,22 @@ export default function CashFlowDashboard() {
       const supabase = createClientComponentClient()
 
       // APIからキャッシュフロー予測データを取得
-      const response = await fetch('/api/cash-flow-prediction')
+      const response = await fetch('/api/cash-flow-prediction', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(10000) // 10秒タイムアウト
+      })
       if (!response.ok) {
-        throw new Error('Failed to fetch cash flow data')
+        const errorText = await response.text()
+        console.error('APIレスポンスエラー:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          errorText
+        })
+        throw new Error(`Failed to fetch cash flow data: ${response.status} ${response.statusText}`)
       }
       const predictionData = await response.json()
 
@@ -201,10 +214,21 @@ export default function CashFlowDashboard() {
           startDate: startDate.toISOString().split('T')[0],
           startMonth: startDate.getMonth() + 1
         })
-        // 銀行残高履歴から初期残高を取得
-        const initialBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
-          ? bankBalanceHistory[0].opening_balance 
-          : 5000000
+        // 現在の残高を計算して初期残高として使用
+        const calculateCurrentBalance = () => {
+          if (bankBalanceHistory && bankBalanceHistory.length > 0) {
+            const latestBalance = bankBalanceHistory[0]
+            const currentBalance = latestBalance.closing_balance || 0
+            const currentMonthIncome = latestBalance.total_income || 0
+            const currentMonthExpense = latestBalance.total_expense || 0
+            return latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+          } else if (fiscalInfo) {
+            return fiscalInfo.bank_balance || 0
+          }
+          return 5000000 // デフォルト値
+        }
+
+        const initialBalance = calculateCurrentBalance()
 
         for (let i = 0; i < 12; i++) {
           const date = new Date(startDate)
@@ -228,15 +252,31 @@ export default function CashFlowDashboard() {
       await fetchPaymentData(supabase)
     } catch (error) {
       console.error('Error fetching cash flow data:', error)
+      console.error('エラーの詳細:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
       // エラー時はサンプルデータを表示
       const fallbackData: CashFlowData[] = []
       const currentYear = new Date().getFullYear()
       const startDate = new Date(currentYear, 3, 1)
       
-      // 銀行残高履歴から初期残高を取得
-      const initialBalance = bankBalanceHistory && bankBalanceHistory.length > 0 
-        ? bankBalanceHistory[0].opening_balance 
-        : 3000000
+      // 現在の残高を計算して初期残高として使用（正常時と同じ計算方法）
+      const calculateCurrentBalance = () => {
+        if (bankBalanceHistory && bankBalanceHistory.length > 0) {
+          const latestBalance = bankBalanceHistory[0]
+          const currentBalance = latestBalance.closing_balance || 0
+          const currentMonthIncome = latestBalance.total_income || 0
+          const currentMonthExpense = latestBalance.total_expense || 0
+          return latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+        } else if (fiscalInfo) {
+          return fiscalInfo.bank_balance || 0
+        }
+        return 3000000 // デフォルト値
+      }
+
+      const initialBalance = calculateCurrentBalance()
       
       for (let i = 0; i < 12; i++) {
         const date = new Date(startDate)
@@ -321,30 +361,50 @@ export default function CashFlowDashboard() {
       })
 
       // cost_entriesからデータを取得
-      let costQuery = supabase
-        .from('cost_entries')
-        .select(`id, amount, entry_date, entry_type, company_name, description, project_id, company_id`)
-        .gte('entry_date', today.toISOString().split('T')[0])
-        .lte('entry_date', thirtyDaysLater.toISOString().split('T')[0])
-        .order('entry_date', { ascending: true })
-        .limit(10)
-      if (cid) costQuery = costQuery.eq('company_id', cid)
-      const { data: costEntries, error: costError } = await costQuery
+      let costEntries = null
+      let costError = null
+      try {
+        let costQuery = supabase
+          .from('cost_entries')
+          .select(`id, amount, entry_date, entry_type, company_name, description, project_id, company_id`)
+          .gte('entry_date', today.toISOString().split('T')[0])
+          .lte('entry_date', thirtyDaysLater.toISOString().split('T')[0])
+          .order('entry_date', { ascending: true })
+          .limit(10)
+        if (cid) costQuery = costQuery.eq('company_id', cid)
+        const result = await costQuery
+        costEntries = result.data
+        costError = result.error
+      } catch (error) {
+        // cost_entriesテーブルが存在しない場合は正常な動作として扱う
+        costError = null
+        costEntries = []
+      }
 
       // salary_entriesからデータを取得
-      let salaryQuery = supabase
-        .from('salary_entries')
-        .select(`id, salary_amount, salary_period_end, employee_name, employee_department, notes, created_at, company_id`)
-        .gte('salary_period_end', today.toISOString().split('T')[0])
-        .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
-        .order('salary_period_end', { ascending: true })
-        .limit(10)
-      if (cid) salaryQuery = salaryQuery.eq('company_id', cid)
-      const { data: salaryData, error: salaryError } = await salaryQuery
+      let salaryData = null
+      let salaryError = null
+      try {
+        let salaryQuery = supabase
+          .from('salary_entries')
+          .select(`id, salary_amount, salary_period_end, employee_name, employee_department, notes, created_at, company_id`)
+          .gte('salary_period_end', today.toISOString().split('T')[0])
+          .lte('salary_period_end', thirtyDaysLater.toISOString().split('T')[0])
+          .order('salary_period_end', { ascending: true })
+          .limit(10)
+        if (cid) salaryQuery = salaryQuery.eq('company_id', cid)
+        const result = await salaryQuery
+        salaryData = result.data
+        salaryError = result.error
+      } catch (error) {
+        // salary_entriesテーブルが存在しない場合は正常な動作として扱う
+        salaryError = null
+        salaryData = []
+      }
 
-      if (costError && salaryError) {
-        console.error('支払いデータ自動更新エラー:', { costError, salaryError })
-        return
+      // エラーログは開発環境でのみ表示
+      if (costError && salaryError && process.env.NODE_ENV === 'development') {
+        console.log('支払いデータ取得: cost_entriesとsalary_entriesの両方でエラーが発生しましたが、処理を継続します')
       }
 
       // データを統合してPaymentData形式に変換
@@ -411,11 +471,9 @@ export default function CashFlowDashboard() {
 
       // ステートを更新
       setPaymentData(newPaymentData)
-      setLastUpdated(new Date())
 
-      console.log('支払いデータ自動更新完了:', {
-        count: newPaymentData.length,
-        lastUpdated: new Date().toISOString()
+      console.log('支払いデータ更新完了:', {
+        count: newPaymentData.length
       })
 
     } catch (error) {
@@ -656,7 +714,6 @@ export default function CashFlowDashboard() {
 
       if (paymentData.length > 0) {
         setPaymentData(paymentData)
-        setLastUpdated(new Date())
       } else {
         // データがない場合は適切なメッセージを表示
         setPaymentData([
@@ -670,7 +727,6 @@ export default function CashFlowDashboard() {
             negotiable: false,
           }
         ])
-        setLastUpdated(new Date())
       }
     } catch (error) {
       console.error('支払いデータ取得エラー:', error)
@@ -685,7 +741,6 @@ export default function CashFlowDashboard() {
           negotiable: false,
         }
       ])
-      setLastUpdated(new Date())
     }
   }
 
@@ -766,23 +821,38 @@ export default function CashFlowDashboard() {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">
-                    今期の期首残高
+                    現在の残高
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {bankBalanceHistory && bankBalanceHistory.length > 0 
-                      ? formatCurrency(bankBalanceHistory[0].closing_balance)
-                      : fiscalInfo 
-                        ? formatCurrency(fiscalInfo.bank_balance) 
-                        : '未設定'
-                    }
+                    {(() => {
+                      // 現在の残高を計算
+                      let currentBalance = 0
+                      
+                      if (bankBalanceHistory && bankBalanceHistory.length > 0) {
+                        // 最新の月末残高を基準とする
+                        const latestBalance = bankBalanceHistory[0]
+                        currentBalance = latestBalance.closing_balance || 0
+                        
+                        // 今月の実際の収支を加減算
+                        const currentMonthIncome = latestBalance.total_income || 0
+                        const currentMonthExpense = latestBalance.total_expense || 0
+                        
+                        // 月末残高に今月の収支を加減算して現在の残高を計算
+                        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+                      } else if (fiscalInfo) {
+                        currentBalance = fiscalInfo.bank_balance || 0
+                      }
+                      
+                      return formatCurrency(currentBalance)
+                    })()}
                   </dd>
                   {bankBalanceHistory && bankBalanceHistory.length > 0 ? (
                     <dd className="text-xs text-gray-500 mt-1">
-                      {new Date(bankBalanceHistory[0].balance_date).getFullYear()}年{new Date(bankBalanceHistory[0].balance_date).getMonth() + 1}月末
+                      {new Date().getFullYear()}年{new Date().getMonth() + 1}月{new Date().getDate()}日現在
                     </dd>
                   ) : fiscalInfo && (
                     <dd className="text-xs text-gray-500 mt-1">
-                      {fiscalInfo.fiscal_year}年度 第{fiscalInfo.current_period}期
+                      {new Date().getFullYear()}年{new Date().getMonth() + 1}月{new Date().getDate()}日現在
                     </dd>
                   )}
                 </dl>
@@ -1000,15 +1070,7 @@ export default function CashFlowDashboard() {
               </p>
             </div>
             <div className="text-right">
-              <div className="flex items-center text-xs text-gray-500">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-                自動更新中
-              </div>
-              {lastUpdated && (
-                <p className="text-xs text-gray-400 mt-1">
-                  最終更新: {lastUpdated.toLocaleTimeString('ja-JP')}
-                </p>
-              )}
+              {/* 自動更新を無効化したため、更新時刻表示を削除 */}
             </div>
           </div>
         </div>

@@ -53,6 +53,11 @@ export default async function AdminPage() {
 
     // 管理者権限がない場合はダッシュボードにリダイレクト
     if (!currentUser || currentUser?.role !== 'admin') {
+      // superadminの場合は強制ログアウト
+      if (currentUser?.role === 'superadmin') {
+        console.log('❌ Adminページ: スーパー管理者アクセス、強制ログアウト')
+        redirect('/signout')
+      }
       console.log('❌ Adminページ: 管理者権限なし、/dashboardにリダイレクト')
       console.log('   理由:', !currentUser ? 'ユーザーデータなし' : `ロール: ${currentUser?.role}`)
       redirect('/dashboard')

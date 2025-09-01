@@ -19,7 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 async function fixUserPermissions() {
-  const email = 'superadmin@example.com'
+  const email = 'genka_ad@ii-stylelab.com'
 
   try {
     console.log('🔧 ユーザー権限修正を開始...')

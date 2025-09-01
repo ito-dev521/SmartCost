@@ -108,6 +108,7 @@ async function checkAllUsers() {
       console.log('   作成日:', itoSuperAdmin.created_at)
     } else {
       console.log('❌ super_adminsテーブルなし')
+      console.log('   参考: 管理対象メールは genka_ad@ii-stylelab.com')
     }
 
   } catch (error) {

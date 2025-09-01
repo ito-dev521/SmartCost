@@ -431,17 +431,6 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
       </form>
 
       {/* パスワード表示モーダル */}
-      {/* デバッグ情報 */}
-      <div className="text-xs text-gray-500 mb-2">
-        showPasswordModal: {showPasswordModal.toString()}, 
-        generatedPassword: {generatedPassword.password ? '設定済み' : '未設定'}
-        <button 
-          onClick={() => setShowPasswordModal(true)}
-          className="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded"
-        >
-          テスト表示
-        </button>
-      </div>
       
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

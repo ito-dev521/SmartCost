@@ -456,10 +456,14 @@ export default function AnalyticsDashboard() {
     const projectCostTotal = projectCosts.reduce((sum, entry) => sum + entry.amount, 0)
     const generalCostTotal = generalCosts.reduce((sum, entry) => sum + entry.amount, 0)
 
-    // 契約金額合計を計算
-    const totalContractAmount = projects
+    // 契約金額合計を計算（プロジェクト契約金額 + CADDONシステム料）
+    let totalContractAmount = projects
       .filter(project => project.contract_amount)
       .reduce((sum, project) => sum + (project.contract_amount || 0), 0)
+
+    // CADDONシステム料を追加
+    const caddonTotal = caddonBillings.reduce((sum, billing) => sum + (billing.total_amount || 0), 0)
+    totalContractAmount += caddonTotal
 
     // 総利益を計算（契約金額 - プロジェクト原価）
     const totalProfit = totalContractAmount - projectCostTotal
@@ -1988,6 +1992,10 @@ export default function AnalyticsDashboard() {
                       {formatCurrency(monthlyRevenue.reduce((sum, item) => {
                         // 中止プロジェクトは除外
                         if (isProjectCancelled(item.projectId)) return sum
+                        // CADDONプロジェクトの場合はtotalRevenueを使用、それ以外はcontractAmountを使用
+                        if (item.businessNumber?.startsWith('C') || item.projectName.includes('CADDON')) {
+                          return sum + item.totalRevenue
+                        }
                         return sum + (item.contractAmount || 0)
                       }, 0))}
                     </td>
@@ -2013,7 +2021,7 @@ export default function AnalyticsDashboard() {
                       {formatCurrency(monthlyRevenue.reduce((sum, item) => {
                         // 中止プロジェクトは除外
                         if (isProjectCancelled(item.projectId)) return sum
-                        return sum + item.totalRevenue
+                        return sum + calculateYearlyTotal(item)
                       }, 0))}
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-900"></td>
