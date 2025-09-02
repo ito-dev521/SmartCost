@@ -123,24 +123,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // スーパー管理者のアクセス制御
-    if (session && request.nextUrl.pathname !== '/super-admin') {
-      try {
-        const { data: userRow } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-        
-        if ((userRow as any)?.role === 'superadmin') {
-          // スーパー管理者が/super-admin以外の保護されたルートにアクセスした場合は強制ログアウト
-          console.log('❌ Middleware: スーパー管理者が不正なルートにアクセス、強制ログアウト')
-          return NextResponse.redirect(new URL('/signout', request.url))
-        }
-      } catch (error) {
-        console.error('❌ Middleware: ユーザーロール取得エラー:', error)
-      }
-    }
+    // スーパー管理者のアクセス制御を削除 - スーパー管理者は全てのページにアクセス可能
+    // 以前の制限: スーパー管理者が/super-admin以外の保護されたルートにアクセスした場合は強制ログアウト
+    // 現在: スーパー管理者は全ての保護されたルートにアクセス可能
   }
 
   if (isPublicRoute && session && request.nextUrl.pathname === '/login') {

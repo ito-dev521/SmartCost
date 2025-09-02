@@ -160,18 +160,30 @@ export interface Database {
         Row: {
           id: string
           name: string
+          contact_name: string | null
+          email: string | null
+          address: string | null
+          phone: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           name: string
+          contact_name?: string | null
+          email?: string | null
+          address?: string | null
+          phone?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           name?: string
+          contact_name?: string | null
+          email?: string | null
+          address?: string | null
+          phone?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -385,3 +397,22 @@ export type SalaryAllocation = Database['public']['Tables']['salary_allocations'
 export type FiscalInfo = Database['public']['Tables']['fiscal_info']['Row']
 export type FiscalInfoInsert = Database['public']['Tables']['fiscal_info']['Insert']
 export type FiscalInfoUpdate = Database['public']['Tables']['fiscal_info']['Update']
+
+// カスタム型定義
+export interface CompanyWithSettings extends Company {
+  company_settings?: {
+    company_id: string
+    caddon_enabled: boolean
+    created_at: string
+    updated_at: string
+  }
+}
+
+export interface CompanyWithCounts extends CompanyWithSettings {
+  _counts?: {
+    departments: number
+    users: number
+    clients: number
+    projects: number
+  }
+}

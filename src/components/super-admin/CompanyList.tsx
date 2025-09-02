@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Company } from '@/types/database'
+import { CompanyWithCounts } from '@/types/database'
 import { Building2, Users, Briefcase, FolderOpen, Plus, Search, Edit, Trash2 } from 'lucide-react'
 
 interface CompanyListProps {
-  onEdit?: (company: Company) => void
+  onEdit?: (company: CompanyWithCounts) => void
   onDelete?: (companyId: string) => void
   onCreate?: () => void
 }
 
 export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListProps) {
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [companies, setCompanies] = useState<CompanyWithCounts[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -29,6 +29,17 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
         }
 
         const data = await response.json()
+        console.log('🔍 法人一覧取得結果:', data.companies)
+        
+        // CADDON設定の値を確認
+        data.companies?.forEach((company: any) => {
+          console.log(`📋 ${company.name}:`, {
+            caddon_enabled: company.company_settings?.caddon_enabled,
+            hasCompanySettings: !!company.company_settings,
+            companySettings: company.company_settings
+          })
+        })
+        
         setCompanies(data.companies || [])
       } catch (error) {
         setError(error instanceof Error ? error.message : '法人の取得に失敗しました')
@@ -251,8 +262,8 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">CADDON</span>
-                    <span className={`font-medium ${((company as any)._settings?.caddon_enabled ?? true) ? 'text-teal-700' : 'text-gray-500'}`}>
-                      {((company as any)._settings?.caddon_enabled ?? true) ? '有効' : '無効'}
+                    <span className={`font-medium ${(company.company_settings?.caddon_enabled ?? true) ? 'text-teal-700' : 'text-gray-500'}`}>
+                      {(company.company_settings?.caddon_enabled ?? true) ? '有効' : '無効'}
                     </span>
                   </div>
                 </div>

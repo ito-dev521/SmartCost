@@ -53,7 +53,11 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
       setSubmitError('法人名は2文字以上で入力してください')
       return false
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (!formData.email || !formData.email.trim()) {
+      setSubmitError('メールアドレスは必須です')
+      return false
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setSubmitError('メールアドレスの形式が正しくありません')
       return false
     }
@@ -159,7 +163,7 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
           {/* メールアドレス */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              メールアドレス
+              メールアドレス *
             </label>
             <input
               type="email"
@@ -169,7 +173,11 @@ export default function CompanyForm({ company, onSubmit, onCancel }: CompanyForm
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="contact@example.com"
+              required
             />
+            <p className="mt-1 text-sm text-gray-500">
+              法人管理者のログイン用メールアドレスです。アカウント作成後にログイン情報が送信されます。
+            </p>
           </div>
         </div>
         {/* CADDON システム */}

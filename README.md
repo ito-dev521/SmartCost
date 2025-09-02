@@ -88,6 +88,64 @@ npm run dev
 
 ブラウザで `http://localhost:3000` にアクセスしてください。
 
+## 🔧 法人作成APIの使用方法
+
+### 前提条件
+法人作成APIを使用する前に、以下のデータベース設定が必要です：
+
+1. **データベースマイグレーションの実行**:
+   ```bash
+   # Supabase SQL Editorで以下のファイルを実行
+   cat database/setup_company_creation_tables.sql
+   ```
+
+2. **必要なテーブルの確認**:
+   - `companies` - 法人基本情報
+   - `company_settings` - 法人設定（CADDON有効/無効）
+   - `users` - ユーザー情報
+
+### 使用方法
+1. スーパー管理者としてログイン
+2. `/super-admin` ページにアクセス
+3. 「法人管理」セクションで「新規法人登録」をクリック
+4. 法人情報とメールアドレスを入力
+5. 登録完了後、メール送信結果画面でログイン情報を確認
+
+### トラブルシューティング
+
+#### サーバーエラーが発生する場合
+1. **データベース接続の確認**:
+   - 環境変数 `SUPABASE_SERVICE_ROLE_KEY` が正しく設定されているか確認
+   - Supabaseプロジェクトが有効で、データベースにアクセス可能か確認
+
+2. **テーブル構造の確認**:
+   ```sql
+   -- companiesテーブルの構造確認
+   \d companies
+   
+   -- company_settingsテーブルの存在確認
+   \d company_settings
+   
+   -- usersテーブルの構造確認
+   \d users
+   ```
+
+3. **ログの確認**:
+   - 開発サーバーのコンソールでエラーログを確認
+   - 法人作成APIの詳細ログが出力される
+
+4. **データベースマイグレーションの再実行**:
+   ```bash
+   # 必要に応じて、setup_company_creation_tables.sqlを再実行
+   ```
+
+#### メール送信が失敗する場合
+現在の実装では、メール送信はログ出力のみです。実運用環境でメール送信を行うには：
+
+1. 外部メールサービス（SendGrid、Mailgun等）の設定
+2. `src/app/api/super-admin/companies/route.ts`の`sendCompanyCreationEmail`関数の修正
+3. 環境変数 `MAIL_WEBHOOK_URL` と `MAIL_API_KEY` の設定
+
 ## 📁 プロジェクト構造
 
 ```

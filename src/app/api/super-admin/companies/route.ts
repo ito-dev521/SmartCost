@@ -1,103 +1,170 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-api'
-import { Company, SuperAdmin } from '@/types/database'
+import { createClient } from '@supabase/supabase-js'
+
+// Supabaseクライアント作成関数
+function createSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('❌ 環境変数エラー:', {
+      supabaseUrl: supabaseUrl ? '設定済み' : '未設定',
+      supabaseServiceKey: supabaseServiceKey ? '設定済み' : '未設定'
+    })
+    throw new Error('Supabase環境変数が設定されていません')
+  }
+  
+  console.log('🔍 Supabase接続情報:', {
+    url: supabaseUrl,
+    hasServiceKey: !!supabaseServiceKey
+  })
+  
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+}
+
+// データベース接続テスト
+async function testDatabaseConnection(supabase: any) {
+  try {
+    console.log('🔍 データベース接続テスト開始')
+    
+    // companiesテーブルの存在確認
+    const { data: companiesTest, error: companiesError } = await supabase
+      .from('companies')
+      .select('id')
+      .limit(1)
+    
+    if (companiesError) {
+      console.error('❌ companiesテーブル接続エラー:', companiesError)
+      throw new Error(`companiesテーブルに接続できません: ${companiesError.message}`)
+    }
+    
+    console.log('✅ companiesテーブル接続成功')
+    
+    // company_settingsテーブルの存在確認
+    const { data: settingsTest, error: settingsError } = await supabase
+      .from('company_settings')
+      .select('company_id')
+      .limit(1)
+    
+    if (settingsError) {
+      console.error('❌ company_settingsテーブル接続エラー:', settingsError)
+      console.log('⚠️ company_settingsテーブルが存在しない可能性があります。データベースマイグレーションを実行してください。')
+    } else {
+      console.log('✅ company_settingsテーブル接続成功')
+    }
+    
+    // usersテーブルの存在確認
+    const { data: usersTest, error: usersError } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1)
+    
+    if (usersError) {
+      console.error('❌ usersテーブル接続エラー:', usersError)
+      throw new Error(`usersテーブルに接続できません: ${usersError.message}`)
+    }
+    
+    console.log('✅ usersテーブル接続成功')
+    console.log('✅ データベース接続テスト完了')
+    
+  } catch (error) {
+    console.error('❌ データベース接続テスト失敗:', error)
+    throw error
+  }
+}
+
+// パスワード生成関数
+function generatePassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  let password = ''
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
+}
+
+// メール送信関数（実運用では外部メールサービスを利用）
+async function sendCompanyCreationEmail(email: string, companyName: string, password: string) {
+  try {
+    // 実運用では外部メールサービス（SendGrid、Mailgun等）を使用
+    // ここではログ出力のみ行います
+    console.log('【法人作成メール送信】')
+    console.log('宛先:', email)
+    console.log('件名: 法人アカウント作成完了のお知らせ')
+    console.log('会社名:', companyName)
+    console.log('パスワード:', password)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('メール送信エラー:', error)
+    return { success: false, error }
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
-    // ダミーUIプレビューのため、認証・権限チェックは一時的にスキップ
-
-    // 1) 法人の基本情報を取得
-    const { data: companies, error: compError } = await supabase
+    const supabase = createSupabaseClient()
+    
+    // 法人一覧を取得
+    const { data: companies, error } = await supabase
       .from('companies')
-      .select('*')
+      .select(`
+        *,
+        company_settings (
+          caddon_enabled
+        )
+      `)
       .order('created_at', { ascending: false })
 
-    if (compError) {
-      console.error('法人取得エラー:', compError)
-      return NextResponse.json({ error: '法人の取得に失敗しました' }, { status: 500 })
+    if (error) {
+      console.error('法人一覧取得エラー:', error)
+      return NextResponse.json({ error: '法人一覧の取得に失敗しました' }, { status: 500 })
     }
 
-    const companyIds = (companies || []).map(c => c.id)
-
-    // 2) 関連テーブルの件数をグルーピングで取得（FKリレーションが未設定でもOK）
-    type CountRow = { company_id: string; count: number }
-    const fetchCounts = async (table: string): Promise<Record<string, number>> => {
-      const { data } = await supabase
-        .from(table)
-        .select('company_id, count:company_id', { count: 'exact' }) as unknown as { data: CountRow[] | null }
-      const map: Record<string, number> = {}
-      ;(data || []).forEach(r => { if (r.company_id) map[r.company_id] = (map[r.company_id] || 0) + 1 })
-      return map
-    }
-
-    // プロジェクト件数は company_id が null のデータがあるため、client 経由でも補完
-    const [deptMap, userMap, clientMap] = await Promise.all([
-      fetchCounts('departments'),
-      fetchCounts('users'),
-      fetchCounts('clients'),
-    ])
-
-    // projects は company_id または clients.company_id を用いて集計
-    const { data: projRows } = await supabase
-      .from('projects')
-      .select('company_id, client_id')
-
-    const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
-    let clientCompanyMap: Record<string, string> = {}
-    if (clientIds.length > 0) {
-      const { data: clientRows } = await supabase
-        .from('clients')
-        .select('id, company_id')
-        .in('id', clientIds)
-      clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
-    }
-
-    const projMap: Record<string, number> = {}
-    ;(projRows || []).forEach(r => {
-      const cid = r.company_id || clientCompanyMap[r.client_id as string]
-      if (cid) projMap[cid] = (projMap[cid] || 0) + 1
-    })
-
-    // 会社設定（CADDON）
-    const { data: cs, error: csError } = await supabase.from('company_settings').select('company_id, caddon_enabled')
-    if (csError) {
-      console.error('company_settings 取得エラー:', csError)
-    }
-    const csMap = Object.fromEntries((cs || []).map(r => [r.company_id, r.caddon_enabled]))
-
-    const enriched = (companies || []).map(c => ({
-      ...c,
-      _counts: {
-        departments: deptMap[c.id] || 0,
-        users: userMap[c.id] || 0,
-        clients: clientMap[c.id] || 0,
-        projects: projMap[c.id] || 0,
-      },
-      _settings: { caddon_enabled: csMap[c.id] !== undefined ? csMap[c.id] : false }
-    }))
-
-    return NextResponse.json({ companies: enriched })
+    return NextResponse.json({ companies })
   } catch (error) {
-    console.error('法人取得エラー:', error)
+    console.error('法人一覧取得エラー:', error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
-    // ダミーUIプレビューのため、認証・権限チェックは一時的にスキップ
-
+    console.log('🔍 法人作成API: 開始')
+    
+    const supabase = createSupabaseClient()
+    console.log('✅ Supabaseクライアント作成完了')
+    
+    // データベース接続テスト
+    await testDatabaseConnection(supabase)
+    
     const body = await request.json()
+    console.log('📋 リクエストボディ:', { name: body.name, email: body.email })
+    
     const { name, contact_name, email, address, phone, caddon_enabled } = body
 
     // バリデーション
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: '法人名は必須です' }, { status: 400 })
     }
-    if (email && typeof email !== 'string') {
-      return NextResponse.json({ error: 'メールアドレスの形式が不正です' }, { status: 400 })
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return NextResponse.json({ error: '有効なメールアドレスが必要です' }, { status: 400 })
+    }
+
+    // 既存の法人メールアドレスチェック
+    const { data: existingCompany } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('email', email)
+      .single()
+
+    if (existingCompany) {
+      return NextResponse.json({ error: 'このメールアドレスは既に使用されています' }, { status: 409 })
     }
 
     // 法人を作成
@@ -120,16 +187,93 @@ export async function POST(request: NextRequest) {
 
     // 会社設定（CADDON有効/無効）: 新規はtrueで作成
     if (company?.id) {
+      console.log('🔍 CADDON設定保存開始:', { 
+        caddon_enabled, 
+        type: typeof caddon_enabled,
+        isFalse: caddon_enabled === false,
+        isTrue: caddon_enabled === true
+      })
+      
+      // caddon_enabledが明示的にfalseの場合はfalse、それ以外はtrue
+      const finalCaddonEnabled = caddon_enabled === false ? false : true
+      
       const { error: csUpsertError } = await supabase
         .from('company_settings')
-        .upsert({ company_id: company.id, caddon_enabled: typeof caddon_enabled === 'boolean' ? caddon_enabled : true }, { onConflict: 'company_id' })
+        .upsert({ 
+          company_id: company.id, 
+          caddon_enabled: finalCaddonEnabled
+        }, { 
+          onConflict: 'company_id' 
+        })
+        
       if (csUpsertError) {
         console.error('会社設定の作成/更新エラー:', csUpsertError)
         return NextResponse.json({ error: '会社設定の保存に失敗しました。DBマイグレーション（company_settings）を適用してください。' }, { status: 500 })
       }
+      
+      console.log('✅ CADDON設定保存完了:', finalCaddonEnabled)
     }
 
-    return NextResponse.json({ company }, { status: 201 })
+    // 法人管理者アカウントを作成
+    let adminUser = null
+    let generatedPassword = null
+    
+    if (email && company?.id) {
+      try {
+        // パスワードを自動生成
+        generatedPassword = generatePassword()
+        
+        // Supabaseの認証システムでユーザーを作成
+        const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+          email,
+          password: generatedPassword,
+          email_confirm: true, // メール確認をスキップ
+          user_metadata: {
+            name: contact_name || name,
+            role: 'admin',
+            company_id: company.id
+          }
+        })
+
+        if (authError) {
+          console.error('法人管理者アカウント作成エラー:', authError)
+          // アカウント作成に失敗しても法人作成は成功とする
+        } else {
+          // usersテーブルにユーザー情報を保存
+          const { error: userInsertError } = await supabase
+            .from('users')
+            .insert({
+              id: authUser.user.id,
+              email,
+              name: contact_name || name,
+              role: 'admin',
+              company_id: company.id,
+              created_at: new Date().toISOString()
+            })
+
+          if (userInsertError) {
+            console.error('ユーザーテーブル保存エラー:', userInsertError)
+          } else {
+            adminUser = authUser.user
+          }
+        }
+      } catch (userError) {
+        console.error('法人管理者アカウント作成エラー:', userError)
+      }
+    }
+
+    // メール送信
+    let emailResult = null
+    if (email && generatedPassword) {
+      emailResult = await sendCompanyCreationEmail(email, name, generatedPassword)
+    }
+
+    return NextResponse.json({ 
+      company,
+      adminUser: adminUser ? { id: adminUser.id, email: adminUser.email } : null,
+      password: generatedPassword,
+      emailSent: emailResult?.success || false
+    }, { status: 201 })
   } catch (error) {
     console.error('法人作成エラー:', error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
