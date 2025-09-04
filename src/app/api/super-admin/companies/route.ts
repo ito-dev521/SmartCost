@@ -88,21 +88,137 @@ function generatePassword(): string {
   return password
 }
 
-// メール送信関数（実運用では外部メールサービスを利用）
+// HTMLメール本文生成
+function generateCompanyEmailHTML(companyName: string, email: string, password: string): string {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
+        法人アカウント作成完了のお知らせ
+      </h2>
+      
+      <p>${companyName} 様</p>
+      
+      <p>建設原価管理システムの法人アカウントが作成されました。</p>
+      
+      <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #374151;">ログイン情報</h3>
+        <p><strong>メールアドレス:</strong> ${email}</p>
+        <p><strong>パスワード:</strong> <span style="font-family: monospace; background-color: #e5e7eb; padding: 4px 8px; border-radius: 4px;">${password}</span></p>
+      </div>
+      
+      <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; color: #92400e;">
+          <strong>⚠️ セキュリティ上の注意:</strong><br>
+          初回ログイン後、必ずパスワードを変更してください。
+        </p>
+      </div>
+      
+      <p>ログインは以下のURLから行ってください：</p>
+      <p><a href="${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login" style="color: #2563eb; text-decoration: none;">ログインページ</a></p>
+      
+      <p>ご不明な点がございましたら、システム管理者までお問い合わせください。</p>
+      
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+      <p style="color: #6b7280; font-size: 12px;">
+        このメールは自動送信されています。返信はできません。
+      </p>
+    </div>
+  `
+}
+
+// テキストメール本文生成
+function generateCompanyEmailText(companyName: string, email: string, password: string): string {
+  return `
+法人アカウント作成完了のお知らせ
+
+${companyName} 様
+
+建設原価管理システムの法人アカウントが作成されました。
+
+ログイン情報:
+メールアドレス: ${email}
+パスワード: ${password}
+
+⚠️ セキュリティ上の注意:
+初回ログイン後、必ずパスワードを変更してください。
+
+ログインは以下のURLから行ってください：
+${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login
+
+ご不明な点がございましたら、システム管理者までお問い合わせください。
+
+---
+このメールは自動送信されています。返信はできません。
+  `
+}
+
+// メール送信関数（Mailgun使用）
 async function sendCompanyCreationEmail(email: string, companyName: string, password: string) {
   try {
-    // 実運用では外部メールサービス（SendGrid、Mailgun等）を使用
-    // ここではログ出力のみ行います
-    console.log('【法人作成メール送信】')
+    const mailgunApiKey = process.env.MAILGUN_API_KEY
+    const mailgunDomain = process.env.MAILGUN_DOMAIN
+    const fromEmail = process.env.MAILGUN_FROM_EMAIL || `noreply@${mailgunDomain}`
+    const fromName = process.env.MAILGUN_FROM_NAME || 'SmartCost System'
+    
+    // 詳細なデバッグ情報を出力
+    console.log('🔍 Mailgun設定確認:')
+    console.log('  - API Key:', mailgunApiKey ? `key-${mailgunApiKey.substring(0, 8)}...` : '未設定')
+    console.log('  - Domain:', mailgunDomain || '未設定')
+    console.log('  - From Email:', fromEmail)
+    console.log('  - From Name:', fromName)
+    
+    if (!mailgunApiKey || !mailgunDomain) {
+      console.log('⚠️ Mailgun設定が不完全です。ログ出力のみ行います。')
+      console.log('【法人作成メール送信（ログのみ）】')
+      console.log('宛先:', email)
+      console.log('件名: 法人アカウント作成完了のお知らせ')
+      console.log('会社名:', companyName)
+      console.log('パスワード:', password)
+      return { success: true, method: 'log' }
+    }
+
+    console.log('🔍 Mailgunメール送信開始')
     console.log('宛先:', email)
     console.log('件名: 法人アカウント作成完了のお知らせ')
-    console.log('会社名:', companyName)
-    console.log('パスワード:', password)
     
-    return { success: true }
+    // Mailgun APIを使用してメール送信
+    const formData = new URLSearchParams()
+    formData.append('from', `${fromName} <${fromEmail}>`)
+    formData.append('to', email)
+    formData.append('subject', '法人アカウント作成完了のお知らせ')
+    formData.append('html', generateCompanyEmailHTML(companyName, email, password))
+    formData.append('text', generateCompanyEmailText(companyName, email, password))
+
+    console.log('🔍 Mailgun APIリクエスト送信:')
+    console.log('  - URL:', `https://api.mailgun.net/v3/${mailgunDomain}/messages`)
+    console.log('  - Method: POST')
+
+    const response = await fetch(`https://api.mailgun.net/v3/${mailgunDomain}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`api:${mailgunApiKey}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData
+    })
+
+    console.log('🔍 Mailgun APIレスポンス:')
+    console.log('  - Status:', response.status)
+    console.log('  - Status Text:', response.statusText)
+
+    if (response.ok) {
+      const result = await response.json()
+      console.log('✅ Mailgunメール送信成功:', result)
+      return { success: true, method: 'mailgun', messageId: result.id }
+    } else {
+      const errorData = await response.text()
+      console.error('❌ Mailgunメール送信失敗:', response.status, errorData)
+      return { success: false, error: errorData, method: 'mailgun' }
+    }
+    
   } catch (error) {
-    console.error('メール送信エラー:', error)
-    return { success: false, error }
+    console.error('❌ Mailgunメール送信エラー:', error)
+    return { success: false, error, method: 'mailgun' }
   }
 }
 
