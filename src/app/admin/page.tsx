@@ -36,12 +36,15 @@ export default async function AdminPage() {
   console.log('🔍 Adminページ: 管理者権限チェック開始')
 
   // 現在のユーザーが管理者かどうか確認
+  let currentUser;
   try {
-    const { data: currentUser, error: userError } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from('users')
       .select('role, name')
       .eq('id', session.user.id)
       .single()
+
+    currentUser = userData;
 
     console.log('📋 Adminページ: ユーザー権限チェック結果', {
       userFound: !!currentUser,
@@ -53,10 +56,11 @@ export default async function AdminPage() {
 
     // 管理者権限がない場合はダッシュボードにリダイレクト
     if (!currentUser || currentUser?.role !== 'admin') {
-      // superadminの場合は強制ログアウト
+      // superadminの場合は/super-adminにリダイレクト
       if (currentUser?.role === 'superadmin') {
-        console.log('❌ Adminページ: スーパー管理者アクセス、強制ログアウト')
-        redirect('/signout')
+        console.log('❌ Adminページ: スーパー管理者アクセス、/super-adminにリダイレクト')
+        // スーパー管理者は/super-adminにリダイレクト
+        redirect('/super-admin')
       }
       console.log('❌ Adminページ: 管理者権限なし、/dashboardにリダイレクト')
       console.log('   理由:', !currentUser ? 'ユーザーデータなし' : `ロール: ${currentUser?.role}`)

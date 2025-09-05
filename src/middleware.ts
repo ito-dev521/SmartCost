@@ -126,6 +126,9 @@ export async function middleware(request: NextRequest) {
     // スーパー管理者のアクセス制御を削除 - スーパー管理者は全てのページにアクセス可能
     // 以前の制限: スーパー管理者が/super-admin以外の保護されたルートにアクセスした場合は強制ログアウト
     // 現在: スーパー管理者は全ての保護されたルートにアクセス可能
+    
+    // スーパー管理者のアクセス制御を完全に削除
+    // スーパー管理者は全ての保護されたルートにアクセス可能
   }
 
   if (isPublicRoute && session && request.nextUrl.pathname === '/login') {

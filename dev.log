@@ -1,0 +1,192 @@
+
+> construction-cost-management@0.1.0 dev
+> next dev --turbopack
+
+ ⚠ Invalid next.config.ts options detected: 
+ ⚠     Unrecognized key(s) in object: 'nodeMiddleware' at "experimental"
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+   ▲ Next.js 15.5.0 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.3.112:3000
+   - Environments: .env.local
+   - Experiments (use with caution):
+     ✓ nodeMiddleware
+
+ ✓ Starting...
+ ✓ Compiled middleware in 105ms
+ ✓ Ready in 719ms
+ ○ Compiling /api/super-admin/companies ...
+ ✓ Compiled /api/super-admin/companies in 655ms
+🔍 法人作成API: 開始
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+✅ Supabaseクライアント作成完了
+🔍 データベース接続テスト開始
+✅ companiesテーブル接続成功
+✅ company_settingsテーブル接続成功
+✅ usersテーブル接続成功
+✅ データベース接続テスト完了
+📋 リクエストボディ: { name: 'テスト会社5', email: 'test5@example.com' }
+🔍 CADDON設定保存開始: {
+  caddon_enabled: false,
+  type: 'boolean',
+  isFalse: true,
+  isTrue: false
+}
+✅ CADDON設定保存完了: false
+🔍 Mailgun設定確認:
+  - API Key: 1bc95af6...
+  - Domain: sandbox0004ce94ed54504b42f2c4a490fe43d.mailgun.org
+  - From Email: noreply@sandbox0004ce94ed54504b42f2c4a490fe43d.mailgun.org
+  - From Name: SmartCost System
+🔍 Mailgunメール送信開始
+宛先: test5@example.com
+件名: 法人アカウント作成完了のお知らせ
+🔍 Mailgun APIリクエスト送信:
+  - URL: https://api.mailgun.net/v3/sandbox0004ce94ed54504b42f2c4a490fe43d.mailgun.org/messages
+  - Method: POST
+  - Auth Header: Basic YXBpOjFiYzk1YWY2ZDE5YjUwMjU5M2EwNDc0MGM5OGU2ZjJmLTFhZTAyYTA4LTRhNzhkNGFi
+🔍 Mailgun APIレスポンス:
+  - Status: 401
+  - Status Text: Unauthorized
+  - Response Headers: {
+  'access-control-allow-credentials': 'true',
+  'access-control-allow-origin': '*',
+  'cache-control': 'no-store',
+  'content-length': '9',
+  'content-type': 'text/plain; charset=utf-8',
+  date: 'Fri, 05 Sep 2025 14:44:49 GMT',
+  'strict-transport-security': 'max-age=63072000; includeSubDomains',
+  'www-authenticate': 'Basic realm="MG API"',
+  'x-server': 'influx',
+  'x-xss-protection': '1; mode=block'
+}
+❌ Mailgunメール送信失敗: 401 Unauthorized
+❌ エラー詳細: Forbidden
+ POST /api/super-admin/companies 201 in 2260ms
+   Reload env: .env.local
+🔍 法人作成API: 開始
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+✅ Supabaseクライアント作成完了
+🔍 データベース接続テスト開始
+✅ companiesテーブル接続成功
+✅ company_settingsテーブル接続成功
+✅ usersテーブル接続成功
+✅ データベース接続テスト完了
+📋 リクエストボディ: { name: 'テスト会社6', email: 'ito.dev@ii-stylelab.com' }
+🔍 CADDON設定保存開始: {
+  caddon_enabled: false,
+  type: 'boolean',
+  isFalse: true,
+  isTrue: false
+}
+✅ CADDON設定保存完了: false
+法人管理者アカウント作成エラー: Error [AuthApiError]: A user with this email address has already been registered
+    at handleError (../../../src/lib/fetch.ts:102:9)
+    at async _handleRequest (../../../src/lib/fetch.ts:195:5)
+    at async _request (../../../src/lib/fetch.ts:157:16)
+    at async GoTrueAdminApi.createUser (../../src/GoTrueAdminApi.ts:162:14)
+    at async POST (src/app/api/super-admin/companies/route.ts:349:54)
+  347 |         
+  348 |         // Supabaseの認証システムでユーザーを作成
+> 349 |         const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      |                                                      ^
+  350 |           email,
+  351 |           password: generatedPassword,
+  352 |           email_confirm: true, // メール確認をスキップ {
+  __isAuthError: true,
+  status: 422,
+  code: 'email_exists'
+}
+🔍 Mailgun設定確認:
+  - API Key: 1bc95af6...
+  - Domain: sandboxf0004ce94ed54504b42f2c4a490fe43d.mailgun.org
+  - From Email: noreply@sandboxf0004ce94ed54504b42f2c4a490fe43d.mailgun.org
+  - From Name: SmartCost System
+🔍 Mailgunメール送信開始
+宛先: ito.dev@ii-stylelab.com
+件名: 法人アカウント作成完了のお知らせ
+🔍 Mailgun APIリクエスト送信:
+  - URL: https://api.mailgun.net/v3/sandboxf0004ce94ed54504b42f2c4a490fe43d.mailgun.org/messages
+  - Method: POST
+  - Auth Header: Basic YXBpOjFiYzk1YWY2ZDE5YjUwMjU5M2EwNDc0MGM5OGU2ZjJmLTFhZTAyYTA4LTRhNzhkNGFi
+🔍 Mailgun APIレスポンス:
+  - Status: 200
+  - Status Text: OK
+  - Response Headers: {
+  'access-control-allow-credentials': 'true',
+  'access-control-allow-origin': '*',
+  'account-id': '68b7068aac8d648af08f7f95',
+  'cache-control': 'no-store',
+  'content-length': '126',
+  'content-type': 'application/json; charset=utf-8',
+  date: 'Fri, 05 Sep 2025 14:47:17 GMT',
+  'strict-transport-security': 'max-age=63072000; includeSubDomains',
+  'x-mailgun-key-id': '1ae02a08-4a78d4ab',
+  'x-ratelimit-limit': '51',
+  'x-ratelimit-remaining': '50',
+  'x-ratelimit-reset': '1757083667743',
+  'x-recipient-limit': '26',
+  'x-recipient-remaining': '25',
+  'x-recipient-reset': '1757083667743',
+  'x-server': 'influx',
+  'x-xss-protection': '1; mode=block'
+}
+✅ Mailgunメール送信成功: {
+  id: '<20250905144717.e3fa29e1f243a1f8@sandboxf0004ce94ed54504b42f2c4a490fe43d.mailgun.org>',
+  message: 'Queued. Thank you.'
+}
+ POST /api/super-admin/companies 201 in 1803ms
+ ○ Compiling /super-admin ...
+ ✓ Compiled /super-admin in 1277ms
+❌ SuperAdminページ: スーパー管理者権限なし、強制ログアウト
+ GET /super-admin?companyId=4440fcae-03f2-4b0c-8c55-e19017ce08c9 200 in 1856ms
+ ✓ Compiled /api/super-admin/metrics in 110ms
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 360ms
+ GET /api/super-admin/companies 200 in 371ms
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+ GET /api/super-admin/metrics 200 in 613ms
+ GET /api/super-admin/companies 200 in 321ms
+ ✓ Compiled /api/super-admin/companies/[id] in 57ms
+ DELETE /api/super-admin/companies/8d423fc6-8933-4b19-a5b8-67b96fdbb5c6 200 in 836ms
+ DELETE /api/super-admin/companies/078364c1-8f52-4c83-b822-d9c8fa691580 200 in 355ms
+ DELETE /api/super-admin/companies/3daf4ec1-e65c-4f7d-8511-bfe10648e3bc 200 in 404ms
+ DELETE /api/super-admin/companies/420d927e-aace-43e6-9a3c-102f4841eae6 200 in 355ms
+ PUT /api/super-admin/companies/41ebd10e-7603-4d61-b0c2-9c94e6cd77b5 200 in 760ms
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+ GET /api/super-admin/companies 200 in 323ms
+❌ SuperAdminページ: スーパー管理者権限なし、強制ログアウト
+ GET /super-admin?companyId=4440fcae-03f2-4b0c-8c55-e19017ce08c9 200 in 406ms
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 241ms
+ GET /api/super-admin/companies 200 in 365ms
+ GET /api/super-admin/metrics 200 in 529ms
+🔍 Supabase接続情報: {
+  url: 'https://etezftldzxovgpppyagx.supabase.co',
+  hasServiceKey: true
+}
+ GET /api/super-admin/companies 200 in 335ms
+ ✓ Compiled /login in 163ms
+ GET /login 200 in 197ms

@@ -14,6 +14,7 @@ export type PermissionLevel = typeof PERMISSION_LEVELS[keyof typeof PERMISSION_L
 
 // ロール定義
 export const ROLES = {
+  SUPERADMIN: 'superadmin',
   ADMIN: 'admin',
   MANAGER: 'manager',
   USER: 'user',
@@ -96,22 +97,28 @@ export class PermissionChecker {
     }
   }
 
+  // スーパー管理者権限チェック
+  async isSuperAdmin(userId: string): Promise<boolean> {
+    const role = await this.getUserRole(userId)
+    return role === ROLES.SUPERADMIN
+  }
+
   // 管理者権限チェック
   async isAdmin(userId: string): Promise<boolean> {
     const role = await this.getUserRole(userId)
-    return role === ROLES.ADMIN
+    return role === ROLES.ADMIN || role === ROLES.SUPERADMIN
   }
 
   // マネージャー権限チェック
   async isManager(userId: string): Promise<boolean> {
     const role = await this.getUserRole(userId)
-    return role === ROLES.MANAGER || role === ROLES.ADMIN
+    return role === ROLES.MANAGER || role === ROLES.ADMIN || role === ROLES.SUPERADMIN
   }
 
   // ユーザー権限チェック（一般ユーザー以上）
   async isUser(userId: string): Promise<boolean> {
     const role = await this.getUserRole(userId)
-    return role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN
+    return role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN || role === ROLES.SUPERADMIN
   }
 
   // ビューアー権限チェック（閲覧権限以上）
@@ -119,7 +126,7 @@ export class PermissionChecker {
     console.log('🔍 PermissionChecker: canViewチェック開始', { userId })
     const role = await this.getUserRole(userId)
     console.log('📋 PermissionChecker: canView ユーザーロール取得', { userId, role })
-    const result = role === ROLES.VIEWER || role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN
+    const result = role === ROLES.VIEWER || role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN || role === ROLES.SUPERADMIN
     console.log('📋 PermissionChecker: canView 結果', { userId, role, result })
     return result
   }
@@ -293,6 +300,7 @@ export const assertWritableFiscalYear = async () => {
 // Reactコンポーネント用のフック
 export async function usePermissions(userId: string) {
   return {
+    isSuperAdmin: await permissionChecker.isSuperAdmin(userId),
     isAdmin: await permissionChecker.isAdmin(userId),
     isManager: await permissionChecker.isManager(userId),
     isUser: await permissionChecker.isUser(userId),

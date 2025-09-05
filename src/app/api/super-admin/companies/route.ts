@@ -162,7 +162,7 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
     
     // 詳細なデバッグ情報を出力
     console.log('🔍 Mailgun設定確認:')
-    console.log('  - API Key:', mailgunApiKey ? `key-${mailgunApiKey.substring(0, 8)}...` : '未設定')
+    console.log('  - API Key:', mailgunApiKey ? `${mailgunApiKey.substring(0, 8)}...` : '未設定')
     console.log('  - Domain:', mailgunDomain || '未設定')
     console.log('  - From Email:', fromEmail)
     console.log('  - From Name:', fromName)
@@ -192,6 +192,7 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
     console.log('🔍 Mailgun APIリクエスト送信:')
     console.log('  - URL:', `https://api.mailgun.net/v3/${mailgunDomain}/messages`)
     console.log('  - Method: POST')
+    console.log('  - Auth Header:', `Basic ${Buffer.from(`api:${mailgunApiKey}`).toString('base64')}`)
 
     const response = await fetch(`https://api.mailgun.net/v3/${mailgunDomain}/messages`, {
       method: 'POST',
@@ -205,6 +206,10 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
     console.log('🔍 Mailgun APIレスポンス:')
     console.log('  - Status:', response.status)
     console.log('  - Status Text:', response.statusText)
+    
+    // レスポンスヘッダーも確認
+    const responseHeaders = Object.fromEntries(response.headers.entries())
+    console.log('  - Response Headers:', responseHeaders)
 
     if (response.ok) {
       const result = await response.json()
@@ -212,7 +217,8 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
       return { success: true, method: 'mailgun', messageId: result.id }
     } else {
       const errorData = await response.text()
-      console.error('❌ Mailgunメール送信失敗:', response.status, errorData)
+      console.error('❌ Mailgunメール送信失敗:', response.status, response.statusText)
+      console.error('❌ エラー詳細:', errorData)
       return { success: false, error: errorData, method: 'mailgun' }
     }
     

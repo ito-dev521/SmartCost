@@ -7,7 +7,7 @@ import { permissionChecker } from '@/lib/permissions'
 
 interface PermissionGuardProps {
   children: React.ReactNode
-  requiredRole?: 'user' | 'manager' | 'admin'
+  requiredRole?: 'user' | 'manager' | 'admin' | 'superadmin'
   requiredPermission?: string
   fallback?: React.ReactNode
   projectId?: string
@@ -93,6 +93,9 @@ export default function PermissionGuard({
         } else {
           // ロールベースの権限チェック
           switch (requiredRole) {
+            case 'superadmin':
+              permission = await permissionChecker.isSuperAdmin(user.id)
+              break
             case 'admin':
               permission = await permissionChecker.isAdmin(user.id)
               break
@@ -145,7 +148,7 @@ export default function PermissionGuard({
           </div>
           <h3 className="mt-4 text-lg font-medium text-gray-900">アクセス権限がありません</h3>
           <p className="mt-2 text-sm text-gray-500">
-            このページにアクセスするには{requiredRole === 'admin' ? '管理者' : requiredRole === 'manager' ? 'マネージャー' : '一般ユーザー'}以上の権限が必要です。
+            このページにアクセスするには{requiredRole === 'superadmin' ? 'スーパー管理者' : requiredRole === 'admin' ? '管理者' : requiredRole === 'manager' ? 'マネージャー' : '一般ユーザー'}以上の権限が必要です。
           </p>
           <div className="mt-6">
             <button
@@ -164,6 +167,14 @@ export default function PermissionGuard({
 }
 
 // 特定のロールが必要なコンポーネント
+export function SuperAdminGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return (
+    <PermissionGuard requiredRole="superadmin" fallback={fallback}>
+      {children}
+    </PermissionGuard>
+  )
+}
+
 export function AdminGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   return (
     <PermissionGuard requiredRole="admin" fallback={fallback}>
