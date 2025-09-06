@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import ChatBot from '@/components/ai/ChatBot'
 import SidebarNavigation from './SidebarNavigation'
+import UserInfo from './UserInfo'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -77,14 +78,17 @@ export default function DashboardLayout({ children, hideSidebar = false }: Dashb
               </button>
             </div>
             <SidebarNavigation currentPath={pathname} />
-            <div className="mt-auto px-4 pb-4">
-              <button
-                onClick={handleSignOut}
-                className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-gray-50"
-              >
-                <LogOut className="h-6 w-6" />
-                ログアウト
-              </button>
+            <div className="mt-auto">
+              <UserInfo />
+              <div className="px-4 pb-4">
+                <button
+                  onClick={handleSignOut}
+                  className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                >
+                  <LogOut className="h-6 w-6" />
+                  ログアウト
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -99,13 +103,16 @@ export default function DashboardLayout({ children, hideSidebar = false }: Dashb
             </div>
             <SidebarNavigation currentPath={pathname} />
             <div className="mt-auto">
-              <button
-                onClick={handleSignOut}
-                className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-gray-50"
-              >
-                <LogOut className="h-6 w-6" />
-                ログアウト
-              </button>
+              <UserInfo />
+              <div className="px-3">
+                <button
+                  onClick={handleSignOut}
+                  className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                >
+                  <LogOut className="h-6 w-6" />
+                  ログアウト
+                </button>
+              </div>
             </div>
           </div>
         </div>

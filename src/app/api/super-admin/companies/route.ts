@@ -255,6 +255,113 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    console.log('🔍 ユーザー削除API: 開始')
+    
+    const supabase = createSupabaseClient()
+    const body = await request.json()
+    const { email } = body
+    
+    if (!email) {
+      return NextResponse.json({ error: 'メールアドレスが必要です' }, { status: 400 })
+    }
+    
+    console.log('📋 削除対象メールアドレス:', email)
+    
+    // 1. まずSupabase Authからユーザーを検索して削除
+    const { data: authUsers, error: listError } = await supabase.auth.admin.listUsers()
+    
+    if (listError) {
+      console.error('Authユーザー一覧取得エラー:', listError)
+      return NextResponse.json({ error: 'Authユーザーの検索に失敗しました' }, { status: 500 })
+    }
+    
+    const authUser = authUsers.users.find(u => u.email === email)
+    
+    if (authUser) {
+      // Supabase Authから削除
+      const { error: authError } = await supabase.auth.admin.deleteUser(authUser.id)
+      if (authError) {
+        console.error('Auth削除エラー:', authError)
+      } else {
+        console.log('✅ Authユーザー削除完了:', authUser.id)
+      }
+    }
+    
+    // 2. usersテーブルから削除
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single()
+    
+    if (userError && userError.code !== 'PGRST116') {
+      console.error('ユーザー検索エラー:', userError)
+      return NextResponse.json({ error: 'ユーザーの検索に失敗しました' }, { status: 500 })
+    }
+    
+    if (user) {
+      // usersテーブルから削除
+      const { error: deleteUserError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', user.id)
+      
+      if (deleteUserError) {
+        console.error('ユーザー削除エラー:', deleteUserError)
+        return NextResponse.json({ error: 'ユーザーの削除に失敗しました' }, { status: 500 })
+      }
+      
+      console.log('✅ ユーザー削除完了:', user.id)
+    }
+    
+    // 3. 法人テーブルから削除
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('email', email)
+      .single()
+    
+    if (companyError && companyError.code !== 'PGRST116') {
+      console.error('法人検索エラー:', companyError)
+      return NextResponse.json({ error: '法人の検索に失敗しました' }, { status: 500 })
+    }
+    
+    if (company) {
+      // company_settingsから削除
+      await supabase
+        .from('company_settings')
+        .delete()
+        .eq('company_id', company.id)
+      
+      // companiesテーブルから削除
+      const { error: deleteCompanyError } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', company.id)
+      
+      if (deleteCompanyError) {
+        console.error('法人削除エラー:', deleteCompanyError)
+        return NextResponse.json({ error: '法人の削除に失敗しました' }, { status: 500 })
+      }
+      
+      console.log('✅ 法人削除完了:', company.id)
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'ユーザーと法人の削除が完了しました',
+      deletedUser: !!user,
+      deletedCompany: !!company
+    })
+    
+  } catch (error) {
+    console.error('削除エラー:', error)
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('🔍 法人作成API: 開始')
