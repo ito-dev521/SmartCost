@@ -11,6 +11,18 @@ export const createClientComponentClient = () =>
 // 従来のクライアント（後方互換性のため）
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Singleton Supabase client (optional)
+let supabaseSingleton: ReturnType<typeof createClientComponentClient> | undefined
+
+export function getSupabaseSingleton() {
+  if (!supabaseSingleton) {
+    supabaseSingleton = createClientComponentClient()
+  }
+  return supabaseSingleton
+}
+
+// Use in components: const supabase = getSupabaseSingleton()
+
 // データベース型定義
 export interface Database {
   public: {

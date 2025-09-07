@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import DashboardOverview from '@/components/dashboard/DashboardOverview'
+import JWTDebug from '@/components/debug/JWTDebug'
 
 export default async function Dashboard() {
   const supabase = createServerComponentClient()
@@ -14,6 +15,8 @@ export default async function Dashboard() {
 
   return (
     <DashboardLayout>
+      {/* 一時的なJWTデバッグ情報 */}
+      <JWTDebug />
       <DashboardOverview />
     </DashboardLayout>
   )
