@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Loader2, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { createBrowserClient } from '@supabase/ssr'
 
 interface Message {
   id: string
@@ -44,10 +45,69 @@ export default function ChatBot() {
     }
   }, [isOpen])
 
+  // 認証状態を確認（クライアントサイド）
+  const checkClientAuthStatus = async () => {
+    try {
+      console.log('🔍 ChatBot: クライアント認証状態確認開始')
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      if (error) {
+        console.error('❌ ChatBot: クライアント認証エラー:', error)
+        return false
+      }
+      
+      console.log('✅ ChatBot: クライアント認証状態:', user ? { id: user.id, email: user.email } : null)
+      return !!user
+    } catch (error) {
+      console.error('❌ ChatBot: クライアント認証状態確認エラー:', error)
+      return false
+    }
+  }
+
+  // 認証状態を確認（サーバーサイド）
+  const checkServerAuthStatus = async () => {
+    try {
+      console.log('🔍 ChatBot: サーバー認証状態確認開始')
+      const response = await fetch('/api/debug-auth', {
+        method: 'GET',
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ ChatBot: サーバー認証状態:', data)
+        return data.success && data.user
+      } else {
+        console.error('❌ ChatBot: サーバー認証状態確認失敗:', response.status)
+        return false
+      }
+    } catch (error) {
+      console.error('❌ ChatBot: サーバー認証状態確認エラー:', error)
+      return false
+    }
+  }
+
   // OpenAI APIを呼び出し
   const sendMessage = async (content: string) => {
     try {
       setIsLoading(true)
+      console.log('🔍 ChatBot: メッセージ送信開始:', content)
+      
+      // 認証状態を確認（クライアントサイド）
+      const clientAuth = await checkClientAuthStatus()
+      console.log('🔍 ChatBot: クライアント認証結果:', clientAuth)
+      
+      // 認証状態を確認（サーバーサイド）
+      const serverAuth = await checkServerAuthStatus()
+      console.log('🔍 ChatBot: サーバー認証結果:', serverAuth)
+      
+      if (!clientAuth || !serverAuth) {
+        throw new Error('認証が必要です。ログインし直してください。')
+      }
       
       const response = await fetch('/api/ai-chat', {
         method: 'POST',
@@ -55,13 +115,19 @@ export default function ChatBot() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ message: content }),
+        credentials: 'include'
       })
 
+      console.log('📡 ChatBot: APIレスポンス:', response.status, response.ok)
+
       if (!response.ok) {
-        throw new Error('API request failed')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ ChatBot: APIエラー:', response.status, errorData)
+        throw new Error(errorData.error || `API request failed (${response.status})`)
       }
 
       const data = await response.json()
+      console.log('✅ ChatBot: APIレスポンス取得成功')
       
       const newMessage: Message = {
         id: Date.now().toString(),
@@ -72,10 +138,10 @@ export default function ChatBot() {
 
       setMessages(prev => [...prev, newMessage])
     } catch (error) {
-      console.error('Chat error:', error)
+      console.error('❌ ChatBot: チャットエラー:', error)
       const errorMessage: Message = {
         id: Date.now().toString(),
-        content: '申し訳ございません。エラーが発生しました。しばらく待ってから再度お試しください。',
+        content: `申し訳ございません。エラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}。しばらく待ってから再度お試しください。`,
         role: 'assistant',
         timestamp: new Date()
       }

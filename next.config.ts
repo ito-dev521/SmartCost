@@ -4,9 +4,9 @@ const nextConfig: NextConfig = {
   // 開発環境での詳細エラー表示
   reactStrictMode: true,
 
-  // Node.jsミドルウェアの有効化
+  // 実験的機能の設定
   experimental: {
-    nodeMiddleware: true,
+    // 必要に応じて実験的機能を追加
   },
 
   // 環境変数の設定（一時的な対応）

@@ -173,6 +173,7 @@ export default function CashFlowDashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         signal: AbortSignal.timeout(10000) // 10秒タイムアウト
       })
       if (!response.ok) {
@@ -253,9 +254,9 @@ export default function CashFlowDashboard() {
     } catch (error) {
       console.error('Error fetching cash flow data:', error)
       console.error('エラーの詳細:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       })
       // エラー時はサンプルデータを表示
       const fallbackData: CashFlowData[] = []
@@ -361,7 +362,7 @@ export default function CashFlowDashboard() {
       })
 
       // cost_entriesからデータを取得
-      let costEntries = null
+      let costEntries: any[] | null = null
       let costError = null
       try {
         let costQuery = supabase
@@ -382,7 +383,7 @@ export default function CashFlowDashboard() {
       }
 
       // salary_entriesからデータを取得
-      let salaryData = null
+      let salaryData: any[] | null = null
       let salaryError = null
       try {
         let salaryQuery = supabase
@@ -829,18 +830,14 @@ export default function CashFlowDashboard() {
                       let currentBalance = 0
                       
                       if (bankBalanceHistory && bankBalanceHistory.length > 0) {
-                        // 最新の月末残高を基準とする
+                        // 管理者パネルの銀行残高履歴管理から最新の月末残高を取得
                         const latestBalance = bankBalanceHistory[0]
                         currentBalance = latestBalance.closing_balance || 0
-                        
-                        // 今月の実際の収支を加減算
-                        const currentMonthIncome = latestBalance.total_income || 0
-                        const currentMonthExpense = latestBalance.total_expense || 0
-                        
-                        // 月末残高に今月の収支を加減算して現在の残高を計算
-                        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+                        console.log(`💰 CashFlowDashboard: 銀行残高履歴から現在の残高を取得: ${currentBalance} (${latestBalance.balance_date})`)
                       } else if (fiscalInfo) {
+                        // 銀行残高履歴がない場合は決算情報の銀行残高を使用
                         currentBalance = fiscalInfo.bank_balance || 0
+                        console.log(`💰 CashFlowDashboard: 決算情報から現在の残高を取得: ${currentBalance}`)
                       }
                       
                       return formatCurrency(currentBalance)

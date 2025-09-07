@@ -239,64 +239,95 @@ export async function GET(request: NextRequest) {
     )
     console.log('Supabase client created')
 
-    // プロジェクトデータを取得
+    // 認証されたユーザー情報を取得
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.error('認証エラー:', authError)
+      return NextResponse.json(
+        { error: '認証が必要です' },
+        { status: 401 }
+      )
+    }
+
+    console.log('認証されたユーザー:', user.id)
+
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      console.error('ユーザー情報取得エラー:', userError)
+      return NextResponse.json(
+        { error: 'ユーザー情報の取得に失敗しました' },
+        { status: 500 }
+      )
+    }
+
+    console.log('🏢 会社ID:', userData.company_id)
+
+    // プロジェクトデータを取得（会社IDでフィルタリング）
     const { data: projects } = await supabase
       .from('projects')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('business_number', { ascending: true })
 
-    // 原価エントリーデータを取得
+    // 原価エントリーデータを取得（会社IDでフィルタリング）
     const { data: costEntries } = await supabase
       .from('cost_entries')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('entry_date', { ascending: false })
 
-    // クライアントデータを取得
+    // クライアントデータを取得（会社IDでフィルタリング）
     const { data: clients } = await supabase
       .from('clients')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('name')
 
-    // CADDON請求データを取得
+    // CADDON請求データを取得（会社IDでフィルタリング）
     const { data: caddonBillings } = await supabase
       .from('caddon_billing')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('billing_month')
 
-    // 分割入金データを取得（全プロジェクト）
+    // 分割入金データを取得（会社IDでフィルタリング）
     const { data: splitBillings } = await supabase
       .from('split_billing')
       .select('project_id, billing_month, amount')
+      .eq('company_id', userData.company_id)
 
-    // 進捗データを取得（存在するテーブル名に合わせてください）
+    // 進捗データを取得（会社IDでフィルタリング）
     const { data: progressRows } = await supabase
       .from('project_progress')
       .select('project_id, progress_percent, expected_end_date')
+      .eq('company_id', userData.company_id)
 
-    // クッキーから決算情報を取得
-    const allCookies = await cookies()
-    const fiscalInfoCookie = allCookies.get('fiscal-info')
+    // データベースから決算情報を取得
+    const { data: fiscalInfoData, error: fiscalInfoError } = await supabase
+      .from('fiscal_info')
+      .select('*')
+      .eq('company_id', userData.company_id)
+      .single()
 
-    let fiscalInfoData = null
-    if (fiscalInfoCookie) {
-      try {
-        fiscalInfoData = [JSON.parse(fiscalInfoCookie.value)]
-        console.log('クッキーから取得した決算情報:', fiscalInfoData[0])
-      } catch (error) {
-        console.error('クッキーパースエラー:', error)
-      }
+    if (fiscalInfoError && fiscalInfoError.code !== 'PGRST116') {
+      console.error('決算情報取得エラー:', fiscalInfoError)
     }
 
-    const fiscalInfo: FiscalInfo = fiscalInfoData && fiscalInfoData.length > 0
-      ? fiscalInfoData[0]
-      : {
-          id: 'default',
-          fiscal_year: new Date().getFullYear(),
-          settlement_month: 3, // データベースに決算情報がない場合のデフォルト値
-          current_period: 1,
-          bank_balance: 5000000,
-          notes: 'デフォルト設定'
-        }
+    const fiscalInfo: FiscalInfo = fiscalInfoData || {
+      id: 'default',
+      fiscal_year: new Date().getFullYear(),
+      settlement_month: 3, // データベースに決算情報がない場合のデフォルト値
+      current_period: 1,
+      bank_balance: 0, // 新規法人の場合は0に設定
+      notes: 'デフォルト設定'
+    }
 
     console.log('使用する決算情報:', fiscalInfo)
 
@@ -316,12 +347,32 @@ export async function GET(request: NextRequest) {
     console.log('月別収入データ:', monthlyRevenue)
     console.log('月別原価データ:', monthlyCost)
 
-    // 銀行残高履歴から最新の月末残高を取得
-    const { data: bankBalanceHistory } = await supabase
+    // 新規法人の場合は、プロジェクトや入金予定がない場合は予測を表示しない
+    const hasProjectData = (projects && projects.length > 0) || (caddonBillings && caddonBillings.length > 0)
+    const hasRevenueData = monthlyRevenue.some(month => month.amount > 0)
+    const hasCostData = monthlyCost.some(month => month.amount > 0)
+    
+    if (!hasProjectData && !hasRevenueData && !hasCostData) {
+      console.log('新規法人でデータが存在しないため、予測を表示しません')
+      return NextResponse.json({
+        predictions: [],
+        message: '新規法人のため、プロジェクトや入金予定のデータを入力してください。'
+      })
+    }
+
+    // 銀行残高履歴から最新の月末残高を取得（会社IDでフィルタリング）
+    const { data: bankBalanceHistory, error: bankHistoryError } = await supabase
       .from('bank_balance_history')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('balance_date', { ascending: false })
       .limit(1)
+
+    if (bankHistoryError) {
+      console.error('銀行残高履歴取得エラー:', bankHistoryError)
+    }
+
+    console.log('💰 銀行残高履歴:', bankBalanceHistory)
 
     // 予測データを生成（決算月の翌月1日から開始）
     const predictions = []
@@ -330,13 +381,18 @@ export async function GET(request: NextRequest) {
     const nextMonth = settlementMonth === 12 ? 1 : settlementMonth + 1
     const nextYear = settlementMonth === 12 ? fiscalInfo.fiscal_year + 1 : fiscalInfo.fiscal_year
     
-    // 決算月の月末残高を初期残高として使用（6月の残高は決算月の月末残高）
+    // 初期残高を計算（管理者パネルの銀行残高履歴管理から取得）
     let runningBalance = 0
+    
     if (bankBalanceHistory && bankBalanceHistory.length > 0) {
-      // 決算月の月末残高を使用（6月の残高は決算月の月末残高）
-      runningBalance = bankBalanceHistory[0].closing_balance
+      // 銀行残高履歴の最新データから初期残高を取得
+      const latestHistory = bankBalanceHistory[0]
+      runningBalance = latestHistory.closing_balance || 0
+      console.log(`💰 銀行残高履歴から初期残高を取得: ${runningBalance} (${latestHistory.balance_date})`)
     } else {
-      runningBalance = fiscalInfo.bank_balance
+      // 銀行残高履歴がない場合は決算情報の銀行残高を使用
+      runningBalance = fiscalInfo.bank_balance || 0
+      console.log(`💰 決算情報から初期残高を取得: ${runningBalance}`)
     }
 
     console.log(`決算月: ${settlementMonth}月, 翌月: ${nextMonth}月 (${nextYear}年)`)

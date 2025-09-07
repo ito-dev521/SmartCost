@@ -30,9 +30,28 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
     const fetchClients = async () => {
       try {
         setLoading(true)
+        setError(null)
 
-        // Supabaseクライアントからセッションを取得
+        // 現在ログインしているユーザーの会社IDを取得
         const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user?.id) {
+          throw new Error('認証セッションが無効です')
+        }
+
+        // ユーザーの会社IDを取得
+        const { data: currentUser, error: currentUserError } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', session.user.id)
+          .single()
+
+        if (currentUserError || !currentUser?.company_id) {
+          console.error('❌ ClientList: 現在のユーザーの会社ID取得エラー:', currentUserError)
+          throw new Error('ユーザーの会社情報を取得できませんでした')
+        }
+
+        const companyId = currentUser.company_id
+        console.log('🏢 ClientList: 会社ID:', companyId)
 
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -42,8 +61,7 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
           headers['Authorization'] = `Bearer ${session.access_token}`
         }
 
-        const companyId = searchParams?.get('companyId') || ''
-        const endpoint = `/api/clients${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''}`
+        const endpoint = `/api/clients?companyId=${encodeURIComponent(companyId)}`
         const response = await fetch(endpoint, {
           method: 'GET',
           headers,
@@ -56,8 +74,10 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
         }
 
         const data = await response.json()
+        console.log('✅ ClientList: クライアント取得成功:', data.clients?.length || 0, '件')
         setClients(data.clients || [])
       } catch (error) {
+        console.error('❌ ClientList: クライアント取得エラー:', error)
         setError(error instanceof Error ? error.message : 'クライアントの取得に失敗しました')
       } finally {
         setLoading(false)
@@ -65,7 +85,7 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
     }
 
     fetchClients()
-  }, [searchParams])
+  }, [])
 
   // 検索フィルター
   const filteredClients = clients.filter(client =>

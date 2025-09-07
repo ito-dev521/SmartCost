@@ -1,15 +1,28 @@
-import { createServerComponentClient } from '@/lib/supabase-server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import SalaryEntryForm from '@/components/salary/SalaryEntryForm'
 import PermissionGuard from '@/components/auth/PermissionGuard'
 
 export default async function SalaryEntry() {
-  const supabase = createServerComponentClient()
-  // 会社スコープ
-  const cookiesHeader = (await import('next/headers')).cookies
-  const store: any = await (cookiesHeader as any)()
-  const scopeCompanyId = store.get('scope_company_id')?.value
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
 
   const { data: { session } } = await supabase.auth.getSession()
 
@@ -17,17 +30,32 @@ export default async function SalaryEntry() {
     redirect('/login')
   }
 
-  // 部署データを取得
+  // ユーザーの会社IDを取得
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('company_id')
+    .eq('id', session.user.id)
+    .single()
+
+  if (userError || !userData) {
+    console.error('ユーザー情報取得エラー:', userError)
+    redirect('/login')
+  }
+
+  console.log('🏢 給与管理ページ - 会社ID:', userData.company_id)
+
+  // 部署データを取得（会社IDでフィルタリング）
   const { data: departments } = await supabase
     .from('departments')
     .select('id, name')
+    .eq('company_id', userData.company_id)
     .order('name')
 
-  // ユーザーデータを取得（結合なし）
+  // ユーザーデータを取得（会社IDでフィルタリング）
   const { data: usersData, error: usersError } = await supabase
     .from('users')
     .select('id, name, department_id, company_id')
-    .match(scopeCompanyId ? { company_id: scopeCompanyId } : {})
+    .eq('company_id', userData.company_id)
     .order('name')
 
   // エラーチェック
@@ -51,22 +79,14 @@ export default async function SalaryEntry() {
   console.log('変換後のユーザーデータ:', users)
   console.log('ユーザー取得エラー:', usersError)
 
-  // プロジェクトデータを取得（一般管理費プロジェクトは除外）
+  // プロジェクトデータを取得（会社IDでフィルタリング、一般管理費プロジェクトは除外）
   const { data: projectsData } = await supabase
     .from('projects')
     .select('id, name, status, created_at, updated_at, company_id, client_id')
+    .eq('company_id', userData.company_id)  // 会社IDでフィルタリング
     .neq('business_number', 'IP')  // 一般管理費プロジェクトを除外（業務番号）
     .not('name', 'ilike', '%一般管理費%')  // 一般管理費プロジェクトを除外（プロジェクト名）
     .order('name')
-
-  let filteredProjects = projectsData || []
-  if (scopeCompanyId) {
-    const { data: clientRows } = await supabase
-      .from('clients')
-      .select('id, company_id')
-    const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
-    filteredProjects = filteredProjects.filter(p => p.company_id === scopeCompanyId || (p.client_id && clientCompanyMap[p.client_id] === scopeCompanyId))
-  }
 
   // プロジェクトデータを正しい形式に変換
   const projects = projectsData?.map(project => ({
@@ -77,10 +97,11 @@ export default async function SalaryEntry() {
     updated_at: project.updated_at
   })) || []
 
-  // 予算科目データを取得（人件費関連のみ）
+  // 予算科目データを取得（会社IDでフィルタリング、人件費関連のみ）
   const { data: categories } = await supabase
     .from('budget_categories')
     .select('*')
+    .eq('company_id', userData.company_id)
     .ilike('name', '%人件費%')
     .order('level, sort_order')
 
@@ -90,13 +111,7 @@ export default async function SalaryEntry() {
         <SalaryEntryForm
           initialUsers={users || []}
           initialDepartments={departments || []}
-          initialProjects={(filteredProjects?.map(project => ({
-            id: project.id,
-            name: project.name,
-            status: project.status,
-            created_at: project.created_at,
-            updated_at: project.updated_at
-          })) || [])}
+          initialProjects={projects || []}
           initialCategories={categories || []}
         />
       </PermissionGuard>

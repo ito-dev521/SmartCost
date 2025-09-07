@@ -46,15 +46,31 @@ export default function BankBalanceHistoryManager() {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch('/api/bank-balance-history')
+      console.log('🔍 BankBalanceHistoryManager: 履歴データ取得開始')
+      const response = await fetch('/api/bank-balance-history', {
+        credentials: 'include'
+      })
+      
+      console.log('📡 BankBalanceHistoryManager: レスポンス:', response.status, response.ok)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ BankBalanceHistoryManager: 履歴データ取得成功:', data.history?.length || 0, '件')
+        console.log('📊 BankBalanceHistoryManager: 履歴データ:', data.history)
         setHistory(data.history || [])
+        
+        // 新規法人の場合のメッセージを表示
+        if (data.message) {
+          console.log('📋 新規法人メッセージ:', data.message)
+          setMessage({ type: 'error', text: data.message })
+        }
       } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ BankBalanceHistoryManager: 履歴データ取得失敗:', response.status, errorData)
         setMessage({ type: 'error', text: '履歴データの取得に失敗しました' })
       }
     } catch (error) {
-      console.error('履歴取得エラー:', error)
+      console.error('❌ BankBalanceHistoryManager: 履歴取得エラー:', error)
       setMessage({ type: 'error', text: 'ネットワークエラーが発生しました' })
     } finally {
       setLoading(false)
@@ -76,7 +92,10 @@ export default function BankBalanceHistoryManager() {
       })
 
       if (isDuplicate) {
-        setMessage({ type: 'error', text: '同じ年月のデータは既に存在します' })
+        setMessage({ 
+          type: 'error', 
+          text: '同じ年月のデータは既に存在します。\n編集機能を使用して既存のデータを更新するか、別の年月を選択してください。' 
+        })
         return
       }
     }
@@ -90,6 +109,10 @@ export default function BankBalanceHistoryManager() {
       const { total_expense, ...dataToSend } = formData
       const body = editing ? { ...dataToSend, id: editing.id } : dataToSend
 
+      console.log('🔍 BankBalanceHistoryManager: 保存開始')
+      console.log('📤 BankBalanceHistoryManager: 送信データ:', body)
+      console.log('📤 BankBalanceHistoryManager: メソッド:', method)
+
       const response = await fetch('/api/bank-balance-history', {
         method,
         headers: {
@@ -98,21 +121,31 @@ export default function BankBalanceHistoryManager() {
         body: JSON.stringify(body),
       })
 
+      console.log('📡 BankBalanceHistoryManager: レスポンス:', response.status, response.ok)
+
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ BankBalanceHistoryManager: 保存成功:', data)
         setMessage({ type: 'success', text: data.message })
         await fetchHistory()
         handleCancel()
       } else {
         const error = await response.json()
+        console.error('❌ BankBalanceHistoryManager: 保存エラー:', error)
         let errorMessage = error.error || '保存に失敗しました'
         
         // 詳細なエラー情報がある場合は追加
         if (error.details) {
-          errorMessage += ` (詳細: ${error.details})`
+          errorMessage += `\n詳細: ${error.details}`
+        }
+        if (error.suggestion) {
+          errorMessage += `\n提案: ${error.suggestion}`
         }
         if (error.monthYear) {
-          errorMessage += ` (対象年月: ${error.monthYear})`
+          errorMessage += `\n対象年月: ${error.monthYear}`
+        }
+        if (error.code) {
+          errorMessage += `\nエラーコード: ${error.code}`
         }
         
         setMessage({ type: 'error', text: errorMessage })

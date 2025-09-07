@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import {
   FileText,
   Home,
@@ -49,35 +50,79 @@ export default function SidebarNavigation({
   navigationItems = defaultNavigationItems,
   currentPath
 }: SidebarNavigationProps) {
-    const router = useRouter()
-    const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const [caddonEnabled, setCaddonEnabled] = useState<boolean>(true)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    const fetchCaddonStatus = async () => {
       try {
-        const isModified = e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button === 1
-        if (isModified) return
-        const m = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
-        const cid = m ? decodeURIComponent(m[1]) : ''
-        if (!cid) return
-        e.preventDefault()
-        const url = new URL(href, window.location.origin)
-        if (!url.searchParams.get('companyId')) url.searchParams.set('companyId', cid)
-        router.push(url.pathname + (url.search ? url.search : ''))
-      } catch {}
+        console.log('🔍 SidebarNavigation: CADDON状態取得開始')
+        const response = await fetch('/api/company-settings', {
+          credentials: 'include', // クッキーを含める
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        console.log('📡 SidebarNavigation: APIレスポンス:', response.status, response.ok)
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('📋 SidebarNavigation: 取得したデータ:', data)
+          setCaddonEnabled(data.caddon_enabled)
+          console.log('✅ SidebarNavigation: CADDON状態設定:', data.caddon_enabled)
+        } else {
+          const errorText = await response.text()
+          console.error('❌ SidebarNavigation: APIエラー:', response.status, errorText)
+          // エラーの場合はデフォルトで有効にする
+          setCaddonEnabled(true)
+        }
+      } catch (error) {
+        console.error('❌ SidebarNavigation: CADDON状態取得エラー:', error)
+        // エラーの場合はデフォルトで有効にする
+        setCaddonEnabled(true)
+      } finally {
+        setLoading(false)
+        console.log('🏁 SidebarNavigation: ローディング完了')
+      }
     }
+
+    fetchCaddonStatus()
+  }, [])
+
+  const onNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    try {
+      const isModified = e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button === 1
+      if (isModified) return
+      const m = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
+      const cid = m ? decodeURIComponent(m[1]) : ''
+      if (!cid) return
+      e.preventDefault()
+      const url = new URL(href, window.location.origin)
+      if (!url.searchParams.get('companyId')) url.searchParams.set('companyId', cid)
+      router.push(url.pathname + (url.search ? url.search : ''))
+    } catch {}
+  }
     return (
     <div className="flex-1">
       <nav className="space-y-2">
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = currentPath === item.href
-          // CADDONリンクは会社設定が無効なら非表示（簡易：クッキーで判定）
+          
+          // CADDONリンクは会社設定が無効なら非表示
           if (item.href === '/caddon') {
-            try {
-              if (typeof document !== 'undefined') {
-                const m = document.cookie.match(/company_caddon_enabled=([^;]+)/)
-                const on = m ? m[1] !== 'false' : true
-                if (!on) return null
-              }
-            } catch {}
+            console.log('🔍 SidebarNavigation: CADDONメニュー表示判定:', { loading, caddonEnabled })
+            if (loading) {
+              console.log('⏳ SidebarNavigation: ローディング中のため非表示')
+              // ローディング中は表示しない
+              return null
+            }
+            if (!caddonEnabled) {
+              console.log('❌ SidebarNavigation: CADDON無効のため非表示')
+              return null
+            }
+            console.log('✅ SidebarNavigation: CADDON有効のため表示')
           }
           return (
             <a

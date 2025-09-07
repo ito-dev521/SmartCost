@@ -1,87 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-api'
-import { permissionChecker } from '@/lib/permissions'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
     console.log('🔍 /api/projects: GETリクエスト受信')
 
-    // 認証チェック（デバッグ用に一時的に無効化）
-    console.log('🔍 /api/projects: 認証チェック開始')
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
+          },
+          async setAll(cookiesToSet) {
+            const cookieStore = await cookies()
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options)
+            })
+          },
+        },
+      }
+    )
 
-    // Supabase 未設定（placeholder）の場合はスタブを返して UI を動かす
-    const isPlaceholderSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
-    if (isPlaceholderSupabase) {
-      console.log('🔧 /api/projects: placeholder 環境のためスタブデータを返却')
-      return NextResponse.json({ projects: [] })
+    // 認証されたユーザー情報を取得
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.error('認証エラー:', authError)
+      return NextResponse.json(
+        { error: '認証が必要です' },
+        { status: 401 }
+      )
     }
 
-    // サービスロールキーを使用してSupabaseクライアントを作成
-    const supabase = createClient()
-    console.log('📋 /api/projects: Supabaseクライアント作成完了')
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
 
-    // デバッグ用に認証チェックを完全にスキップ
-    console.log('✅ /api/projects: 認証チェックスキップ、プロジェクト一覧取得')
-
-    // リクエストヘッダーをログ出力
-    console.log('📋 /api/projects: リクエストヘッダー:', Object.fromEntries(request.headers.entries()))
-
-    // クエリから companyId を取得
-    const { searchParams } = new URL(request.url)
-    let companyId = searchParams.get('companyId')
-    if (!companyId) {
-      const cookieHeader = request.headers.get('cookie') || ''
-      const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
-      if (m) companyId = decodeURIComponent(m[1])
+    if (userError || !userData) {
+      console.error('ユーザー情報取得エラー:', userError)
+      return NextResponse.json(
+        { error: 'ユーザー情報の取得に失敗しました' },
+        { status: 500 }
+      )
     }
 
-    // プロジェクト一覧を取得（一般管理費プロジェクトとCADDONシステムは除外）
+    console.log('🏢 会社ID:', userData.company_id)
+
+    // プロジェクト一覧を取得（会社IDでフィルタリング、一般管理費プロジェクトとCADDONシステムは除外）
     console.log('🔍 /api/projects: プロジェクト一覧取得開始')
-    let query = supabase
+    const { data: projects, error } = await supabase
       .from('projects')
       .select('*')
+      .eq('company_id', userData.company_id)  // 会社IDでフィルタリング
       .neq('business_number', 'IP')
       .not('name', 'ilike', '%一般管理費%')
       .not('business_number', 'ilike', 'C%')
       .not('name', 'ilike', '%CADDON%')
       .order('business_number', { ascending: true })
 
-    if (companyId) {
-      // company_id 直付 or clients.company_id 経由のいずれかに紐づくもののみ返す
-      // まず projects の client_id を集め、clients を引いて companyId を判別
-      const { data: projRows } = await supabase
-        .from('projects')
-        .select('id, company_id, client_id')
-      const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
-      let clientCompanyIds: Record<string, string> = {}
-      if (clientIds.length > 0) {
-        const { data: clientRows } = await supabase
-          .from('clients')
-          .select('id, company_id')
-          .in('id', clientIds)
-        clientCompanyIds = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
-      }
-      // 会社に属さないID集合を後でフィルタ用に使うため、取得後に絞り込み
-      const { data: allProjects, error } = await query
-      if (error) {
-        console.error('❌ /api/projects: プロジェクト取得エラー:', error)
-        return NextResponse.json({ error: 'プロジェクトの取得に失敗しました' }, { status: 500 })
-      }
-      const filtered = (allProjects || []).filter(p => {
-        return p.company_id === companyId || (p.client_id && clientCompanyIds[p.client_id] === companyId)
-      })
-      console.log('✅ /api/projects: フィルタ後件数:', filtered.length)
-      return NextResponse.json({ projects: filtered })
-    }
-
-    const { data: projects, error } = await query
-
     if (error) {
       console.error('❌ /api/projects: プロジェクト取得エラー:', error)
       return NextResponse.json({ error: 'プロジェクトの取得に失敗しました' }, { status: 500 })
     }
 
-    console.log('✅ /api/projects: プロジェクト取得成功:', projects?.length || 0)
+    console.log('✅ /api/projects: 取得件数:', projects?.length || 0)
     return NextResponse.json({ projects: projects || [] })
   } catch (error) {
     console.error('プロジェクト取得エラー:', error)
@@ -93,15 +82,52 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔍 /api/projects: POSTリクエスト受信')
 
-    // 認証チェック（デバッグ用に一時的に無効化）
-    console.log('🔍 /api/projects: 認証チェック開始')
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
+          },
+          async setAll(cookiesToSet) {
+            const cookieStore = await cookies()
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options)
+            })
+          },
+        },
+      }
+    )
 
-    // サービスロールキーを使用してSupabaseクライアントを作成
-    const supabase = createClient()
-    console.log('📋 /api/projects: Supabaseクライアント作成完了')
+    // 認証されたユーザー情報を取得
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.error('認証エラー:', authError)
+      return NextResponse.json(
+        { error: '認証が必要です' },
+        { status: 401 }
+      )
+    }
 
-    // デバッグ用に認証チェックを完全にスキップ
-    console.log('✅ /api/projects: 認証チェックスキップ、プロジェクト作成')
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      console.error('ユーザー情報取得エラー:', userError)
+      return NextResponse.json(
+        { error: 'ユーザー情報の取得に失敗しました' },
+        { status: 500 }
+      )
+    }
+
+    console.log('🏢 会社ID:', userData.company_id)
 
     // リクエストボディを取得
     const body = await request.json()
@@ -156,6 +182,7 @@ export async function POST(request: NextRequest) {
       start_date,
       end_date,
       status: status || 'planning',
+      company_id: userData.company_id,  // 会社IDを追加
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }

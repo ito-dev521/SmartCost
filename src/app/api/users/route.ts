@@ -117,16 +117,32 @@ export async function GET(request: NextRequest) {
     // ユーザー一覧取得（companyIdクエリ対応）
     const { searchParams } = new URL(request.url)
     let companyId = searchParams.get('companyId')
+    console.log('🔍 /api/users: URLパラメータから取得したcompanyId:', companyId)
+    
     if (!companyId) {
       const cookieHeader = request.headers.get('cookie') || ''
       const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
-      if (m) companyId = decodeURIComponent(m[1])
+      if (m) {
+        companyId = decodeURIComponent(m[1])
+        console.log('🍪 /api/users: クッキーから取得したcompanyId:', companyId)
+      }
     }
-    let userQuery = supabase.from('users').select('*').order('created_at', { ascending: false })
-    if (companyId) {
-      userQuery = userQuery.eq('company_id', companyId)
+    
+    if (!companyId) {
+      console.log('⚠️ /api/users: companyIdが指定されていないため、空の配列を返します')
+      console.log('🔍 /api/users: デバッグ情報:', {
+        url: request.url,
+        searchParams: Object.fromEntries(searchParams.entries()),
+        cookieHeader: request.headers.get('cookie') || 'なし'
+      })
+      return NextResponse.json({ users: [] })
     }
-    const { data: users, error: usersError } = await userQuery
+
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
 
     if (usersError) {
       console.error('Users fetch error:', usersError)

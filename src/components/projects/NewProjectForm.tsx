@@ -238,8 +238,7 @@ export default function NewProjectForm() {
         console.log('✅ NewProjectForm: プロジェクト作成成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
-        const dest = cid ? `/projects?companyId=${encodeURIComponent(cid)}` : '/projects'
-        router.push(dest)
+        router.push('/projects')
         router.refresh()
 
       } catch (error) {

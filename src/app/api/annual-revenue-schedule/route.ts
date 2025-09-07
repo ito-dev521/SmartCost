@@ -142,8 +142,7 @@ export async function GET(request: NextRequest) {
 
     console.log('取得したデータ:', {
       projects: projects?.length || 0,
-      caddonBillings: caddonBillings?.length || 0,
-      splitBillings: splitBillings?.length || 0
+      caddonBillings: caddonBillings?.length || 0
     })
 
     // 閲覧年度の取得（クッキー fiscal-view-year があれば優先）

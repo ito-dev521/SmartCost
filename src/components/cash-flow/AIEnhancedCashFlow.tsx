@@ -172,6 +172,7 @@ export default function AIEnhancedCashFlow() {
   const [totalExpense, setTotalExpense] = useState<number>(0)
   const [projects, setProjects] = useState<Project[]>([])
   const [caddonBillings, setCaddonBillings] = useState<CaddonBilling[]>([])
+  const [newCompanyMessage, setNewCompanyMessage] = useState<string | null>(null)
 
   // 年間入金予定表と同じ入金予定日計算関数
   const calculatePaymentDate = (endDate: string, client: any): Date => {
@@ -396,11 +397,21 @@ export default function AIEnhancedCashFlow() {
   const fetchDetailedPredictions = async () => {
     try {
       const currentYear = new Date().getFullYear()
-      const response = await fetch(`/api/cash-flow-prediction?fiscal_year=${currentYear}&months=12`)
+      const response = await fetch(`/api/cash-flow-prediction?fiscal_year=${currentYear}&months=12`, {
+        credentials: 'include'
+      })
       if (response.ok) {
         const data = await response.json()
         setDetailedPredictions(data.predictions || [])
         setPredictionSummary(data.summary)
+        
+        // 新規法人の場合のメッセージを表示
+        if (data.message) {
+          console.log('新規法人メッセージ:', data.message)
+          setNewCompanyMessage(data.message)
+        } else {
+          setNewCompanyMessage(null)
+        }
       }
     } catch (error) {
       console.error('詳細予測取得エラー:', error)
@@ -430,14 +441,17 @@ export default function AIEnhancedCashFlow() {
       // 年間入金予定表のデータを月次予測詳細の形式に変換
       const predictions: DetailedCashFlowPrediction[] = []
       
-      // 現在の残高を計算（銀行残高履歴の最新データから）
-      let currentBalance = fiscalInfo?.bank_balance || 0
+      // 現在の残高を計算（管理者パネルの銀行残高履歴管理から取得）
+      let currentBalance = 0
       if (history && history.length > 0) {
+        // 銀行残高履歴の最新データから初期残高を取得
         const latestBalance = history[0]
-        currentBalance = latestBalance.closing_balance || currentBalance
-        const currentMonthIncome = latestBalance.total_income || 0
-        const currentMonthExpense = latestBalance.total_expense || 0
-        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+        currentBalance = latestBalance.closing_balance || 0
+        console.log(`💰 AIEnhancedCashFlow: 銀行残高履歴から初期残高を取得: ${currentBalance} (${latestBalance.balance_date})`)
+      } else {
+        // 銀行残高履歴がない場合は決算情報の銀行残高を使用
+        currentBalance = fiscalInfo?.bank_balance || 0
+        console.log(`💰 AIEnhancedCashFlow: 決算情報から初期残高を取得: ${currentBalance}`)
       }
       
       let runningBalance = currentBalance // 現在の残高
@@ -503,22 +517,23 @@ export default function AIEnhancedCashFlow() {
       // 最新の銀行残高履歴から現在の残高を取得
       let currentBalance = fiscalInfo?.bank_balance || 0
       
-      // 銀行残高履歴がある場合は、最新の月末残高から現在の残高を計算
+      // 銀行残高履歴がある場合は、最新の月末残高を使用
       if (history && history.length > 0) {
         const latestBalance = history[0] // 最新のデータ
+        // closing_balanceは既にその月の収支を含んだ月末残高なので、そのまま使用
         currentBalance = latestBalance.closing_balance || currentBalance
-        
-        // 今月の実際の収支を加減算
-        const currentMonthIncome = latestBalance.total_income || 0
-        const currentMonthExpense = latestBalance.total_expense || 0
-        
-        // 月末残高に今月の収支を加減算して現在の残高を計算
-        currentBalance = latestBalance.closing_balance + currentMonthIncome - currentMonthExpense
+        console.log('💰 銀行残高履歴から現在の残高を取得:', currentBalance, '日付:', latestBalance.balance_date)
+      } else {
+        // 銀行残高履歴がない場合は決算情報の銀行残高を使用
+        currentBalance = fiscalInfo?.bank_balance || 0
+        console.log('💰 決算情報から現在の残高を取得:', currentBalance)
       }
 
       // 予測は常にAPIから取得して一貫性を保つ
       const currentYear = new Date().getFullYear()
-      const predictionRes = await fetch(`/api/cash-flow-prediction?fiscal_year=${currentYear}&months=12`)
+      const predictionRes = await fetch(`/api/cash-flow-prediction?fiscal_year=${currentYear}&months=12`, {
+        credentials: 'include'
+      })
       let predData: any = null
       if (predictionRes.ok) {
         predData = await predictionRes.json()
@@ -1228,6 +1243,38 @@ export default function AIEnhancedCashFlow() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* 新規法人メッセージ */}
+          {newCompanyMessage && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">
+                    新規法人のため予測データがありません
+                  </h3>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <p>{newCompanyMessage}</p>
+                  </div>
+                  <div className="mt-4">
+                    <div className="-mx-2 -my-1.5 flex">
+                      <button
+                        type="button"
+                        className="bg-blue-50 px-2 py-1.5 rounded-md text-sm font-medium text-blue-800 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-50 focus:ring-blue-600"
+                        onClick={() => setNewCompanyMessage(null)}
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

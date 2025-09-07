@@ -26,6 +26,6 @@ export async function GET() {
       fullSession: session
     })
   } catch (err) {
-    return NextResponse.json({ error: err.message })
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' })
   }
 }

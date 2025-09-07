@@ -42,57 +42,75 @@ export default function DashboardOverview() {
       const cidMatch = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/) : null
       const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
 
-      // 1. プロジェクト統計を取得（CADDONも含める）
-      const { data: projects, error: projectsError } = await supabase
+      // 1. プロジェクト統計を取得（会社スコープでフィルタリング）
+      let projectsQuery = supabase
         .from('projects')
         .select('id, status, contract_amount, business_number, name, company_id, client_id')
         .neq('business_number', 'IP')  // 一般管理費プロジェクトは除外（CADDONは除外しない）
         .not('name', 'ilike', '%一般管理費%')
+
+      // 会社IDが指定されている場合は、その会社のプロジェクトのみ取得
+      if (cid) {
+        projectsQuery = projectsQuery.eq('company_id', cid)
+      }
+
+      const { data: projects, error: projectsError } = await projectsQuery
 
       if (projectsError) {
         console.error('プロジェクト取得エラー:', projectsError)
         throw projectsError
       }
 
-      let filteredProjects = projects || []
-      if (cid) {
-        const { data: clientRows } = await supabase
-          .from('clients')
-          .select('id, company_id')
-        const clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id])) as Record<string,string>
-        filteredProjects = filteredProjects.filter(p => p.company_id === cid || (p.client_id && clientCompanyMap[p.client_id] === cid))
-      }
+      const filteredProjects = projects || []
 
-      // 2. 原価データを取得
-      const { data: costEntries, error: costError } = await supabase
+      // 2. 原価データを取得（会社スコープでフィルタリング）
+      let costQuery = supabase
         .from('cost_entries')
         .select('amount, entry_type')
+      
+      if (cid) {
+        costQuery = costQuery.eq('company_id', cid)
+      }
+
+      const { data: costEntries, error: costError } = await costQuery
 
       if (costError) {
         console.error('原価データ取得エラー:', costError)
         throw costError
       }
 
-      // 3. 作業日報データを取得（今月分）
+      // 3. 作業日報データを取得（今月分、会社スコープでフィルタリング）
       const currentDate = new Date()
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
       
-      const { data: dailyReports, error: reportsError } = await supabase
+      let reportsQuery = supabase
         .from('daily_reports')
         .select('id, date')
         .gte('date', startOfMonth.toISOString().slice(0, 10))
         .lte('date', endOfMonth.toISOString().slice(0, 10))
+      
+      if (cid) {
+        reportsQuery = reportsQuery.eq('company_id', cid)
+      }
+
+      const { data: dailyReports, error: reportsError } = await reportsQuery
 
       if (reportsError) {
         console.error('作業日報取得エラー:', reportsError)
         throw reportsError
       }
 
-      // 4. ユーザーデータを取得
-      const { data: users, error: usersError } = await supabase
+      // 4. ユーザーデータを取得（会社スコープでフィルタリング）
+      let usersQuery = supabase
         .from('users')
         .select('id, role')
+      
+      if (cid) {
+        usersQuery = usersQuery.eq('company_id', cid)
+      }
+
+      const { data: users, error: usersError } = await usersQuery
 
       if (usersError) {
         console.error('ユーザーデータ取得エラー:', usersError)
@@ -107,9 +125,17 @@ export default function DashboardOverview() {
       let totalContractAmount = filteredProjects?.reduce((sum, p) => sum + (p.contract_amount || 0), 0) || 0
 
       try {
-        const { data: caddonBillings, error: caddonError } = await supabase
+        // CADDONの請求データを会社スコープで取得
+        let caddonQuery = supabase
           .from('caddon_billing')
           .select('total_amount')
+        
+        if (cid) {
+          // 会社IDが指定されている場合は、その会社のCADDONデータのみ取得
+          caddonQuery = caddonQuery.eq('company_id', cid)
+        }
+        
+        const { data: caddonBillings, error: caddonError } = await caddonQuery
 
         if (caddonError) {
           console.error('CADDON請求取得エラー:', caddonError)

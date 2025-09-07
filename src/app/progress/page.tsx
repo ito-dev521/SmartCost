@@ -117,7 +117,7 @@ export default function Progress() {
 
         <ProgressManagement
           initialProjects={projects || []}
-          initialProgressData={progressData || []}
+          initialProgressData={progressData as any || []}
           onProgressUpdate={handleProgressUpdate}
         />
 

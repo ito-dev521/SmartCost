@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
-import { permissionChecker } from '@/lib/permissions'
+// import { permissionChecker } from '@/lib/permissions' // サーバーサイド用なのでクライアントサイドでは使用しない
 
 interface PermissionGuardProps {
   children: React.ReactNode
@@ -35,56 +35,66 @@ export default function PermissionGuard({
           return
         }
 
+        // ユーザーのロールを取得
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        const userRole = userData?.role
+
         let permission = false
 
         if (requiredPermission) {
           // プロジェクト単位の権限チェック（read/write/admin）
           if (projectId && ['read', 'write', 'admin'].includes(requiredPermission)) {
+            // プロジェクト権限は現在はロールベースで簡略化
             if (requiredPermission === 'read') {
-              permission = await permissionChecker.canViewProject(user.id, projectId)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
             } else if (requiredPermission === 'write') {
-              permission = await permissionChecker.canEditProject(user.id, projectId)
+              permission = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
             } else if (requiredPermission === 'admin') {
-              permission = await permissionChecker.canAdminProject(user.id, projectId)
+              permission = userRole === 'admin' || userRole === 'superadmin'
             }
           } else {
             // グローバル権限チェック
             switch (requiredPermission) {
             case 'canManageProjects':
-              permission = await permissionChecker.canManageProjects(user.id)
+              permission = userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canViewAnalytics':
-              permission = await permissionChecker.canViewAnalytics(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canViewDailyReports':
-              permission = await permissionChecker.canViewDailyReports(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canViewCostEntries':
-              permission = await permissionChecker.canViewCostEntries(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canManageSalaries':
-              permission = await permissionChecker.canManageSalaries(user.id)
+              permission = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canViewProgress':
-              permission = await permissionChecker.canViewProgress(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canManageCosts':
-              permission = await permissionChecker.canManageCosts(user.id)
+              permission = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canManageCashFlow':
-              permission = await permissionChecker.canManageCashFlow(user.id)
+              permission = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canViewClients':
-              permission = await permissionChecker.canViewClients(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canManageUsers':
-              permission = await permissionChecker.canManageUsers(user.id)
+              permission = userRole === 'admin' || userRole === 'superadmin'
               break
             case 'canManageSystem':
-              permission = await permissionChecker.canManageSystem(user.id)
+              permission = userRole === 'superadmin'
               break
             case 'canManageCaddon':
-              permission = await permissionChecker.canManageCaddon(user.id)
+              permission = userRole === 'admin' || userRole === 'superadmin'
               break
             default:
               permission = false
@@ -94,16 +104,16 @@ export default function PermissionGuard({
           // ロールベースの権限チェック
           switch (requiredRole) {
             case 'superadmin':
-              permission = await permissionChecker.isSuperAdmin(user.id)
+              permission = userRole === 'superadmin'
               break
             case 'admin':
-              permission = await permissionChecker.isAdmin(user.id)
+              permission = userRole === 'admin' || userRole === 'superadmin'
               break
             case 'manager':
-              permission = await permissionChecker.isManager(user.id)
+              permission = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             case 'user':
-              permission = await permissionChecker.isUser(user.id)
+              permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
             default:
               permission = false

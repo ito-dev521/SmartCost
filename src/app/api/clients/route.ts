@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-api'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { permissionChecker } from '@/lib/permissions'
 import { Client } from '@/types/database'
 
@@ -7,92 +8,67 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔍 /api/clients: GETリクエスト受信')
 
-    // AuthorizationヘッダーからJWTトークンを取得
-    const authHeader = request.headers.get('authorization')
-    console.log('🔑 /api/clients: Authorizationヘッダー:', authHeader ? '存在' : 'なし')
-
-    let userId = null
-    let token = null
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7)
-      try {
-        // JWTデコード（簡易版）
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
-        userId = payload.sub
-        console.log('👤 /api/clients: JWTから取得したユーザーID:', userId)
-      } catch (error) {
-        console.error('❌ /api/clients: JWTデコードエラー:', error)
+    // Supabaseクライアントを作成
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+        },
       }
-    }
+    )
 
-    // クッキーからセッション情報を取得
-    const cookieHeader = request.headers.get('cookie')
-    if (cookieHeader && !userId) {
-      console.log('🍪 /api/clients: クッキーヘッダーから認証情報を取得')
-      const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-        const [name, value] = cookie.trim().split('=')
-        acc[name] = value
-        return acc
-      }, {} as Record<string, string>)
-
-      // sb-access-tokenがあれば使用
-      if (cookies['sb-access-token']) {
-        try {
-          token = cookies['sb-access-token']
-          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
-          userId = payload.sub
-          console.log('🍪 /api/clients: クッキーから取得したユーザーID:', userId)
-        } catch (error) {
-          console.error('❌ /api/clients: クッキートークンデコードエラー:', error)
-        }
-      }
-    }
-
-    if (!userId) {
-      console.error('❌ /api/clients: 認証情報なし')
+    // 認証チェック
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('❌ /api/clients: 認証が必要')
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
-    // Supabaseクライアントを作成（サービスロールキーを使用）
-    const supabase = createClient()
-    console.log('✅ /api/clients: Supabaseクライアント作成完了')
+    console.log('👤 /api/clients: 認証済みユーザー:', user.id)
 
-    // 権限チェック（デバッグ用に一時的に無効化）
-    console.log('🔍 /api/clients: 権限チェック開始', { userId })
-    
-    // デバッグ用に一時的に権限チェックをスキップ
-    const canViewClients = true // デバッグ用に一時的にtrueに設定
-    console.log('📋 /api/clients: 権限チェック結果（デバッグ用）:', { canViewClients })
-    
-    // 権限チェックを一時的に無効化
-    if (false && !canViewClients) { // 強制的にfalseにして権限チェックをスキップ
-      console.log('❌ /api/clients: 権限なし')
-      return NextResponse.json({ error: '権限がありません' }, { status: 403 })
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      console.error('❌ /api/clients: ユーザー情報取得エラー:', userError)
+      return NextResponse.json({ error: 'ユーザー情報の取得に失敗しました' }, { status: 500 })
     }
 
-    // companyId クエリでフィルタ
-    const { searchParams } = new URL(request.url)
-    let companyId = searchParams.get('companyId')
-    if (!companyId) {
-      const cookieHeader = request.headers.get('cookie') || ''
-      const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
-      if (m) companyId = decodeURIComponent(m[1])
-    }
-    console.log('🔍 /api/clients: 取得フィルタ companyId=', companyId)
+    const companyId = userData.company_id
+    console.log('🏢 /api/clients: 会社ID:', companyId)
 
-    let query = supabase.from('clients').select('*').order('name', { ascending: true })
-    if (companyId) {
-      query = query.eq('company_id', companyId)
-    }
-
-    const { data: clients, error } = await query
+    const { data: clients, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('name', { ascending: true })
 
     if (error) {
-      console.error('クライアント取得エラー:', error)
+      console.error('❌ /api/clients: クライアント取得エラー:', error)
       return NextResponse.json({ error: 'クライアントの取得に失敗しました' }, { status: 500 })
     }
 
+    console.log('✅ /api/clients: クライアント取得成功:', clients?.length || 0, '件')
     return NextResponse.json({ clients })
   } catch (error) {
     console.error('クライアント取得エラー:', error)
@@ -102,24 +78,56 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
-
-    // デバッグ用に認証チェックを一時的に無効化
-    console.log('🔍 /api/clients POST: 認証チェックをスキップ（デバッグ用）')
+    console.log('🔍 /api/clients POST: クライアント作成開始')
     
-    // 認証チェックを一時的に無効化
-    let session = null
-    try {
-      const authResult = await supabase.auth.getSession()
-      session = authResult.data.session
-      console.log('📋 /api/clients POST: セッション情報:', session ? '存在' : 'なし')
-    } catch (authError) {
-      console.log('⚠️ /api/clients POST: 認証エラー、処理を続行:', authError)
+    // Supabaseクライアントを作成
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+        },
+      }
+    )
+
+    // 認証チェック
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('❌ /api/clients POST: 認証が必要')
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
-    // 権限チェックを一時的に無効化
-    console.log('🔍 /api/clients POST: 権限チェックをスキップ（デバッグ用）')
-    const isManager = true // デバッグ用に一時的にtrueに設定
+    console.log('👤 /api/clients POST: 認証済みユーザー:', user.id)
+
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      console.error('❌ /api/clients POST: ユーザー情報取得エラー:', userError)
+      return NextResponse.json({ error: 'ユーザー情報の取得に失敗しました' }, { status: 500 })
+    }
+
+    const companyId = userData.company_id
+    console.log('🏢 /api/clients POST: 会社ID:', companyId)
 
     const body = await request.json()
     const { 
@@ -138,21 +146,10 @@ export async function POST(request: NextRequest) {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'クライアント名は必須です' }, { status: 400 })
     }
-
-    // デバッグ用に一時的に部署情報チェックをスキップ
-    console.log('🔍 /api/clients POST: 部署情報チェックをスキップ（デバッグ用）')
-    
-    // 一時的にデフォルトの会社IDを使用
-    const defaultCompanyId = '00000000-0000-0000-0000-000000000000' // デバッグ用の仮のID
-    console.log('📋 /api/clients POST: デフォルト会社IDを使用:', defaultCompanyId)
-
-    // クライアント作成時に一意のcompany_idを生成
-    const uniqueCompanyId = crypto.randomUUID()
-    console.log('📋 /api/clients POST: 生成されたcompany_id:', uniqueCompanyId)
     
     // クライアントを作成
     const clientData = {
-      company_id: uniqueCompanyId,
+      company_id: companyId, // 現在ログインしているユーザーの会社IDを使用
       name: name.trim(),
       phone: phone?.trim() || null,
       address: address?.trim() || null,
@@ -164,6 +161,8 @@ export async function POST(request: NextRequest) {
       payment_cycle_description: payment_cycle_description || '',
     }
 
+    console.log('💾 /api/clients POST: クライアントデータ:', clientData)
+
     const { data: client, error } = await supabase
       .from('clients')
       .insert([clientData])
@@ -171,10 +170,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('クライアント作成エラー:', error)
+      console.error('❌ /api/clients POST: クライアント作成エラー:', error)
       return NextResponse.json({ error: 'クライアントの作成に失敗しました' }, { status: 500 })
     }
 
+    console.log('✅ /api/clients POST: クライアント作成成功:', client)
     return NextResponse.json({ client }, { status: 201 })
   } catch (error) {
     console.error('クライアント作成エラー:', error)

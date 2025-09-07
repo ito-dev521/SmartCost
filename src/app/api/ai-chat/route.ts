@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@/lib/supabase-server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 // システムプロンプト - 原価管理システムに特化
 const SYSTEM_PROMPT = `
@@ -73,19 +74,56 @@ const SYSTEM_PROMPT = `
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔍 /api/ai-chat: AIチャットリクエスト受信')
+    
     // 認証チェック
-    const supabase = createServerComponentClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+        },
+      }
+    )
 
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('❌ /api/ai-chat: 認証が必要')
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
+
+    console.log('👤 /api/ai-chat: 認証済みユーザー:', user.id)
 
     const { message } = await request.json()
 
     if (!message) {
       return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
     }
+
+    console.log('💬 /api/ai-chat: メッセージ受信:', message)
+
+    // OpenAI APIキーの確認
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ /api/ai-chat: OpenAI APIキーが設定されていません')
+      return NextResponse.json({ error: 'AIサービスが利用できません' }, { status: 500 })
+    }
+
+    console.log('🤖 /api/ai-chat: OpenAI API呼び出し開始')
 
     // OpenAI API呼び出し
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -112,7 +150,9 @@ export async function POST(request: NextRequest) {
     })
 
     if (!openaiResponse.ok) {
-      console.error('OpenAI API error:', openaiResponse.status, openaiResponse.statusText)
+      console.error('❌ /api/ai-chat: OpenAI API error:', openaiResponse.status, openaiResponse.statusText)
+      const errorText = await openaiResponse.text()
+      console.error('❌ /api/ai-chat: OpenAI API error details:', errorText)
       return NextResponse.json(
         { error: 'AIの応答生成中にエラーが発生しました' },
         { status: 500 }
@@ -123,12 +163,14 @@ export async function POST(request: NextRequest) {
     const response = data.choices[0]?.message?.content
 
     if (!response) {
+      console.error('❌ /api/ai-chat: AIの応答が正しく生成されませんでした')
       return NextResponse.json(
         { error: 'AIの応答が正しく生成されませんでした' },
         { status: 500 }
       )
     }
 
+    console.log('✅ /api/ai-chat: AI応答生成成功')
     return NextResponse.json({ response })
 
   } catch (error) {

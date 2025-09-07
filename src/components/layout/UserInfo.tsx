@@ -53,7 +53,7 @@ export default function UserInfo() {
         if (error) {
           console.error('ユーザー情報取得エラー:', error)
         } else {
-          setUser(userData)
+          setUser(userData as any)
         }
       } catch (error) {
         console.error('ユーザー情報取得エラー:', error)

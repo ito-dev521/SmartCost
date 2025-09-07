@@ -31,13 +31,25 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
   const [showForm, setShowForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<User | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const supabase = createClientComponentClient()
   const searchParams = useSearchParams()
 
   useEffect(() => {
+    fetchCurrentUser()
     fetchUsers()
     fetchDepartments()
   }, [searchParams])
+
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      setCurrentUserId(session?.user?.id || null)
+    } catch (error) {
+      console.error('❌ UserManagement: 現在のユーザー取得エラー:', error)
+      setCurrentUserId(null)
+    }
+  }
 
   const fetchUsers = async () => {
     try {
@@ -56,8 +68,27 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
       console.log('🔑 UserManagement: アクセストークン取得成功')
 
-      const companyId = searchParams?.get('companyId') || ''
-      const endpoint = `/api/users${companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''}`
+      // 現在ログインしているユーザーの会社IDを取得
+      if (!session?.user?.id) {
+        throw new Error('認証セッションが無効です')
+      }
+
+      // ユーザーの会社IDを取得
+      const { data: currentUser, error: currentUserError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', session.user.id)
+        .single()
+
+      if (currentUserError || !currentUser?.company_id) {
+        console.error('❌ UserManagement: 現在のユーザーの会社ID取得エラー:', currentUserError)
+        throw new Error('ユーザーの会社情報を取得できませんでした')
+      }
+
+      const companyId = currentUser.company_id
+      console.log('🏢 UserManagement: 会社ID:', companyId)
+      
+      const endpoint = `/api/users?companyId=${encodeURIComponent(companyId)}`
       const response = await fetch(endpoint, {
         method: 'GET',
         headers: {
@@ -196,6 +227,11 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
     return matchesSearch && matchesRole
   })
 
+  // 現在ログインしているユーザーかどうかを判定する関数
+  const isCurrentUser = (user: User) => {
+    return currentUserId === user.id
+  }
+
   const roleConfig = {
     admin: { label: '管理者', color: 'bg-purple-100 text-purple-800' },
     superadmin: { label: 'スーパー管理者', color: 'bg-red-100 text-red-800' },
@@ -318,7 +354,7 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         </div>
         <div className="divide-y divide-gray-200">
           {filteredUsers.map((user) => (
-            <div key={user.id} className="p-6 hover:bg-gray-50">
+            <div key={user.id} className={`p-6 hover:bg-gray-50 ${isCurrentUser(user) ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex-shrink-0 h-12 w-12">
@@ -331,6 +367,11 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-lg font-medium text-gray-900">{user.name}</h4>
+                      {isCurrentUser(user) && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          現在のユーザー
+                        </span>
+                      )}
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleConfig[user.role as keyof typeof roleConfig]?.color || 'bg-gray-100 text-gray-800'}`}>
                         {roleConfig[user.role as keyof typeof roleConfig]?.label || user.role}
                       </span>
@@ -355,13 +396,24 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
                     <Edit className="h-4 w-4" />
                     編集
                   </button>
-                  <button
-                    onClick={() => setDeleteConfirm(user)}
-                    className="text-red-600 hover:text-red-800 text-sm px-3 py-1 rounded-md hover:bg-red-50 transition-colors flex items-center gap-1"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    削除
-                  </button>
+                  {isCurrentUser(user) ? (
+                    <button
+                      disabled
+                      className="text-gray-400 text-sm px-3 py-1 rounded-md bg-gray-100 cursor-not-allowed flex items-center gap-1"
+                      title="自分自身のアカウントは削除できません"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      削除不可
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirm(user)}
+                      className="text-red-600 hover:text-red-800 text-sm px-3 py-1 rounded-md hover:bg-red-50 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      削除
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

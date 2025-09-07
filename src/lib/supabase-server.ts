@@ -61,3 +61,8 @@ export const createServerComponentClient = (request?: Request) => {
   }
 }
 
+// APIルート用Supabaseクライアント
+export const createClient = (request?: Request) => {
+  return createServerComponentClient(request)
+}
+

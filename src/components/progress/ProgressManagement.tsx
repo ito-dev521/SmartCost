@@ -242,7 +242,7 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
             // フォールバック：ページリロード
             console.log('コールバックなし：ページリロード実行')
             setTimeout(() => {
-              window.location.reload(true)
+              window.location.reload()
             }, 1500)
           }
 

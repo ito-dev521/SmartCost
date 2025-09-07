@@ -26,6 +26,21 @@ export default async function CaddonPage() {
     userCompanyId = userData?.company_id
   }
 
+  // CADDONが有効かどうかをチェック
+  if (userCompanyId) {
+    const { data: companySettings } = await supabase
+      .from('company_settings')
+      .select('caddon_enabled')
+      .eq('company_id', userCompanyId)
+      .single()
+
+    const caddonEnabled = companySettings?.caddon_enabled ?? true
+    if (!caddonEnabled) {
+      // CADDONが無効の場合はダッシュボードにリダイレクト
+      redirect('/dashboard')
+    }
+  }
+
   // クライアントデータを取得（会社IDでフィルタリング）
   const { data: clients, error: clientsError } = await supabase
     .from('clients')
