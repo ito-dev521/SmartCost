@@ -258,6 +258,21 @@ export default function AnalyticsDashboard() {
     fetchData()
   }, [])
 
+  // CADDON請求データの更新をリッスン
+  useEffect(() => {
+    const handleCaddonBillingUpdate = (event: CustomEvent) => {
+      console.log('🔔 CADDON請求データが更新されました:', event.detail)
+      // データを再取得
+      fetchData()
+    }
+
+    window.addEventListener('caddonBillingUpdated', handleCaddonBillingUpdate as EventListener)
+    
+    return () => {
+      window.removeEventListener('caddonBillingUpdated', handleCaddonBillingUpdate as EventListener)
+    }
+  }, [])
+
   // 認証状況を確認
   const checkAuth = async () => {
     try {

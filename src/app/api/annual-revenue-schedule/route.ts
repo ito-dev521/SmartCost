@@ -17,6 +17,7 @@ interface CaddonBilling {
   id: string
   billing_month: string
   amount: number
+  total_amount: number
 }
 
 interface SplitBilling {
@@ -149,7 +150,7 @@ export async function GET(request: NextRequest) {
     // CADDON請求データを取得（会社IDでフィルタリング）
     const { data: caddonBillings, error: caddonError } = await supabase
       .from('caddon_billing')
-      .select('*')
+      .select('id, billing_month, amount, total_amount, project_id')
       .eq('company_id', userData.company_id)
       .order('billing_month')
 
@@ -224,8 +225,9 @@ export async function GET(request: NextRequest) {
           const projectBillings = caddonBillings?.filter(billing => billing.project_id === project.id)
           if (projectBillings && projectBillings.length > 0) {
             projectBillings.forEach(billing => {
-              // total_amountフィールドを使用（年間入金予定表の表示と同じ）
-              const amount = billing.total_amount || billing.amount || 0
+              // amountフィールドを優先使用（CADDON管理と整合性を保つ）
+              const amount = billing.amount || billing.total_amount || 0
+              console.log(`CADDON請求データ: ${billing.billing_month} - amount: ${billing.amount}, total_amount: ${billing.total_amount}, 使用値: ${amount}`)
               if (amount > 0) {
                 const billingDate = new Date(billing.billing_month)
                 const key = `${billingDate.getFullYear()}-${String(billingDate.getMonth() + 1).padStart(2, '0')}`

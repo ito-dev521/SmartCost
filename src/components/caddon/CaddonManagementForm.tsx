@@ -25,6 +25,7 @@ interface CaddonBilling {
   total_amount: number
   billing_status: string
   notes: string
+  company_id?: string
 }
 
 interface CaddonManagementFormProps {
@@ -228,12 +229,31 @@ export default function CaddonManagementForm({
 
     setSaving(true)
     try {
+      // 現在のユーザーの会社IDを取得
+      const { data: { user } } = await supabase.auth.getUser()
+      let userCompanyId = null
+      
+      if (user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', user.id)
+          .single()
+        userCompanyId = userData?.company_id
+      }
+
+      // 保存用データにcompany_idを追加
+      const saveData = {
+        ...formData,
+        company_id: userCompanyId
+      }
+
       let result
       if (editingEntry?.id) {
         // 編集モード：更新
         const { data, error } = await supabase
           .from('caddon_billing')
-          .update(formData)
+          .update(saveData)
           .eq('id', editingEntry.id)
           .select()
           .single()
@@ -244,7 +264,7 @@ export default function CaddonManagementForm({
         // 新規作成モード：挿入
         const { data, error } = await supabase
           .from('caddon_billing')
-          .insert([formData])
+          .insert([saveData])
           .select()
           .single()
         
@@ -253,6 +273,15 @@ export default function CaddonManagementForm({
       }
 
       alert(editingEntry ? 'CADDON請求データを更新しました' : 'CADDON請求データを保存しました')
+      
+      // 年間入金予定表のデータ更新をトリガー
+      // カスタムイベントを発火して他のコンポーネントに通知
+      window.dispatchEvent(new CustomEvent('caddonBillingUpdated', {
+        detail: { 
+          action: editingEntry?.id ? 'update' : 'create',
+          data: result 
+        }
+      }))
       
       // フォームをリセット
       setFormData({
@@ -325,6 +354,16 @@ export default function CaddonManagementForm({
       if (error) throw error
 
       alert('CADDON請求データを削除しました')
+      
+      // 年間入金予定表のデータ更新をトリガー
+      // カスタムイベントを発火して他のコンポーネントに通知
+      window.dispatchEvent(new CustomEvent('caddonBillingUpdated', {
+        detail: { 
+          action: 'delete',
+          data: entry 
+        }
+      }))
+      
       await fetchCaddonBillings()
     } catch (error) {
       console.error('削除エラー:', error)

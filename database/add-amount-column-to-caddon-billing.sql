@@ -1,0 +1,30 @@
+-- caddon_billingテーブルにamountカラムを追加
+-- 年間入金予定表との整合性を確保
+
+-- 1. amountカラムを追加
+ALTER TABLE caddon_billing ADD COLUMN amount NUMERIC DEFAULT 0;
+
+-- 2. 既存データのamountをtotal_amountで更新
+UPDATE caddon_billing SET amount = total_amount;
+
+-- 3. 更新結果を確認
+SELECT 
+    COUNT(*) as total_records,
+    COUNT(total_amount) as records_with_total_amount,
+    COUNT(amount) as records_with_amount,
+    COUNT(*) - COUNT(amount) as records_without_amount
+FROM caddon_billing;
+
+-- 4. サンプルデータを確認
+SELECT 
+    id,
+    billing_month,
+    caddon_usage_fee,
+    initial_setup_fee,
+    support_fee,
+    total_amount,
+    amount,
+    (caddon_usage_fee + initial_setup_fee + support_fee) as calculated_total
+FROM caddon_billing
+ORDER BY billing_month DESC
+LIMIT 5;
