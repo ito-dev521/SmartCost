@@ -33,6 +33,8 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
   const [progressRate, setProgressRate] = useState(0)
   const [loading, setLoading] = useState(false)
   const [forceUpdate, setForceUpdate] = useState(0)
+  
+  const supabase = createClientComponentClient()
 
   // デバッグ: コンポーネントマウント時にプロジェクトデータを確認
   useEffect(() => {
@@ -162,11 +164,32 @@ export default function ProgressManagement({ initialProjects, initialProgressDat
       setSubmitMessage(null)
 
       try {
+        // 現在のユーザーの会社IDを取得
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError || !user) {
+          console.error('ユーザー取得エラー:', userError)
+          setSubmitMessage({ type: 'error', message: 'ユーザー情報の取得に失敗しました' })
+          return
+        }
+
+        const { data: userData, error: userDataError } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', user.id)
+          .single()
+
+        if (userDataError || !userData) {
+          console.error('ユーザー会社ID取得エラー:', userDataError)
+          setSubmitMessage({ type: 'error', message: '会社情報の取得に失敗しました' })
+          return
+        }
+
         const requestData = {
           project_id: selectedProjectId,
           progress_rate: progressRate,
           progress_date: progressDate,
-          notes: notes.trim() || null
+          notes: notes.trim() || null,
+          companyId: userData.company_id
         }
 
         console.log('APIリクエストデータ:', requestData)

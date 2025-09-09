@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClientComponentClient } from '@/lib/supabase'
 import { FiscalInfo } from '@/types/database'
-import { AlertCircle, Save, Building2 } from 'lucide-react'
+import { AlertCircle, Save, Building2, Calendar } from 'lucide-react'
 import { ChevronDown } from 'lucide-react'
+import FiscalPeriodChangeModal from './FiscalPeriodChangeModal'
 
 export default function FiscalInfoSettings() {
   const [fiscalInfo, setFiscalInfo] = useState<Partial<FiscalInfo>>({
@@ -22,6 +23,7 @@ export default function FiscalInfoSettings() {
   const [pastYears, setPastYears] = useState<number[]>([])
   const [readonlyView, setReadonlyView] = useState<boolean>(false)
   const [rolling, setRolling] = useState<boolean>(false)
+  const [showPeriodChangeModal, setShowPeriodChangeModal] = useState<boolean>(false)
 
   useEffect(() => {
     fetchFiscalInfo()
@@ -227,6 +229,28 @@ export default function FiscalInfoSettings() {
             </div>
           )
         })()}
+        
+        {/* 決算期変更 */}
+        <div className="p-4 border rounded-md bg-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 font-medium">決算期変更</p>
+              <p className="text-xs text-gray-500 mt-1">決算期の途中変更（年度・決算月の変更）</p>
+            </div>
+            <button
+              onClick={() => setShowPeriodChangeModal(true)}
+              disabled={readonlyView}
+              className="px-4 py-2 text-sm rounded-md text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              決算期変更
+            </button>
+          </div>
+          {readonlyView && (
+            <div className="mt-2 text-xs text-yellow-700">過年度閲覧中は実行できません。現行年度に戻してください。</div>
+          )}
+        </div>
+        
         {/* 過年度の閲覧切替 */}
         <div className="p-4 border rounded-md bg-gray-50">
           <div className="flex items-center justify-between">
@@ -374,6 +398,18 @@ export default function FiscalInfoSettings() {
           </div>
         </div>
       </div>
+      
+      {/* 決算期変更モーダル */}
+      <FiscalPeriodChangeModal
+        isOpen={showPeriodChangeModal}
+        onClose={() => setShowPeriodChangeModal(false)}
+        currentFiscalYear={fiscalInfo.fiscal_year || new Date().getFullYear()}
+        currentSettlementMonth={fiscalInfo.settlement_month || 3}
+        onSuccess={() => {
+          fetchFiscalInfo()
+          setMessage({ type: 'success', text: '決算期変更が完了しました' })
+        }}
+      />
     </div>
   )
 }

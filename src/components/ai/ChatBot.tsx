@@ -26,6 +26,12 @@ export default function ChatBot() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Supabaseクライアントの初期化
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   // 自動スクロール
   const scrollToBottom = () => {
@@ -72,19 +78,25 @@ export default function ChatBot() {
   const checkServerAuthStatus = async () => {
     try {
       console.log('🔍 ChatBot: サーバー認証状態確認開始')
-      const response = await fetch('/api/debug-auth', {
-        method: 'GET',
-        credentials: 'include'
-      })
       
-      if (response.ok) {
-        const data = await response.json()
-        console.log('✅ ChatBot: サーバー認証状態:', data)
-        return data.success && data.user
-      } else {
-        console.error('❌ ChatBot: サーバー認証状態確認失敗:', response.status)
+      // セッション状態を確認
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('❌ ChatBot: セッション取得エラー:', error)
         return false
       }
+      
+      if (!session) {
+        console.error('❌ ChatBot: セッションが存在しません')
+        return false
+      }
+      
+      console.log('✅ ChatBot: サーバー認証状態:', {
+        user_id: session.user.id,
+        email: session.user.email
+      })
+      return true
     } catch (error) {
       console.error('❌ ChatBot: サーバー認証状態確認エラー:', error)
       return false
@@ -139,13 +151,26 @@ export default function ChatBot() {
       setMessages(prev => [...prev, newMessage])
     } catch (error) {
       console.error('❌ ChatBot: チャットエラー:', error)
-      const errorMessage: Message = {
+      
+      let errorMessage = '申し訳ございません。エラーが発生しました。'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('認証') || error.message.includes('ログイン')) {
+          errorMessage = 'ログインが必要です。ページを再読み込みしてログインし直してください。'
+        } else if (error.message.includes('API request failed')) {
+          errorMessage = 'サーバーとの通信でエラーが発生しました。しばらく待ってから再度お試しください。'
+        } else {
+          errorMessage = `エラー: ${error.message}`
+        }
+      }
+      
+      const errorMsg: Message = {
         id: Date.now().toString(),
-        content: `申し訳ございません。エラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}。しばらく待ってから再度お試しください。`,
+        content: errorMessage,
         role: 'assistant',
         timestamp: new Date()
       }
-      setMessages(prev => [...prev, errorMessage])
+      setMessages(prev => [...prev, errorMsg])
     } finally {
       setIsLoading(false)
     }

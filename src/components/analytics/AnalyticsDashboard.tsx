@@ -9,6 +9,7 @@ import {
   ChevronUp
 } from 'lucide-react'
 import CategoryCostChart from './CategoryCostChart'
+import ProgressCostAnalysis from './ProgressCostAnalysis'
 
 interface Project {
   id: string
@@ -288,34 +289,61 @@ export default function AnalyticsDashboard() {
     try {
       setLoading(true)
       
-      // プロジェクトデータを取得
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        setLoading(false)
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setLoading(false)
+        return
+      }
+
+      console.log('分析ページ - ユーザーの会社ID:', userData.company_id)
+      
+      // プロジェクトデータを取得（会社IDでフィルタリング）
       const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
-      // 原価エントリーデータを取得
+      // 原価エントリーデータを取得（会社IDでフィルタリング）
       const { data: costEntriesData } = await supabase
         .from('cost_entries')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('entry_date', { ascending: false })
 
-      // 予算科目データを取得
+      // 予算科目データを取得（会社IDでフィルタリング）
       const { data: categoriesData } = await supabase
         .from('budget_categories')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('level, sort_order')
 
-      // クライアントデータを取得
+      // クライアントデータを取得（会社IDでフィルタリング）
       const { data: clientsData } = await supabase
         .from('clients')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('name')
 
-      // CADDON請求データを取得
+      // CADDON請求データを取得（会社IDでフィルタリング）
       const { data: caddonBillingsData } = await supabase
         .from('caddon_billing')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('billing_month')
 
       // 決算情報を取得（管理者ページで設定されたクッキーから）
@@ -331,12 +359,13 @@ export default function AnalyticsDashboard() {
         console.error('決算情報取得エラー:', error)
       }
 
-      // フォールバック：Supabaseから取得
+      // フォールバック：Supabaseから取得（会社IDでフィルタリング）
       if (!fiscalInfoData) {
         console.log('管理者ページ設定が見つからないため、Supabaseから取得します')
         const { data: supabaseData } = await supabase
           .from('fiscal_info')
           .select('*')
+          .eq('company_id', userData.company_id)
           .order('fiscal_year', { ascending: false })
           .limit(1)
         fiscalInfoData = supabaseData
@@ -963,8 +992,15 @@ export default function AnalyticsDashboard() {
           throw new Error(`分割入金データの保存に失敗しました (${response.status}: ${response.statusText})`)
         }
         
+        // レスポンスの内容を確認
+        const responseData = await response.json()
+        if (!responseData.success) {
+          console.error('APIレスポンス失敗:', responseData)
+          throw new Error(responseData.error || '分割入金データの保存に失敗しました')
+        }
+        
         if (process.env.NODE_ENV === 'development') {
-          console.log('分割入金データ保存成功:', { projectId, month, amount })
+          console.log('分割入金データ保存成功:', { projectId, month, amount, responseData })
         }
       }
     } catch (error) {
@@ -2262,6 +2298,11 @@ export default function AnalyticsDashboard() {
           </div>
         </div>
       )}
+
+      {/* 工事進行基準原価分析セクション */}
+      <div className="mt-8">
+        <ProgressCostAnalysis />
+      </div>
     </div>
   )
 }

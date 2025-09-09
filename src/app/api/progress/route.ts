@@ -7,13 +7,14 @@ export async function POST(request: NextRequest) {
     const requestBody = await request.json()
     console.log('リクエストボディ:', requestBody)
 
-    const { project_id, progress_rate, progress_date, notes } = requestBody
+    const { project_id, progress_rate, progress_date, notes, companyId } = requestBody
 
     console.log('パラメータ確認:', {
       project_id,
       progress_rate,
       progress_date,
       notes,
+      companyId,
       progress_rate_type: typeof progress_rate
     })
 
@@ -21,6 +22,14 @@ export async function POST(request: NextRequest) {
       console.log('バリデーションエラー: 必須フィールドが不足')
       return NextResponse.json(
         { error: 'project_id, progress_rate, progress_date は必須です' },
+        { status: 400 }
+      )
+    }
+
+    if (!companyId) {
+      console.log('バリデーションエラー: companyIdが不足')
+      return NextResponse.json(
+        { error: 'companyId は必須です' },
         { status: 400 }
       )
     }
@@ -50,6 +59,7 @@ export async function POST(request: NextRequest) {
       progress_rate,
       progress_date,
       notes: notes || null,
+      company_id: companyId,
       created_by: generateUUID(),
       created_at: new Date().toISOString(),
     }

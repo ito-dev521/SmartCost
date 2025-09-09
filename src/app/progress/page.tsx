@@ -34,34 +34,41 @@ export default function Progress() {
   const fetchData = async () => {
     console.log('=== データ再取得開始 ===')
     try {
-      const cidMatch = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
-      const cid = cidMatch ? decodeURIComponent(cidMatch[1]) : ''
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        setLoading(false)
+        return
+      }
 
-      // プロジェクトデータの取得（会社スコープ）
-      let { data: projRows } = await supabase
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setLoading(false)
+        return
+      }
+
+      console.log('進捗管理ページ - ユーザーの会社ID:', userData.company_id)
+
+      // プロジェクトデータの取得（会社IDでフィルタリング）
+      const { data: projRows } = await supabase
         .from('projects')
         .select('id, company_id, client_id, name, business_number, status, client_name')
+        .eq('company_id', userData.company_id)
         .neq('business_number', 'IP')
         .not('name', 'ilike', '%一般管理費%')
         .not('business_number', 'ilike', 'C%')
         .not('name', 'ilike', '%CADDON%')
         .order('business_number', { ascending: true })
 
-      if (cid) {
-        const clientIds = Array.from(new Set((projRows || []).map(r => r.client_id).filter(Boolean))) as string[]
-        let clientCompanyMap: Record<string, string> = {}
-        if (clientIds.length > 0) {
-          const { data: clientRows } = await supabase
-            .from('clients')
-            .select('id, company_id')
-            .in('id', clientIds)
-          clientCompanyMap = Object.fromEntries((clientRows || []).map(cr => [cr.id, cr.company_id]))
-        }
-        projRows = (projRows || []).filter(p => p.company_id === cid || (p.client_id && clientCompanyMap[p.client_id as string] === cid)) as any
-      }
-
       // 進捗データの取得（APIで会社スコープ適用）
-      const progressEndpoint = `/api/progress${cid ? `?companyId=${encodeURIComponent(cid)}` : ''}`
+      const progressEndpoint = `/api/progress?companyId=${encodeURIComponent(userData.company_id)}`
       const progressRes = await fetch(progressEndpoint)
       const progressJson = await progressRes.json()
       const progress = progressJson.data

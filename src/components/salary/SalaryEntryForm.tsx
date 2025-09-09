@@ -510,6 +510,26 @@ export default function SalaryEntryForm({
     try {
       const currentUserId = await getCurrentUserId()
 
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        alert('ユーザー情報の取得に失敗しました')
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        alert('会社情報の取得に失敗しました')
+        return
+      }
+
       // 1. 給与エントリーを保存（配分結果と同じ値を保存）
       const totalWorkHours = laborCosts.reduce((sum, cost) => sum + cost.work_hours, 0)
       const totalWorkHoursWithOverhead = totalWorkHours + overheadHours // 一般管理費も含む総工数
@@ -524,6 +544,7 @@ export default function SalaryEntryForm({
         total_work_hours: totalWorkHoursWithOverhead, // 配分結果と同じ総工数
         hourly_rate: hourlyRate, // 配分結果と同じ時給単価
         notes: `${salaryForm.notes || ''} (配分結果: 総工数${totalWorkHoursWithOverhead}時間, 時給¥${hourlyRate.toLocaleString()}, 一般管理費¥${overheadLaborCost.toLocaleString()})`.trim(),
+        company_id: userData.company_id,
         created_by: currentUserId
       }
 
@@ -559,7 +580,8 @@ export default function SalaryEntryForm({
         project_id: cost.project_id,
         work_hours: cost.work_hours,
         hourly_rate: cost.hourly_rate,
-        labor_cost: cost.labor_cost
+        labor_cost: cost.labor_cost,
+        company_id: userData.company_id
       }))
 
       const { error: allocationError } = await supabase
@@ -576,6 +598,7 @@ export default function SalaryEntryForm({
         amount: cost.labor_cost,
         description: `${salaryForm.employee_name}の人件費（${workManagementType === 'hours' ? '工数' : '時間'}管理、${selectedPeriod.start}～${selectedPeriod.end}）`,
         entry_type: 'direct',
+        company_id: userData.company_id,
         created_by: currentUserId
       }))
 

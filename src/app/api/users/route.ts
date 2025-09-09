@@ -342,7 +342,8 @@ export async function POST(request: NextRequest) {
           email,
           name,
           role,
-          department_id: department_id || null
+          department_id: department_id || null,
+          company_id: userData.company_id // 現在のユーザーの会社IDを設定
         }
       ])
       .select()

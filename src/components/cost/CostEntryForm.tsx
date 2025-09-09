@@ -144,19 +144,41 @@ export default function CostEntryForm({
     try {
       setLoading(true)
       
-      // プロジェクトデータを再取得
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        setLoading(false)
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setLoading(false)
+        return
+      }
+      
+      // プロジェクトデータを再取得（会社IDでフィルタリング）
       const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('business_number', { ascending: true })  // 業務番号の若い順（昇順）でソート
 
-      // 予算科目データを再取得
+      // 予算科目データを再取得（会社IDでフィルタリング）
       const { data: categoriesData } = await supabase
         .from('budget_categories')
         .select('*')
+        .eq('company_id', userData.company_id)
         .order('level, sort_order')
 
-      // 最近の原価エントリーを再取得（全件取得してフロントエンドで制御）
+      // 最近の原価エントリーを再取得（会社IDでフィルタリング）
       const { data: entriesData } = await supabase
         .from('cost_entries')
         .select(`
@@ -164,6 +186,7 @@ export default function CostEntryForm({
           projects:project_id(name),
           budget_categories:category_id(name)
         `)
+        .eq('company_id', userData.company_id)
         .order('created_at', { ascending: false })
 
       if (projectsData) setProjects(projectsData)
@@ -200,6 +223,26 @@ export default function CostEntryForm({
     try {
       const currentUserId = await getCurrentUserId()
       
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        alert('ユーザー情報の取得に失敗しました')
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        alert('会社情報の取得に失敗しました')
+        return
+      }
+      
       if (isEditing && editingEntry) {
         // 編集モード：既存エントリーを更新
         const { error } = await supabase
@@ -211,6 +254,7 @@ export default function CostEntryForm({
             amount: parseFloat(projectFormData.amount),
             description: projectFormData.description || null,
             entry_type: projectFormData.entry_type,
+            company_id: userData.company_id,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingEntry.id)
@@ -228,6 +272,7 @@ export default function CostEntryForm({
           amount: parseFloat(projectFormData.amount),
           description: projectFormData.description || null,
           entry_type: projectFormData.entry_type,
+          company_id: userData.company_id,
           created_by: currentUserId,
           created_at: new Date().toISOString(),
         }
@@ -271,6 +316,26 @@ export default function CostEntryForm({
     try {
       const currentUserId = await getCurrentUserId()
       
+      // 現在のユーザーの会社IDを取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('ユーザー取得エラー:', userError)
+        alert('ユーザー情報の取得に失敗しました')
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        alert('会社情報の取得に失敗しました')
+        return
+      }
+      
       if (isEditing && editingEntry) {
         // 編集モード：既存エントリーを更新
         const { error } = await supabase
@@ -282,6 +347,7 @@ export default function CostEntryForm({
             amount: parseFloat(generalFormData.amount),
             description: generalFormData.description || null,
             entry_type: generalFormData.entry_type,
+            company_id: userData.company_id,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingEntry.id)
@@ -300,6 +366,7 @@ export default function CostEntryForm({
           amount: parseFloat(generalFormData.amount),
           description: generalFormData.description || null,
           entry_type: generalFormData.entry_type,
+          company_id: userData.company_id,
           created_by: currentUserId,
           created_at: new Date().toISOString(),
         }

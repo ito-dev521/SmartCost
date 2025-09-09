@@ -1,10 +1,32 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    console.log('🔍 /api/split-billing POST: リクエスト開始')
+    
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+            }
+          },
+        },
+      }
+    )
     
     // ユーザー認証チェック（クッキーまたはBearerトークン）
     let user: { id?: string } | null = null
@@ -35,6 +57,38 @@ export async function POST(request: NextRequest) {
     }
 
     const { projectId, monthlyData } = await request.json()
+    console.log('📋 /api/split-billing POST: リクエストデータ:', { projectId, monthlyDataKeys: Object.keys(monthlyData || {}) })
+
+    // プロジェクトがユーザーの会社に属しているか確認
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('company_id')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !project) {
+      console.error('❌ /api/split-billing POST: プロジェクト取得エラー:', projectError)
+      return NextResponse.json({ error: 'プロジェクトが見つかりません' }, { status: 404 })
+    }
+    console.log('✅ /api/split-billing POST: プロジェクト確認完了:', project.company_id)
+
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userDataError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userDataError || !userData) {
+      console.error('❌ /api/split-billing POST: ユーザー会社ID取得エラー:', userDataError)
+      return NextResponse.json({ error: '会社情報の取得に失敗しました' }, { status: 500 })
+    }
+    console.log('✅ /api/split-billing POST: ユーザー会社ID確認完了:', userData.company_id)
+
+    // プロジェクトがユーザーの会社に属しているか確認
+    if (project.company_id !== userData.company_id) {
+      return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
+    }
 
     // 既存の分割入金データを削除
     const { error: deleteError } = await supabase
@@ -52,6 +106,7 @@ export async function POST(request: NextRequest) {
       project_id: projectId,
       billing_month: month,
       amount: amount as number,
+      company_id: userData.company_id,
       created_by: user?.id || null,
       created_at: new Date().toISOString()
     }))
@@ -76,7 +131,27 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+            }
+          },
+        },
+      }
+    )
     
     // ユーザー認証チェック（クッキーまたはBearerトークン）
     let user = null
@@ -106,15 +181,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
+    // ユーザーの会社IDを取得
+    const { data: userData, error: userDataError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.user.id)
+      .single()
+
+    if (userDataError || !userData) {
+      console.error('ユーザー会社ID取得エラー:', userDataError)
+      return NextResponse.json({ error: '会社情報の取得に失敗しました' }, { status: 500 })
+    }
+
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
     const allProjects = searchParams.get('allProjects')
 
     if (allProjects === 'true') {
-      // 全プロジェクトの分割入金データを一括取得
+      // 全プロジェクトの分割入金データを一括取得（会社IDフィルタリング）
       const { data, error } = await supabase
         .from('split_billing')
         .select('project_id, billing_month, amount')
+        .eq('company_id', userData.company_id)
         .order('project_id, billing_month')
 
       if (error) {
@@ -133,11 +221,29 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ projectData })
     } else if (projectId) {
+      // プロジェクトがユーザーの会社に属しているか確認
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('company_id')
+        .eq('id', projectId)
+        .single()
+
+      if (projectError || !project) {
+        console.error('プロジェクト取得エラー:', projectError)
+        return NextResponse.json({ error: 'プロジェクトが見つかりません' }, { status: 404 })
+      }
+
+      // プロジェクトがユーザーの会社に属しているか確認
+      if (project.company_id !== userData.company_id) {
+        return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
+      }
+
       // 単一プロジェクトの分割入金データを取得
       const { data, error } = await supabase
         .from('split_billing')
         .select('billing_month, amount')
         .eq('project_id', projectId)
+        .eq('company_id', userData.company_id)
         .order('billing_month')
 
       if (error) {

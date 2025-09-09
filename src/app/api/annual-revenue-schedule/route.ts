@@ -111,30 +111,57 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    // プロジェクトデータを取得
+    // ユーザーの会社IDを取得
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: '認証が必要です' },
+        { status: 401 }
+      )
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      return NextResponse.json(
+        { error: 'ユーザー情報の取得に失敗しました' },
+        { status: 500 }
+      )
+    }
+
+    console.log('🔍 年間入金予定表取得: 会社ID', userData.company_id)
+
+    // プロジェクトデータを取得（会社IDでフィルタリング）
     const { data: projects, error: projectsError } = await supabase
       .from('projects')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('business_number', { ascending: true })
 
     if (projectsError) {
       console.error('プロジェクトデータ取得エラー:', projectsError)
     }
 
-    // CADDON請求データを取得
+    // CADDON請求データを取得（会社IDでフィルタリング）
     const { data: caddonBillings, error: caddonError } = await supabase
       .from('caddon_billing')
       .select('*')
+      .eq('company_id', userData.company_id)
       .order('billing_month')
 
     if (caddonError) {
       console.error('CADDON請求データ取得エラー:', caddonError)
     }
 
-    // クライアントデータを取得（年間入金予定表と同じ計算に必要）
+    // クライアントデータを取得（会社IDでフィルタリング）
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select('*')
+      .eq('company_id', userData.company_id)
 
     if (clientsError) {
       console.error('クライアントデータ取得エラー:', clientsError)

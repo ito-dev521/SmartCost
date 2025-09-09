@@ -348,11 +348,27 @@ export default function DailyReportPage() {
       console.log('アクセストークン:', session?.access_token ? 'あり' : 'なし')
       if (sessionError) console.error('セッション取得エラー:', sessionError)
 
+      // ユーザーの会社IDを取得
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user?.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setProjects([])
+        return
+      }
+
+      console.log('ユーザーの会社ID:', userData.company_id)
+
       // プロジェクト取得（必要なフィールドのみ）
-      // プロジェクト一覧を取得（作業日報用なので一般管理費プロジェクトも含む）
+      // プロジェクト一覧を取得（作業日報用なので一般管理費プロジェクトも含む、会社IDでフィルタリング）
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, business_number')
+        .eq('company_id', userData.company_id)
         .order('name')
 
       if (error) {
@@ -414,10 +430,31 @@ export default function DailyReportPage() {
       }
 
       // monthlyEntriesにない場合は、データベースから直接取得
+      // 現在のユーザーの会社IDを取得
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('ユーザー情報が取得できません')
+        setEntries([])
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setEntries([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('daily_reports')
         .select('*, work_type')
         .eq('date', selectedDate)
+        .eq('company_id', userData.company_id)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -510,12 +547,33 @@ export default function DailyReportPage() {
       
       console.log('カレンダー用日付範囲:', startDate, '〜', endDate)
 
+      // 現在のユーザーの会社IDを取得
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('ユーザー情報が取得できません')
+        setMonthlyEntries([])
+        return
+      }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        setMonthlyEntries([])
+        return
+      }
+
       // まず基本データを取得
       const { data, error } = await supabase
         .from('daily_reports')
         .select('*, work_type')
         .gte('date', startDate)
         .lte('date', endDate)
+        .eq('company_id', userData.company_id)
         .order('date', { ascending: true })
 
       if (error) {
@@ -606,6 +664,17 @@ export default function DailyReportPage() {
         console.error('ユーザー情報が取得できません')
         return
       }
+
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        return
+      }
       
       const { data, error } = await supabase
         .from('daily_reports')
@@ -620,6 +689,7 @@ export default function DailyReportPage() {
         `)
         .gte('date', startDate)
         .lt('date', endDate)
+        .eq('company_id', userData.company_id)
         .order('date', { ascending: false })
 
       if (error) {
@@ -826,6 +896,18 @@ export default function DailyReportPage() {
         throw userError
       }
 
+      // ユーザーの会社IDを取得
+      const { data: userData, error: userDataError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user?.id)
+        .single()
+
+      if (userDataError || !userData) {
+        console.error('ユーザー会社ID取得エラー:', userDataError)
+        throw userDataError
+      }
+
       // 削除されたエントリーを処理
       if (deletedEntries.length > 0) {
         console.log('削除対象エントリー:', deletedEntries)
@@ -881,7 +963,8 @@ export default function DailyReportPage() {
             work_hours: entry.work_hours,
             work_type: entry.work_type || workManagementType,
             notes: entry.notes,
-            user_id: user?.id // ユーザーIDを明示的に追加
+            user_id: user?.id, // ユーザーIDを明示的に追加
+            company_id: userData.company_id // 会社IDを追加
           }
           console.log('挿入データ:', insertData)
           

@@ -122,9 +122,33 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
   const fetchDepartments = async () => {
     try {
       console.log('🔍 UserManagement: fetchDepartments開始')
+      
+      // 現在のユーザーの会社IDを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user?.id) {
+        console.error('❌ UserManagement: 認証セッションなし')
+        setDepartments([])
+        return
+      }
+
+      const { data: currentUser, error: currentUserError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', session.user.id)
+        .single()
+
+      if (currentUserError || !currentUser?.company_id) {
+        console.error('❌ UserManagement: 現在のユーザーの会社ID取得エラー:', currentUserError)
+        setDepartments([])
+        return
+      }
+
+      console.log('🏢 UserManagement: 部署取得 - 会社ID:', currentUser.company_id)
+      
       const { data, error } = await supabase
         .from('departments')
         .select('*')
+        .eq('company_id', currentUser.company_id)
         .order('name')
       
       if (error) {
