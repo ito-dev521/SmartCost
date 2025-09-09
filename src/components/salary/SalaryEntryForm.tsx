@@ -508,8 +508,6 @@ export default function SalaryEntryForm({
 
     setSaving(true)
     try {
-      const currentUserId = await getCurrentUserId()
-
       // 現在のユーザーの会社IDを取得
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
@@ -529,6 +527,8 @@ export default function SalaryEntryForm({
         alert('会社情報の取得に失敗しました')
         return
       }
+
+      const currentUserId = user.id
 
       // 1. 給与エントリーを保存（配分結果と同じ値を保存）
       const totalWorkHours = laborCosts.reduce((sum, cost) => sum + cost.work_hours, 0)
@@ -630,7 +630,22 @@ export default function SalaryEntryForm({
 
     } catch (error) {
       console.error('保存エラー:', error)
-      alert('データの保存に失敗しました')
+      
+      // 詳細なエラー情報を表示
+      let errorMessage = 'データの保存に失敗しました'
+      if (error && typeof error === 'object') {
+        if ('message' in error) {
+          errorMessage += `\n\nエラー詳細: ${error.message}`
+        }
+        if ('code' in error) {
+          errorMessage += `\nエラーコード: ${error.code}`
+        }
+        if ('details' in error) {
+          errorMessage += `\n詳細: ${error.details}`
+        }
+      }
+      
+      alert(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -639,7 +654,10 @@ export default function SalaryEntryForm({
   // 現在のユーザーIDを取得
   const getCurrentUserId = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    return user?.id || 'unknown'
+    if (!user?.id) {
+      throw new Error('ユーザーIDが取得できません')
+    }
+    return user.id
   }
 
   const formatCurrency = (amount: number) => {
