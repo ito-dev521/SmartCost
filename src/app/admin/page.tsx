@@ -4,8 +4,9 @@ import DepartmentManagement from '@/components/admin/DepartmentManagement'
 import WorkManagementSettings from '@/components/admin/WorkManagementSettings'
 import FiscalInfoSettings from '@/components/admin/FiscalInfoSettings'
 import BankBalanceHistoryManager from '@/components/admin/BankBalanceHistoryManager'
+import BudgetCategoryManagement from '@/components/admin/BudgetCategoryManagement'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { Shield, Building, Settings } from 'lucide-react'
+import { Shield, Building, Settings, FileText } from 'lucide-react'
 
 export default async function AdminPage() {
   console.log('🔍 Adminページ: 認証チェック開始')
@@ -108,6 +109,15 @@ export default async function AdminPage() {
           {/* 工数管理設定 */}
           <div>
             <WorkManagementSettings />
+          </div>
+
+          {/* 原価科目管理 */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              原価科目管理
+            </h2>
+            <BudgetCategoryManagement />
           </div>
 
           {/* 部署管理 */}

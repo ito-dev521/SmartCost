@@ -37,7 +37,6 @@ export default function CostEntryForm({
     entry_date: new Date().toISOString().split('T')[0],
     amount: '',
     description: '',
-    entry_type: 'direct',
   })
 
   // 一般管理費用のフォームデータ
@@ -47,7 +46,6 @@ export default function CostEntryForm({
     entry_date: new Date().toISOString().split('T')[0],
     amount: '',
     description: '',
-    entry_type: 'general_admin',
   })
 
   const supabase = createClientComponentClient()
@@ -71,7 +69,6 @@ export default function CostEntryForm({
         entry_date: entry.entry_date,
         amount: entry.amount.toString(),
         description: entry.description || '',
-        entry_type: entry.entry_type as 'direct' | 'indirect',
       })
     } else {
       // 一般管理費の場合
@@ -81,7 +78,6 @@ export default function CostEntryForm({
         entry_date: entry.entry_date,
         amount: entry.amount.toString(),
         description: entry.description || '',
-        entry_type: 'general_admin',
       })
     }
   }
@@ -97,7 +93,6 @@ export default function CostEntryForm({
       entry_date: new Date().toISOString().split('T')[0],
       amount: '',
       description: '',
-      entry_type: 'direct',
     })
     setGeneralFormData({
       category_id: '',
@@ -105,7 +100,6 @@ export default function CostEntryForm({
       entry_date: new Date().toISOString().split('T')[0],
       amount: '',
       description: '',
-      entry_type: 'general_admin',
     })
   }
 
@@ -253,7 +247,7 @@ export default function CostEntryForm({
             entry_date: projectFormData.entry_date,
             amount: parseFloat(projectFormData.amount),
             description: projectFormData.description || null,
-            entry_type: projectFormData.entry_type,
+            entry_type: 'direct', // プロジェクト原価は自動で直接費
             company_id: userData.company_id,
             updated_at: new Date().toISOString(),
           })
@@ -271,7 +265,7 @@ export default function CostEntryForm({
           entry_date: projectFormData.entry_date,
           amount: parseFloat(projectFormData.amount),
           description: projectFormData.description || null,
-          entry_type: projectFormData.entry_type,
+          entry_type: 'direct', // プロジェクト原価は自動で直接費
           company_id: userData.company_id,
           created_by: currentUserId,
           created_at: new Date().toISOString(),
@@ -346,7 +340,7 @@ export default function CostEntryForm({
             entry_date: generalFormData.entry_date,
             amount: parseFloat(generalFormData.amount),
             description: generalFormData.description || null,
-            entry_type: generalFormData.entry_type,
+            entry_type: 'general_admin', // その他経費は自動で間接費
             company_id: userData.company_id,
             updated_at: new Date().toISOString(),
           })
@@ -365,7 +359,7 @@ export default function CostEntryForm({
           entry_date: generalFormData.entry_date,
           amount: parseFloat(generalFormData.amount),
           description: generalFormData.description || null,
-          entry_type: generalFormData.entry_type,
+          entry_type: 'general_admin', // その他経費は自動で間接費
           company_id: userData.company_id,
           created_by: currentUserId,
           created_at: new Date().toISOString(),
@@ -424,25 +418,54 @@ export default function CostEntryForm({
       : project.name
   }
 
-  // プロジェクト原価用のカテゴリを取得
+  // プロジェクト原価用のカテゴリを取得（直接費系）
   const getProjectCategories = () => {
-    return categories.filter(c => 
-      // 指定された4つの原価のみを含める
-      c.name.includes('人件費') ||
-      c.name.includes('委託費') ||
-      c.name.includes('外注費') ||
-      c.name.includes('材料費')
-    )
+    return categories.filter(c => {
+      // レベル1の大分類で直接費系を判定
+      if (c.level === 1) {
+        return c.name.includes('人件費') || 
+               c.name.includes('委託費') || 
+               c.name.includes('外注費') || 
+               c.name.includes('材料費') ||
+               c.name.includes('直接費')
+      }
+      // レベル2,3の場合は親カテゴリを確認
+      if (c.level > 1 && c.parent_id) {
+        const parentCategory = categories.find(p => p.id === c.parent_id)
+        if (parentCategory) {
+          return parentCategory.name.includes('人件費') || 
+                 parentCategory.name.includes('委託費') || 
+                 parentCategory.name.includes('外注費') || 
+                 parentCategory.name.includes('材料費') ||
+                 parentCategory.name.includes('直接費')
+        }
+      }
+      return false
+    })
   }
 
-  // その他経費用のカテゴリを取得
+  // その他経費用のカテゴリを取得（間接費系）
   const getGeneralCategories = () => {
-    return categories.filter(c =>
-      // 一般管理費、開発費、間接費を含める
-      c.name.includes('一般管理費') ||
-      c.name.includes('開発費') ||
-      c.name.includes('間接費')
-    )
+    return categories.filter(c => {
+      // レベル1の大分類で間接費系を判定
+      if (c.level === 1) {
+        return c.name.includes('一般管理費') || 
+               c.name.includes('開発費') || 
+               c.name.includes('間接費') ||
+               c.name.includes('経費')
+      }
+      // レベル2,3の場合は親カテゴリを確認
+      if (c.level > 1 && c.parent_id) {
+        const parentCategory = categories.find(p => p.id === c.parent_id)
+        if (parentCategory) {
+          return parentCategory.name.includes('一般管理費') || 
+                 parentCategory.name.includes('開発費') || 
+                 parentCategory.name.includes('間接費') ||
+                 parentCategory.name.includes('経費')
+        }
+      }
+      return false
+    })
   }
 
   // エントリータイプの表示名を取得
@@ -608,6 +631,7 @@ export default function CostEntryForm({
                 {getProjectCategories().map((category) => (
                   <option key={category.id} value={category.id}>
                     {'　'.repeat(category.level - 1)}{category.name}
+                    {category.level > 1 && ` (レベル${category.level})`}
                   </option>
                 ))}
               </select>
@@ -666,22 +690,6 @@ export default function CostEntryForm({
               </div>
             </div>
 
-            {/* 原価種別 */}
-            <div>
-              <label htmlFor="project_entry_type" className="block text-sm font-medium text-gray-700">
-                原価種別
-              </label>
-              <select
-                name="entry_type"
-                id="project_entry_type"
-                value={projectFormData.entry_type}
-                onChange={handleProjectChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="direct">直接費</option>
-                <option value="indirect">間接費</option>
-              </select>
-            </div>
 
             {/* 備考 */}
             <div>
@@ -751,6 +759,7 @@ export default function CostEntryForm({
                 {getGeneralCategories().map((category) => (
                   <option key={category.id} value={category.id}>
                     {'　'.repeat(category.level - 1)}{category.name}
+                    {category.level > 1 && ` (レベル${category.level})`}
                   </option>
                 ))}
               </select>

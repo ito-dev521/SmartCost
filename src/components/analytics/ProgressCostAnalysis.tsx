@@ -251,7 +251,7 @@ export default function ProgressCostAnalysis() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600">認識済み収益</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ¥{statistics.totalRecognizedRevenue.toLocaleString()}
+                  ¥{Math.round(statistics.totalRecognizedRevenue).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -265,7 +265,7 @@ export default function ProgressCostAnalysis() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600">総原価</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ¥{statistics.totalCost.toLocaleString()}
+                  ¥{Math.round(statistics.totalCost).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -279,7 +279,7 @@ export default function ProgressCostAnalysis() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600">総利益</p>
                 <p className={`text-2xl font-bold ${statistics.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ¥{statistics.totalProfit.toLocaleString()}
+                  ¥{Math.round(statistics.totalProfit).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -349,17 +349,17 @@ export default function ProgressCostAnalysis() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ¥{item.contractAmount.toLocaleString()}
+                    ¥{Math.round(item.contractAmount).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ¥{item.recognizedRevenue.toLocaleString()}
+                    ¥{Math.round(item.recognizedRevenue).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ¥{item.totalCost.toLocaleString()}
+                    ¥{Math.round(item.totalCost).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`text-sm font-medium ${item.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ¥{item.profit.toLocaleString()}
+                      ¥{Math.round(item.profit).toLocaleString()}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -368,7 +368,7 @@ export default function ProgressCostAnalysis() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ¥{item.costEfficiency.toLocaleString()}
+                    ¥{Math.round(item.costEfficiency).toLocaleString()}
                   </td>
                 </tr>
               ))}

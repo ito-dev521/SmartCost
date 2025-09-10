@@ -463,6 +463,19 @@ export default function SalaryEntryForm({
 
 
 
+      // 人件費カテゴリを取得
+      const laborCostCategory = categories.find(cat => 
+        cat.name.includes('人件費') || 
+        (cat.level === 1 && cat.name.includes('直接費'))
+      )
+      
+      if (!laborCostCategory) {
+        alert('人件費カテゴリが見つかりません。管理者パネルで原価科目を設定してください。')
+        return
+      }
+
+      console.log('使用する人件費カテゴリ:', laborCostCategory)
+
       // プロジェクト毎の人件費データを生成
       const costs = allocations.map(allocation => {
         const project = projects.find(p => p.id === allocation.project_id)
@@ -473,7 +486,7 @@ export default function SalaryEntryForm({
           work_hours: allocation.work_hours,
           hourly_rate: allocation.hourly_rate,
           labor_cost: allocation.labor_cost,
-          category_id: categories.find(cat => cat.name.includes('人件費'))?.id || ''
+          category_id: laborCostCategory.id
         }
         console.log('プロジェクト人件費データ:', cost)
         return cost
@@ -501,8 +514,22 @@ export default function SalaryEntryForm({
 
   // 給与データを保存
   const saveSalaryData = async () => {
+    console.log('💾 給与データ保存開始:', { laborCosts, salaryForm, selectedPeriod })
+    
     if (laborCosts.length === 0) {
       alert('まずプロジェクト配分を計算してください')
+      return
+    }
+
+    // データの検証
+    const invalidCosts = laborCosts.filter(cost => 
+      !cost.project_id || cost.project_id.trim() === '' ||
+      !cost.category_id || cost.category_id.trim() === ''
+    )
+    
+    if (invalidCosts.length > 0) {
+      console.error('❌ 無効なデータ:', invalidCosts)
+      alert('プロジェクトIDまたはカテゴリIDが無効です。プロジェクト配分を再計算してください。')
       return
     }
 
@@ -575,14 +602,24 @@ export default function SalaryEntryForm({
       if (salaryError) throw salaryError
 
       // 2. 給与配分を保存
-      const salaryAllocations = laborCosts.map(cost => ({
-        salary_entry_id: salaryEntry.id,
-        project_id: cost.project_id,
-        work_hours: cost.work_hours,
-        hourly_rate: cost.hourly_rate,
-        labor_cost: cost.labor_cost,
-        company_id: userData.company_id
-      }))
+      const salaryAllocations = laborCosts.map(cost => {
+        // UUIDの検証
+        if (!cost.project_id || cost.project_id.trim() === '') {
+          throw new Error(`プロジェクトIDが無効です: ${cost.project_id}`)
+        }
+        if (!cost.category_id || cost.category_id.trim() === '') {
+          throw new Error(`カテゴリIDが無効です: ${cost.category_id}`)
+        }
+        
+        return {
+          salary_entry_id: salaryEntry.id,
+          project_id: cost.project_id,
+          work_hours: cost.work_hours,
+          hourly_rate: cost.hourly_rate,
+          labor_cost: cost.labor_cost,
+          company_id: userData.company_id
+        }
+      })
 
       const { error: allocationError } = await supabase
         .from('salary_allocations')
@@ -591,16 +628,26 @@ export default function SalaryEntryForm({
       if (allocationError) throw allocationError
 
       // 3. プロジェクト原価としてcost_entriesにも保存
-      const costEntries = laborCosts.map(cost => ({
-        project_id: cost.project_id,
-        category_id: cost.category_id,
-        entry_date: selectedPeriod.end, // 期間の終了日を原価発生日とする
-        amount: cost.labor_cost,
-        description: `${salaryForm.employee_name}の人件費（${workManagementType === 'hours' ? '工数' : '時間'}管理、${selectedPeriod.start}～${selectedPeriod.end}）`,
-        entry_type: 'direct',
-        company_id: userData.company_id,
-        created_by: currentUserId
-      }))
+      const costEntries = laborCosts.map(cost => {
+        // UUIDの検証
+        if (!cost.project_id || cost.project_id.trim() === '') {
+          throw new Error(`プロジェクトIDが無効です: ${cost.project_id}`)
+        }
+        if (!cost.category_id || cost.category_id.trim() === '') {
+          throw new Error(`カテゴリIDが無効です: ${cost.category_id}`)
+        }
+        
+        return {
+          project_id: cost.project_id,
+          category_id: cost.category_id,
+          entry_date: selectedPeriod.end, // 期間の終了日を原価発生日とする
+          amount: cost.labor_cost,
+          description: `${salaryForm.employee_name}の人件費（${workManagementType === 'hours' ? '工数' : '時間'}管理、${selectedPeriod.start}～${selectedPeriod.end}）`,
+          entry_type: 'direct',
+          company_id: userData.company_id,
+          created_by: currentUserId
+        }
+      })
 
       const { error: costError } = await supabase
         .from('cost_entries')

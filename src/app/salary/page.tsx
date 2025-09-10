@@ -98,12 +98,32 @@ export default async function SalaryEntry() {
   })) || []
 
   // 予算科目データを取得（会社IDでフィルタリング、人件費関連のみ）
-  const { data: categories } = await supabase
+  const { data: allCategories } = await supabase
     .from('budget_categories')
     .select('*')
     .eq('company_id', userData.company_id)
-    .ilike('name', '%人件費%')
     .order('level, sort_order')
+
+  // 人件費関連の科目をフィルタリング（階層構造に対応）
+  const categories = allCategories?.filter(category => {
+    // レベル1の大分類で人件費系を判定
+    if (category.level === 1) {
+      return category.name.includes('人件費') || category.name.includes('直接費')
+    }
+    // レベル2,3の場合は親カテゴリを確認
+    if (category.level > 1 && category.parent_id) {
+      const parentCategory = allCategories?.find(p => p.id === category.parent_id)
+      if (parentCategory) {
+        return parentCategory.name.includes('人件費') || parentCategory.name.includes('直接費')
+      }
+    }
+    return false
+  }) || []
+
+  // デバッグ用ログ
+  console.log('給与入力ページ - 取得した人件費カテゴリ:', categories)
+  console.log('給与入力ページ - 全カテゴリ数:', allCategories?.length || 0)
+  console.log('給与入力ページ - 人件費カテゴリ数:', categories.length)
 
   return (
     <DashboardLayout>

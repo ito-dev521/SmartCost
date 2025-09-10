@@ -88,17 +88,21 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // CADDONシステムのプロジェクトを除外
+    // CADDONシステムと一般管理費のプロジェクトを除外
     const projects = allProjects?.filter(project => {
       const isCaddonSystem = (
         (project.business_number && project.business_number.startsWith('C')) ||
         (project.name && project.name.includes('CADDON'))
       )
-      return !isCaddonSystem
+      const isOverheadProject = (
+        (project.business_number && project.business_number === 'IP') ||
+        (project.name && project.name.includes('一般管理費'))
+      )
+      return !isCaddonSystem && !isOverheadProject
     }) || []
 
     console.log('📊 /api/analytics/progress-cost: 全プロジェクト数:', allProjects?.length || 0)
-    console.log('📊 /api/analytics/progress-cost: CADDON除外後プロジェクト数:', projects.length)
+    console.log('📊 /api/analytics/progress-cost: CADDON・一般管理費除外後プロジェクト数:', projects.length)
 
     // 進捗データを取得（CADDONシステムのプロジェクトを除外）
     const { data: allProgressData, error: progressError } = await supabase
@@ -114,7 +118,7 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // CADDONシステムのプロジェクトに関連する進捗データを除外
+    // CADDONシステムと一般管理費のプロジェクトに関連する進捗データを除外
     const progressData = allProgressData?.filter(progress => {
       const project = allProjects?.find(p => p.id === progress.project_id)
       if (!project) return false
@@ -123,11 +127,15 @@ export async function GET(request: NextRequest) {
         (project.business_number && project.business_number.startsWith('C')) ||
         (project.name && project.name.includes('CADDON'))
       )
-      return !isCaddonSystem
+      const isOverheadProject = (
+        (project.business_number && project.business_number === 'IP') ||
+        (project.name && project.name.includes('一般管理費'))
+      )
+      return !isCaddonSystem && !isOverheadProject
     }) || []
 
     console.log('📈 /api/analytics/progress-cost: 全進捗レコード数:', allProgressData?.length || 0)
-    console.log('📈 /api/analytics/progress-cost: CADDON除外後進捗レコード数:', progressData.length)
+    console.log('📈 /api/analytics/progress-cost: CADDON・一般管理費除外後進捗レコード数:', progressData.length)
 
     // 原価データを取得（CADDONシステムのプロジェクトを除外）
     const { data: allCostData, error: costError } = await supabase
@@ -142,7 +150,7 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // CADDONシステムのプロジェクトに関連する原価データを除外
+    // CADDONシステムと一般管理費のプロジェクトに関連する原価データを除外
     const costData = allCostData?.filter(cost => {
       if (!cost.project_id) return true // プロジェクトに関連しない原価は含める
       
@@ -153,11 +161,15 @@ export async function GET(request: NextRequest) {
         (project.business_number && project.business_number.startsWith('C')) ||
         (project.name && project.name.includes('CADDON'))
       )
-      return !isCaddonSystem
+      const isOverheadProject = (
+        (project.business_number && project.business_number === 'IP') ||
+        (project.name && project.name.includes('一般管理費'))
+      )
+      return !isCaddonSystem && !isOverheadProject
     }) || []
 
     console.log('💰 /api/analytics/progress-cost: 全原価レコード数:', allCostData?.length || 0)
-    console.log('💰 /api/analytics/progress-cost: CADDON除外後原価レコード数:', costData.length)
+    console.log('💰 /api/analytics/progress-cost: CADDON・一般管理費除外後原価レコード数:', costData.length)
 
     // 予算科目データを取得
     const { data: categories, error: categoriesError } = await supabase
