@@ -379,7 +379,6 @@ export default function AIEnhancedCashFlow() {
           const data = await response.json()
           const annualTotal = data.annualTotal || 0
           setTotalIncome(annualTotal)
-          console.log('年間入金予定表から取得した年間合計:', annualTotal)
         } else {
           console.error('年間入金予定表APIエラー:', response.status)
           setTotalIncome(0)
@@ -407,7 +406,6 @@ export default function AIEnhancedCashFlow() {
         
         // 新規法人の場合のメッセージを表示
         if (data.message) {
-          console.log('新規法人メッセージ:', data.message)
           setNewCompanyMessage(data.message)
         } else {
           setNewCompanyMessage(null)
@@ -420,9 +418,7 @@ export default function AIEnhancedCashFlow() {
 
   const fetchAnnualRevenueSchedule = async () => {
     try {
-      console.log('年間入金予定表取得開始')
       const response = await fetch('/api/annual-revenue-schedule')
-      console.log('年間入金予定表APIレスポンス:', response.status, response.ok)
       
       if (response.ok) {
         const data = await response.json()

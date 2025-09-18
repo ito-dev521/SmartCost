@@ -79,7 +79,6 @@ export default function ProgressCostAnalysis() {
       setLoading(true)
       setError(null)
 
-      console.log('🔍 ProgressCostAnalysis: データ取得開始')
 
       // APIからデータを取得
       const response = await fetch('/api/analytics/progress-cost', {
@@ -90,7 +89,6 @@ export default function ProgressCostAnalysis() {
         credentials: 'include'
       })
 
-      console.log('📡 ProgressCostAnalysis: APIレスポンス:', response.status, response.ok)
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -98,7 +96,6 @@ export default function ProgressCostAnalysis() {
       }
 
       const result = await response.json()
-      console.log('✅ ProgressCostAnalysis: API取得成功')
 
       if (!result.success) {
         throw new Error(result.error || 'データの取得に失敗しました')
@@ -119,7 +116,6 @@ export default function ProgressCostAnalysis() {
         filteredData = filteredData.filter(item => item.project.status === 'in_progress')
       }
 
-      console.log('📊 ProgressCostAnalysis: フィルタリング後データ数:', filteredData.length)
       setData(filteredData)
 
     } catch (err) {

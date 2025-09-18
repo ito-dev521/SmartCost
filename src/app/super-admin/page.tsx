@@ -60,7 +60,6 @@ export default async function SuperAdminPage() {
 
       if (!isSuperAdmin) {
         // スーパー管理者以外のアクセスは強制ログアウト
-        console.log('❌ SuperAdminページ: スーパー管理者権限なし、強制ログアウト')
         redirect('/signout')
       }
     } catch {

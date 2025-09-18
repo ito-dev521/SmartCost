@@ -207,14 +207,8 @@ export default function CashFlowDashboard() {
         const sampleData: CashFlowData[] = []
         const currentYear = new Date().getFullYear()
         // 決算月に基づいて年度開始月を決定（決算月の翌月）
-        console.log('キャッシュフロー予測開始月計算:', { fiscalInfo, settlementMonth: fiscalInfo?.settlement_month })
         const fiscalStartMonth = fiscalInfo ? fiscalInfo.settlement_month : 3 // デフォルトは3月決算
         const startDate = new Date(currentYear, fiscalStartMonth, 1) // 決算月の翌月を開始月とする
-        console.log('計算結果:', {
-          fiscalStartMonth,
-          startDate: startDate.toISOString().split('T')[0],
-          startMonth: startDate.getMonth() + 1
-        })
         // 現在の残高を計算して初期残高として使用
         const calculateCurrentBalance = () => {
           if (bankBalanceHistory && bankBalanceHistory.length > 0) {
@@ -297,9 +291,7 @@ export default function CashFlowDashboard() {
   }
   const fetchFiscalInfo = async () => {
     try {
-      console.log('fetchFiscalInfo開始')
       const response = await fetch('/api/fiscal-info')
-      console.log('APIレスポンス:', response.status, response.ok)
 
       if (response.ok) {
         const data = await response.json()

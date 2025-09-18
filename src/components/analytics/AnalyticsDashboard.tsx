@@ -619,7 +619,6 @@ export default function AnalyticsDashboard() {
     if (client.payment_cycle_type === 'month_end') {
       // 月末締め翌月末払いの場合
       if (process.env.NODE_ENV === 'development') {
-        console.log('月末締め翌月末払い計算')
       }
       
       // 支払い月オフセットを考慮して計算
@@ -633,44 +632,17 @@ export default function AnalyticsDashboard() {
       const finalYear = targetMonth >= 12 ? targetYear + Math.floor(targetMonth / 12) : targetYear
       const finalMonth = targetMonth >= 12 ? targetMonth % 12 : targetMonth
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('計算過程:', {
-          endMonth: end.getMonth(),
-          endYear: end.getFullYear(),
-          paymentMonthOffset,
-          targetMonth,
-          finalYear,
-          finalMonth
-        })
-      }
       
       paymentDate.setFullYear(finalYear)
       paymentDate.setMonth(finalMonth)
       paymentDate.setDate(new Date(finalYear, finalMonth + 1, 0).getDate()) // その月の末日
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('設定後の日付:', {
-          year: paymentDate.getFullYear(),
-          month: paymentDate.getMonth(),
-          date: paymentDate.getDate(),
-          fullDate: paymentDate.toISOString()
-        })
-      }
     } else if (client.payment_cycle_type === 'specific_date') {
       // 特定日締めの場合
       const closingDay = client.payment_cycle_closing_day || 25
       const paymentMonthOffset = client.payment_cycle_payment_month_offset || 1
       const paymentDay = client.payment_cycle_payment_day || 15
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('特定日締め計算:', {
-          closingDay,
-          paymentMonthOffset,
-          paymentDay,
-          endDay: end.getDate(),
-          isBeforeClosing: end.getDate() <= closingDay
-        })
-      }
 
       if (end.getDate() <= closingDay) {
         // 締め日以前の場合は当月締め
@@ -685,24 +657,12 @@ export default function AnalyticsDashboard() {
       }
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('計算結果:', {
-        originalDate: end.toISOString(),
-        calculatedDate: paymentDate.toISOString()
-      })
-    }
 
     return paymentDate
   }
 
   // 月次収益を計算
   const calculateMonthlyRevenue = useCallback(() => {
-    console.log('calculateMonthlyRevenue開始:', {
-      fiscalInfo,
-      projectsCount: projects.length,
-      clientsCount: clients.length,
-      caddonBillingsCount: caddonBillings.length
-    })
 
     // 決算情報がない場合はデフォルト値を使用
     const currentFiscalInfo = fiscalInfo || {
@@ -715,7 +675,6 @@ export default function AnalyticsDashboard() {
     }
 
     const fiscalYearStart = currentFiscalInfo.settlement_month + 1
-    console.log('年度開始月:', fiscalYearStart)
     const monthlyData: MonthlyRevenue[] = []
 
     // 一般管理費を除外したプロジェクトを取得
@@ -724,11 +683,6 @@ export default function AnalyticsDashboard() {
       !project.name.includes('その他経費')
     )
     
-    console.log('フィルタリング後のプロジェクト:', {
-      total: projects.length,
-      filtered: filteredProjects.length,
-      projects: filteredProjects.map(p => ({ id: p.id, name: p.name, client: p.client_name }))
-    })
 
     filteredProjects.forEach(project => {
       const client = clients.find(c => c.name === project.client_name)

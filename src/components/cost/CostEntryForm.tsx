@@ -512,28 +512,9 @@ export default function CostEntryForm({
   // 「もっと見る」ボタンを表示するかどうか
   const shouldShowMoreButton = () => {
     const shouldShow = costEntries.length > 5 && !showAllEntries
-    console.log('もっと見るボタン表示チェック:', {
-      totalEntries: costEntries.length,
-      showAllEntries,
-      shouldShow
-    })
     return shouldShow
   }
 
-  // デバッグ用：プロジェクトデータの詳細を表示
-  useEffect(() => {
-    console.log('=== プロジェクトデータ詳細 ===')
-    projects.forEach((project, index) => {
-      console.log(`プロジェクト ${index + 1}:`, {
-        id: project.id,
-        name: project.name,
-        business_number: project.business_number,
-        status: project.status,
-        hasBusinessNumber: !!project.business_number
-      })
-    })
-    console.log('========================')
-  }, [projects])
 
 
 

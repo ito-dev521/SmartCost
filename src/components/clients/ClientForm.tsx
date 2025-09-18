@@ -82,7 +82,6 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
       if (response.ok) {
         const data = await response.json()
         setAddressSuggestions(data.suggestions || [])
-        console.log('📋 住所候補取得結果:', data)
       }
     } catch (error) {
       console.error('住所候補取得エラー:', error)

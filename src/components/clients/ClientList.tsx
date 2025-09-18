@@ -16,7 +16,6 @@ interface ClientListProps {
 }
 
 export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = false, canEdit = false, canDelete = false }: ClientListProps) {
-  console.log('🔍 ClientList: 権限状態:', { canCreate, canEdit, canDelete })
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,7 +50,6 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
         }
 
         const companyId = currentUser.company_id
-        console.log('🏢 ClientList: 会社ID:', companyId)
 
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',

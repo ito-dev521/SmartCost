@@ -166,7 +166,6 @@ export default function BudgetCategoryManagement() {
 
   // 保存処理
   const handleSave = async () => {
-    console.log('💾 保存処理開始:', formData)
     
     if (!formData.name.trim()) {
       alert('原価科目名を入力してください')
@@ -174,16 +173,13 @@ export default function BudgetCategoryManagement() {
     }
 
     try {
-      console.log('🔐 ユーザー認証確認中...')
       // 現在のユーザーの会社IDを取得
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
         console.error('❌ ユーザー認証エラー:', userError)
         throw new Error('ユーザー情報の取得に失敗しました')
       }
-      console.log('✅ ユーザー認証成功:', user.id)
 
-      console.log('🏢 会社情報取得中...')
       const { data: userData, error: userDataError } = await supabase
         .from('users')
         .select('company_id')

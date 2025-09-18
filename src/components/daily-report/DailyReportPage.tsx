@@ -365,8 +365,6 @@ export default function DailyReportPage() {
         throw error
       }
 
-      console.log('取得した生データ:', data)
-      console.log('データ件数:', data?.length || 0)
 
       // 実際の業務番号を使用
       const projectsWithBusinessNumbers = data?.map((project: {
@@ -379,7 +377,6 @@ export default function DailyReportPage() {
         business_number: project.business_number || 'N/A'
       })) || []
 
-      console.log('加工後のプロジェクトデータ:', projectsWithBusinessNumbers)
       setProjects(projectsWithBusinessNumbers)
 
       if (projectsWithBusinessNumbers.length === 0) {
@@ -394,22 +391,12 @@ export default function DailyReportPage() {
 
   const fetchDailyReports = async () => {
     try {
-      console.log('作業日報取得開始...')
-      console.log('選択された日付:', selectedDate)
 
       // まずmonthlyEntriesから該当する日付のデータを探す
       if (monthlyEntries.length > 0) {
         const entriesFromMonthly = monthlyEntries.filter(entry => entry.date === selectedDate)
-        console.log('選択された日付の月間データ検索結果:', {
-          selectedDate,
-          monthlyEntriesCount: monthlyEntries.length,
-          foundEntries: entriesFromMonthly,
-          allDates: monthlyEntries.map(e => e.date),
-          sampleEntries: monthlyEntries.slice(0, 3).map(e => ({ date: e.date, id: e.id }))
-        })
         
         if (entriesFromMonthly.length > 0) {
-          console.log('月間データから該当日付のエントリーを取得:', entriesFromMonthly)
           setEntries(entriesFromMonthly)
           return
         }
@@ -455,7 +442,6 @@ export default function DailyReportPage() {
         throw error
       }
 
-      console.log('取得した作業日報:', data)
 
       if (!data || data.length === 0) {
         console.log('日次データがありません')

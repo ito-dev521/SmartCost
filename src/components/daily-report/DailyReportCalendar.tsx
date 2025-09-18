@@ -36,11 +36,7 @@ export default function DailyReportCalendar({
   const [displayDate, setDisplayDate] = useState(currentDate)
 
   // デバッグログ
-  console.log('DailyReportCalendar - entries:', entries)
-  console.log('DailyReportCalendar - entries length:', entries.length)
   if (entries.length > 0) {
-    console.log('DailyReportCalendar - first entry:', entries[0])
-    console.log('DailyReportCalendar - entry dates:', entries.map(e => e.date))
   }
 
   // 現在表示中の月の情報を計算
@@ -75,16 +71,6 @@ export default function DailyReportCalendar({
     const isWeekend = date.getDay() === 0 || date.getDay() === 6
     
     // デバッグログ（開発時のみ）
-    if (process.env.NODE_ENV === 'development' && date.getDate() <= 5) {
-      console.log(`日付 ${dateString}:`, {
-        hasEntry,
-        entriesCount: entries.length,
-        matchingEntries: entries.filter(entry => entry.date === dateString),
-        originalDate: date.toISOString(),
-        dateString,
-        sampleEntries: entries.slice(0, 3).map(e => ({ date: e.date, id: e.id }))
-      })
-    }
     
     return { hasEntry, isToday, isWeekend }
   }
@@ -135,16 +121,6 @@ export default function DailyReportCalendar({
     }
     
     // デバッグログ（開発時のみ）
-    if (process.env.NODE_ENV === 'development') {
-      console.log('カレンダー日付生成:', {
-        monthInfo,
-        sampleDays: days.slice(0, 5).map(d => ({
-          date: d,
-          dateString: d.toISOString().slice(0, 10),
-          formatted: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-        }))
-      })
-    }
     
     return days
   }, [monthInfo])

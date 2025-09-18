@@ -41,7 +41,6 @@ export default function DepartmentManagement() {
       setLoading(true)
       setMessage(null)
       
-      console.log('部署管理: 部署一覧取得開始...')
       
       // 現在のユーザーの会社IDを取得
       const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -87,7 +86,6 @@ export default function DepartmentManagement() {
             setMessage({ type: 'error', text: '部署の取得に失敗しました' })
             setDepartments([])
           } else {
-            console.log('部署取得成功:', data?.length || 0, '件')
             setDepartments(data || [])
           }
         } else {
@@ -106,7 +104,6 @@ export default function DepartmentManagement() {
           setMessage({ type: 'error', text: '部署の取得に失敗しました' })
           setDepartments([])
         } else {
-          console.log('部署取得成功:', data?.length || 0, '件')
           setDepartments(data || [])
         }
       }

@@ -11,9 +11,7 @@ export default function SignoutPage() {
   useEffect(() => {
     const handleSignout = async () => {
       try {
-        console.log('🔐 SignoutPage: 強制ログアウト開始')
         await supabase.auth.signOut()
-        console.log('✅ SignoutPage: ログアウト完了、/loginにリダイレクト')
         router.replace('/login')
       } catch (error) {
         console.error('❌ SignoutPage: ログアウトエラー:', error)

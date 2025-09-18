@@ -46,22 +46,16 @@ export default function BankBalanceHistoryManager() {
 
   const fetchHistory = async () => {
     try {
-      console.log('🔍 BankBalanceHistoryManager: 履歴データ取得開始')
       const response = await fetch('/api/bank-balance-history', {
         credentials: 'include'
       })
       
-      console.log('📡 BankBalanceHistoryManager: レスポンス:', response.status, response.ok)
-      
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ BankBalanceHistoryManager: 履歴データ取得成功:', data.history?.length || 0, '件')
-        console.log('📊 BankBalanceHistoryManager: 履歴データ:', data.history)
         setHistory(data.history || [])
         
         // 新規法人の場合のメッセージを表示
         if (data.message) {
-          console.log('📋 新規法人メッセージ:', data.message)
           setMessage({ type: 'error', text: data.message })
         }
       } else {

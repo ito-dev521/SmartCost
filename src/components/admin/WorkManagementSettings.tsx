@@ -25,7 +25,6 @@ export default function WorkManagementSettings() {
 
   const fetchSetting = async () => {
     try {
-      console.log('工数管理設定: 設定取得開始...')
       
       // 現在のユーザーを確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -53,7 +52,6 @@ export default function WorkManagementSettings() {
 
               // データが存在しない場合はデフォルト設定を作成
         if (!data || data.length === 0) {
-          console.log('設定データが存在しないため、デフォルト設定を作成')
           const { data: newSetting, error: createError } = await supabase
             .from('admin_settings')
             .insert([{
@@ -87,7 +85,6 @@ export default function WorkManagementSettings() {
   }
 
   const handleSettingChange = (value: string) => {
-    console.log('工数管理設定: 設定変更', value)
     if (setting) {
       setSetting({ ...setting, setting_value: value })
       setMessage(null) // エラーメッセージをクリア
@@ -104,7 +101,6 @@ export default function WorkManagementSettings() {
     setMessage(null)
 
     try {
-      console.log('工数管理設定: 保存開始', setting)
 
       const { data, error } = await supabase
         .from('admin_settings')

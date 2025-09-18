@@ -29,7 +29,6 @@ export default function ClientManagement() {
   const checkUserPermissions = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      console.log('🔍 ClientManagement: ユーザー取得結果:', user)
 
       // デバッグ用にすべての権限をtrueに設定
       const permissions = {
@@ -38,7 +37,6 @@ export default function ClientManagement() {
         canEdit: true, // デバッグ用に一時的にtrue
         canDelete: true // デバッグ用に一時的にtrue
       }
-      console.log('📋 ClientManagement: 権限チェック結果:', permissions)
 
       // 権限を直接設定
       setUserPermissions(permissions)
