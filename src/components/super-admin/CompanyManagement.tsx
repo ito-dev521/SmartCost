@@ -114,7 +114,6 @@ export default function CompanyManagement() {
 
   const handleDelete = (companyId: string) => {
     // 削除成功時の処理（必要に応じて）
-    console.log('法人削除:', companyId)
   }
 
   // メール送信結果を閉じる

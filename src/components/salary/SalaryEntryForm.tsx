@@ -60,14 +60,6 @@ export default function SalaryEntryForm({
   initialCategories
 }: SalaryEntryFormProps) {
   // デバッグ用ログ
-  if (process.env.NODE_ENV === 'development') {
-    console.log('SalaryEntryForm - 受け取ったprops:', {
-      initialUsers,
-    initialDepartments,
-    initialProjects,
-    initialCategories
-  })
-  }
 
   const [users] = useState<User[]>(initialUsers)
   const [departments] = useState<Department[]>(initialDepartments)
@@ -98,21 +90,6 @@ export default function SalaryEntryForm({
     const end = `${endYear}-${endMonth}-${endDay}`
     
     // デバッグ用ログ
-    if (process.env.NODE_ENV === 'development') {
-      console.log('期間計算:', {
-        yearMonth,
-        year,
-        month,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        startDateLocal: startDate.toLocaleDateString('ja-JP'),
-        endDateLocal: endDate.toLocaleDateString('ja-JP'),
-        startDay: startDate.getDate(),
-        endDay: endDate.getDate(),
-        calculatedStart: start,
-        calculatedEnd: end
-      })
-    }
     
     return { start, end }
   }
@@ -183,7 +160,6 @@ export default function SalaryEntryForm({
 
       setSalaryEntries(data || [])
       if (process.env.NODE_ENV === 'development') {
-        console.log('給与データ取得完了:', data)
       }
     } catch (error) {
       console.error('給与データ取得エラー:', error)
@@ -275,13 +251,6 @@ export default function SalaryEntryForm({
 
     setCalculating(true)
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('計算開始:', {
-          employee: salaryForm.employee_name,
-          period: selectedPeriod,
-          workManagementType
-        })
-      }
 
       // 指定期間の作業日報データを取得
       let dailyReports: any[] = []

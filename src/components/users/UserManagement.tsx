@@ -53,7 +53,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
   const fetchUsers = async () => {
     try {
-      console.log('🔍 UserManagement: fetchUsers開始')
 
       // Supabaseクライアントからセッションを取得
       const supabase = createClientComponentClient()
@@ -66,7 +65,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         return
       }
 
-      console.log('🔑 UserManagement: アクセストークン取得成功')
 
       // 現在ログインしているユーザーの会社IDを取得
       if (!session?.user?.id) {
@@ -86,7 +84,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
       }
 
       const companyId = currentUser.company_id
-      console.log('🏢 UserManagement: 会社ID:', companyId)
       
       const endpoint = `/api/users?companyId=${encodeURIComponent(companyId)}`
       const response = await fetch(endpoint, {
@@ -98,7 +95,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         credentials: 'include' // クッキーを含める
       })
 
-      console.log('📋 UserManagement: APIレスポンスステータス:', response.status)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
@@ -107,7 +103,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
       }
 
       const data = await response.json()
-      console.log('✅ UserManagement: ユーザー取得成功:', data.users?.length || 0, '件')
       setUsers(data.users || [])
     } catch (error) {
       console.error('❌ UserManagement: fetchUsersエラー:', error)
@@ -121,7 +116,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
 
   const fetchDepartments = async () => {
     try {
-      console.log('🔍 UserManagement: fetchDepartments開始')
       
       // 現在のユーザーの会社IDを取得
       const { data: { session } } = await supabase.auth.getSession()
@@ -143,7 +137,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         return
       }
 
-      console.log('🏢 UserManagement: 部署取得 - 会社ID:', currentUser.company_id)
       
       const { data, error } = await supabase
         .from('departments')
@@ -156,7 +149,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         throw error
       }
 
-      console.log('✅ UserManagement: 部署取得成功:', data?.length || 0, '件')
       setDepartments(data || [])
     } catch (error) {
       console.error('❌ UserManagement: fetchDepartmentsエラー:', error)
@@ -167,7 +159,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
   // ユーザー削除処理
   const handleUserDelete = async (user: User) => {
     try {
-      console.log('🔍 UserManagement: ユーザー削除開始:', user.email)
       
       // セッションからアクセストークンを取得
       const { data: { session } } = await supabase.auth.getSession()
@@ -199,7 +190,6 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
         throw new Error(errorData.error || `削除に失敗しました (HTTP ${response.status})`)
       }
 
-      console.log('✅ UserManagement: ユーザー削除成功')
       
       // 削除確認ダイアログを閉じる
       setDeleteConfirm(null)

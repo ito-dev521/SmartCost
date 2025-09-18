@@ -423,37 +423,11 @@ export default function AnalyticsDashboard() {
   const getFilteredData = () => {
     let filtered = getEnrichedCostEntries()
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('原価エントリの詳細:', {
-        totalEntries: filtered.length,
-        entryTypes: filtered.reduce((acc, entry) => {
-          acc[entry.entry_type] = (acc[entry.entry_type] || 0) + 1
-          return acc
-        }, {} as { [key: string]: number }),
-        sampleEntries: filtered.slice(0, 3).map(entry => ({
-          id: entry.id,
-          entry_type: entry.entry_type,
-          category_id: entry.category_id,
-          amount: entry.amount,
-          description: entry.description
-        }))
-      })
-    }
 
     // 一時的にフィルタリングを無効にして、entry_typeを確認
     const originalFiltered = filtered
     // filtered = filtered.filter(entry => entry.entry_type === 'salary_allocation')
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('フィルタリング結果:', {
-        originalCount: originalFiltered.length,
-        filteredCount: filtered.length,
-        filteredByType: filtered.reduce((acc, entry) => {
-          acc[entry.entry_type] = (acc[entry.entry_type] || 0) + 1
-          return acc
-        }, {} as { [key: string]: number })
-      })
-    }
 
     // プロジェクトでフィルタリング
     if (selectedProject !== 'all') {
@@ -634,21 +608,8 @@ export default function AnalyticsDashboard() {
 
   // 入金予定日を計算
   const calculatePaymentDate = (endDate: string, client: Client): Date => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('calculatePaymentDate開始:', {
-        endDate,
-        clientName: client.name,
-        payment_cycle_type: client.payment_cycle_type,
-        payment_cycle_closing_day: client.payment_cycle_closing_day,
-        payment_cycle_payment_month_offset: client.payment_cycle_payment_month_offset,
-        payment_cycle_payment_day: client.payment_cycle_payment_day
-      })
-    }
 
     if (!endDate || !client.payment_cycle_type) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('デフォルト計算（入金サイクルなし）')
-      }
       return new Date(endDate || new Date())
     }
 

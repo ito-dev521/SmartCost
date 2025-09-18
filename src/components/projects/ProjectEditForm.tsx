@@ -68,7 +68,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
     const fetchProject = async () => {
       try {
         setLoadingProject(true)
-        console.log('🔍 ProjectEditForm: プロジェクト情報取得開始:', projectId)
 
         const { data: { session } } = await supabase.auth.getSession()
         const headers: HeadersInit = {
@@ -86,7 +85,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
 
         if (response.ok) {
           const data = await response.json()
-          console.log('📋 ProjectEditForm: 取得したプロジェクト:', data.project)
           
           const project = data.project
           setFormData({
@@ -121,7 +119,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
     const fetchClients = async () => {
       try {
         setLoadingClients(true)
-        console.log('🔍 ProjectEditForm: クライアント一覧取得開始')
 
         const { data: { session } } = await supabase.auth.getSession()
         const headers: HeadersInit = {
@@ -214,7 +211,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           status: formData.status
         }
 
-        console.log('📡 ProjectEditForm: APIリクエスト開始', projectData)
 
         const { data: { session } } = await supabase.auth.getSession()
         const headers: HeadersInit = {
@@ -231,7 +227,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           body: JSON.stringify(projectData)
         })
 
-        console.log('📡 ProjectEditForm: APIレスポンス:', { status: response.status, ok: response.ok })
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -240,7 +235,6 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
         }
 
         const result = await response.json()
-        console.log('✅ ProjectEditForm: プロジェクト更新成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
         const cidMatch2 = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)

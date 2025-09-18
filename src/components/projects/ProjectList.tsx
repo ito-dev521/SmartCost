@@ -53,12 +53,9 @@ export default function ProjectList() {
 
   const fetchProjects = async () => {
     try {
-      console.log('🔍 ProjectList: プロジェクト一覧取得開始')
-      console.log('🔍 ProjectList: 現在の状態:', { projects: projects.length, loading })
 
       // 認証トークンを取得
       const { data: { session } } = await supabase.auth.getSession()
-      console.log('🔑 ProjectList: セッション取得:', session ? '成功' : '失敗')
 
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -66,7 +63,6 @@ export default function ProjectList() {
 
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`
-        console.log('🔑 ProjectList: 認証トークンをヘッダーに追加')
       }
 
       // APIエンドポイントからプロジェクトを取得
@@ -77,12 +73,9 @@ export default function ProjectList() {
         headers,
       })
 
-      console.log('📡 ProjectList: APIレスポンス:', { status: response.status, ok: response.ok })
 
       if (response.ok) {
         const data = await response.json()
-        console.log('📋 ProjectList: 取得したプロジェクト数:', data.projects?.length || 0)
-        console.log('📋 ProjectList: 取得したプロジェクト:', data.projects)
         setProjects(data.projects || [])
       } else {
         const errorText = await response.text()
@@ -116,13 +109,11 @@ export default function ProjectList() {
   }
 
   const handleEdit = (project: Project) => {
-    console.log('🔍 ProjectList: 編集開始:', project)
     // 編集ページにリダイレクト
     window.location.href = `/projects/${project.id}/edit`
   }
 
   const handleDelete = async (projectId: string) => {
-    console.log('🔍 ProjectList: 削除開始:', projectId)
     
     if (!confirm('このプロジェクトを削除しますか？この操作は取り消せません。')) {
       return
@@ -144,7 +135,6 @@ export default function ProjectList() {
       })
 
       if (response.ok) {
-        console.log('✅ ProjectList: プロジェクト削除成功')
         // プロジェクト一覧を再取得
         fetchProjects()
       } else {

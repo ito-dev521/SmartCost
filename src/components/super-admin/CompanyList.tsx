@@ -29,16 +29,8 @@ export default function CompanyList({ onEdit, onDelete, onCreate }: CompanyListP
         }
 
         const data = await response.json()
-        console.log('🔍 法人一覧取得結果:', data.companies)
         
         // CADDON設定の値を確認
-        data.companies?.forEach((company: any) => {
-          console.log(`📋 ${company.name}:`, {
-            caddon_enabled: company.company_settings?.caddon_enabled,
-            hasCompanySettings: !!company.company_settings,
-            companySettings: company.company_settings
-          })
-        })
         
         setCompanies(data.companies || [])
       } catch (error) {

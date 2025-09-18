@@ -62,11 +62,9 @@ export default function NewProjectForm() {
     const fetchClients = async () => {
       try {
         setLoadingClients(true)
-        console.log('🔍 NewProjectForm: クライアント一覧取得開始')
 
         // 認証トークンを取得
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('🔑 NewProjectForm: セッション取得:', session ? '成功' : '失敗')
 
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
@@ -74,7 +72,6 @@ export default function NewProjectForm() {
 
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
-          console.log('🔑 NewProjectForm: 認証トークンをヘッダーに追加')
         }
 
         const cidMatch = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
@@ -85,11 +82,9 @@ export default function NewProjectForm() {
           headers,
         })
 
-        console.log('📡 NewProjectForm: APIレスポンス:', { status: response.status, ok: response.ok })
 
         if (response.ok) {
           const data = await response.json()
-          console.log('📋 NewProjectForm: 取得したクライアント数:', data.clients?.length || 0)
           setClients(data.clients || [])
         } else {
           const errorText = await response.text()
@@ -204,11 +199,9 @@ export default function NewProjectForm() {
           // description: formData.description.trim() || null  // 一時的に除外
         }
 
-        console.log('📡 NewProjectForm: APIリクエスト開始', projectData)
 
         // 認証トークンを取得
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('🔑 NewProjectForm: セッション取得:', session ? '成功' : '失敗')
 
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
@@ -216,7 +209,6 @@ export default function NewProjectForm() {
 
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
-          console.log('🔑 NewProjectForm: 認証トークンをヘッダーに追加')
         }
 
         // APIエンドポイントを呼び出し
@@ -226,7 +218,6 @@ export default function NewProjectForm() {
           body: JSON.stringify(projectData)
         })
 
-        console.log('📡 NewProjectForm: APIレスポンス:', { status: response.status, ok: response.ok })
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -235,7 +226,6 @@ export default function NewProjectForm() {
         }
 
         const result = await response.json()
-        console.log('✅ NewProjectForm: プロジェクト作成成功:', result)
 
         // 成功したらプロジェクト一覧ページにリダイレクト
         router.push('/projects')
