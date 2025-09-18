@@ -37,7 +37,7 @@ export default async function Projects() {
   console.log('✅ Projectsページ: 認証成功、ページ表示')
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canManageProjects">
+      <PermissionGuard requiredRole="viewer">
         <ProjectList />
       </PermissionGuard>
     </DashboardLayout>

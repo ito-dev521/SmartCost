@@ -127,7 +127,7 @@ export default async function SalaryEntry() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canManageSalaries">
+      <PermissionGuard requiredRole="viewer">
         <SalaryEntryForm
           initialUsers={users || []}
           initialDepartments={departments || []}

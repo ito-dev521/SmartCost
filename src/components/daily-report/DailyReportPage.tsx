@@ -455,6 +455,7 @@ export default function DailyReportPage() {
         .select('*, work_type')
         .eq('date', selectedDate)
         .eq('company_id', userData.company_id)
+        .eq('user_id', user.id) // ログインしたユーザーのデータのみ取得
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -574,6 +575,7 @@ export default function DailyReportPage() {
         .gte('date', startDate)
         .lte('date', endDate)
         .eq('company_id', userData.company_id)
+        .eq('user_id', user.id) // ログインしたユーザーのデータのみ取得
         .order('date', { ascending: true })
 
       if (error) {
@@ -690,6 +692,7 @@ export default function DailyReportPage() {
         .gte('date', startDate)
         .lt('date', endDate)
         .eq('company_id', userData.company_id)
+        .eq('user_id', user.id) // ログインしたユーザーのデータのみ取得
         .order('date', { ascending: false })
 
       if (error) {
@@ -711,35 +714,22 @@ export default function DailyReportPage() {
         return
       }
       
-      // 日付ごとにグループ化（ユーザー情報を個別取得）
+      // 日付ごとにグループ化（自分のデータのみなのでユーザー情報取得を簡素化）
       const groupedByDate: any = {}
+      
+      // 現在のユーザー情報を取得
+      const { data: currentUserData, error: currentUserError } = await supabase
+        .from('users')
+        .select('name, email')
+        .eq('id', user.id)
+        .single()
+      
+      const currentUserName = currentUserData?.name || currentUserData?.email || '不明'
       
       for (const report of data) {
         const date = report.date
         if (!groupedByDate[date]) {
           groupedByDate[date] = []
-        }
-        
-        // ユーザー情報を個別に取得
-        let userName = '不明'
-        
-        if (report.user_id) {
-          try {
-            const { data: userData, error: userError } = await supabase
-              .from('users')
-              .select('name, email')
-              .eq('id', report.user_id)
-              .single()
-            
-            if (!userError && userData) {
-              userName = userData.name || userData.email || '不明'
-              console.log(`月次ユーザー情報取得成功: ${report.user_id} -> ${userName}`)
-            } else {
-              console.warn('月次ユーザー情報取得エラー:', userError)
-            }
-          } catch (userErr) {
-            console.warn('月次ユーザー情報取得例外:', userErr)
-          }
         }
         
         groupedByDate[date].push({
@@ -754,7 +744,7 @@ export default function DailyReportPage() {
           updated_at: report.updated_at,
           project_name: report.projects?.name || '不明',
           business_number: report.projects?.business_number || 'N/A',
-          user_name: userName
+          user_name: currentUserName
         })
       }
 
@@ -1311,15 +1301,12 @@ export default function DailyReportPage() {
           ) : (
             entries.map((entry, index) => (
               <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                {/* ユーザー情報表示 */}
+                {/* ユーザー情報表示（自分のデータのみなので簡素化） */}
                 {entry.user_name && entry.user_name !== '不明' && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
-                    <div className="flex items-center gap-2 text-sm text-blue-800">
-                      <span className="font-medium">入力者:</span>
-                      <span>{entry.user_name}</span>
-                      {entry.user_email && entry.user_email !== entry.user_name && (
-                        <span className="text-blue-600">({entry.user_email})</span>
-                      )}
+                  <div className="mb-4 p-3 bg-green-50 rounded-md border border-green-200">
+                    <div className="flex items-center gap-2 text-sm text-green-800">
+                      <span className="font-medium">自分の作業日報</span>
+                      <span className="text-green-600">({entry.user_name})</span>
                     </div>
                   </div>
                 )}
@@ -1831,10 +1818,10 @@ export default function DailyReportPage() {
                           {entry.work_content || '-'}
                         </div>
                         {entry.user_name && entry.user_name !== '不明' && (
-                          <div className="text-xs text-blue-600 mb-1">
-                            入力者: {entry.user_name}
+                          <div className="text-xs text-green-600 mb-1">
+                            自分の作業日報 ({entry.user_name})
                             {entry.created_at && (
-                              <span className="ml-2 text-blue-500">
+                              <span className="ml-2 text-green-500">
                                 ({new Date(entry.created_at).toLocaleString('ja-JP')})
                               </span>
                             )}

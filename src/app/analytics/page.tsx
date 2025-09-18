@@ -18,7 +18,7 @@ export default async function Analytics() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canViewAnalytics">
+      <PermissionGuard requiredRole="viewer">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <BarChart3 className="h-8 w-8 text-blue-600" />

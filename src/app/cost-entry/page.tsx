@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import CostEntryForm from '@/components/cost/CostEntryForm'
+import PermissionGuard from '@/components/auth/PermissionGuard'
 
 export default async function CostEntry() {
   const cookieStore = await cookies()
@@ -102,11 +103,13 @@ export default async function CostEntry() {
 
   return (
     <DashboardLayout>
-      <CostEntryForm 
-        initialProjects={filteredProjects || []}
-        initialCategories={categories || []}
-        initialCostEntries={costEntries || []}
-      />
+      <PermissionGuard requiredRole="viewer">
+        <CostEntryForm 
+          initialProjects={filteredProjects || []}
+          initialCategories={categories || []}
+          initialCostEntries={costEntries || []}
+        />
+      </PermissionGuard>
     </DashboardLayout>
   )
 }

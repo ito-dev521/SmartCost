@@ -41,7 +41,7 @@ export default function UserInfo() {
             name,
             role,
             company_id,
-            companies (
+            companies!inner (
               id,
               name,
               email
@@ -52,11 +52,26 @@ export default function UserInfo() {
 
         if (error) {
           console.error('ユーザー情報取得エラー:', error)
+          console.error('エラー詳細:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          })
+          
+          // ユーザーが存在しない場合は、セッションをクリア
+          if (error.code === 'PGRST116') {
+            console.log('ユーザーが存在しません。セッションをクリアします。')
+            await supabase.auth.signOut()
+            window.location.href = '/login'
+          }
         } else {
+          console.log('✅ ユーザー情報取得成功:', userData)
           setUser(userData as any)
         }
       } catch (error) {
         console.error('ユーザー情報取得エラー:', error)
+        console.error('エラー詳細:', error)
       } finally {
         setLoading(false)
       }
@@ -100,7 +115,14 @@ export default function UserInfo() {
         </div>
         
         <div className="text-xs text-gray-500">
-          ロール: {user.role === 'admin' ? '管理者' : user.role === 'superadmin' ? 'スーパー管理者' : '一般ユーザー'}
+          ロール: {
+            user.role === 'superadmin' ? 'スーパー管理者' :
+            user.role === 'admin' ? '管理者' :
+            user.role === 'manager' ? 'マネージャー' :
+            user.role === 'user' ? '一般ユーザー' :
+            user.role === 'viewer' ? '閲覧者' :
+            '不明'
+          }
         </div>
       </div>
     </div>

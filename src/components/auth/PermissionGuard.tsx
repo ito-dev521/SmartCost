@@ -7,7 +7,7 @@ import { createClientComponentClient } from '@/lib/supabase'
 
 interface PermissionGuardProps {
   children: React.ReactNode
-  requiredRole?: 'user' | 'manager' | 'admin' | 'superadmin'
+  requiredRole?: 'viewer' | 'user' | 'manager' | 'admin' | 'superadmin'
   requiredPermission?: string
   fallback?: React.ReactNode
   projectId?: string
@@ -115,6 +115,9 @@ export default function PermissionGuard({
             case 'user':
               permission = userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
               break
+            case 'viewer':
+              permission = userRole === 'viewer' || userRole === 'user' || userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin'
+              break
             default:
               permission = false
           }
@@ -158,7 +161,7 @@ export default function PermissionGuard({
           </div>
           <h3 className="mt-4 text-lg font-medium text-gray-900">アクセス権限がありません</h3>
           <p className="mt-2 text-sm text-gray-500">
-            このページにアクセスするには{requiredRole === 'superadmin' ? 'スーパー管理者' : requiredRole === 'admin' ? '管理者' : requiredRole === 'manager' ? 'マネージャー' : '一般ユーザー'}以上の権限が必要です。
+            このページにアクセスするには{requiredRole === 'superadmin' ? 'スーパー管理者' : requiredRole === 'admin' ? '管理者' : requiredRole === 'manager' ? 'マネージャー' : requiredRole === 'user' ? '一般ユーザー' : '閲覧者'}以上の権限が必要です。
           </p>
           <div className="mt-6">
             <button
@@ -204,6 +207,14 @@ export function ManagerGuard({ children, fallback }: { children: React.ReactNode
 export function UserGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   return (
     <PermissionGuard requiredRole="user" fallback={fallback}>
+      {children}
+    </PermissionGuard>
+  )
+}
+
+export function ViewerGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return (
+    <PermissionGuard requiredRole="viewer" fallback={fallback}>
       {children}
     </PermissionGuard>
   )

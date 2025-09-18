@@ -183,6 +183,11 @@ export default function CostEntryForm({
         .eq('company_id', userData.company_id)
         .order('created_at', { ascending: false })
 
+      console.log('科目データ再取得結果:', {
+        categoriesCount: categoriesData?.length || 0,
+        categories: categoriesData?.map(c => ({ id: c.id, name: c.name, level: c.level }))
+      })
+
       if (projectsData) setProjects(projectsData)
       if (categoriesData) setCategories(categoriesData)
       if (entriesData) {
@@ -420,14 +425,16 @@ export default function CostEntryForm({
 
   // プロジェクト原価用のカテゴリを取得（直接費系）
   const getProjectCategories = () => {
-    return categories.filter(c => {
+    const filtered = categories.filter(c => {
       // レベル1の大分類で直接費系を判定
       if (c.level === 1) {
         return c.name.includes('人件費') || 
                c.name.includes('委託費') || 
                c.name.includes('外注費') || 
                c.name.includes('材料費') ||
-               c.name.includes('直接費')
+               c.name.includes('直接費') ||
+               c.name.includes('工事費') ||
+               c.name.includes('建設費')
       }
       // レベル2,3の場合は親カテゴリを確認
       if (c.level > 1 && c.parent_id) {
@@ -437,22 +444,34 @@ export default function CostEntryForm({
                  parentCategory.name.includes('委託費') || 
                  parentCategory.name.includes('外注費') || 
                  parentCategory.name.includes('材料費') ||
-                 parentCategory.name.includes('直接費')
+                 parentCategory.name.includes('直接費') ||
+                 parentCategory.name.includes('工事費') ||
+                 parentCategory.name.includes('建設費')
         }
       }
       return false
     })
+    
+    console.log('プロジェクト原価用科目フィルタ結果:', {
+      totalCategories: categories.length,
+      filteredCount: filtered.length,
+      filtered: filtered.map(c => ({ id: c.id, name: c.name, level: c.level }))
+    })
+    
+    return filtered
   }
 
   // その他経費用のカテゴリを取得（間接費系）
   const getGeneralCategories = () => {
-    return categories.filter(c => {
+    const filtered = categories.filter(c => {
       // レベル1の大分類で間接費系を判定
       if (c.level === 1) {
         return c.name.includes('一般管理費') || 
                c.name.includes('開発費') || 
                c.name.includes('間接費') ||
-               c.name.includes('経費')
+               c.name.includes('経費') ||
+               c.name.includes('管理費') ||
+               c.name.includes('事務費')
       }
       // レベル2,3の場合は親カテゴリを確認
       if (c.level > 1 && c.parent_id) {
@@ -461,11 +480,21 @@ export default function CostEntryForm({
           return parentCategory.name.includes('一般管理費') || 
                  parentCategory.name.includes('開発費') || 
                  parentCategory.name.includes('間接費') ||
-                 parentCategory.name.includes('経費')
+                 parentCategory.name.includes('経費') ||
+                 parentCategory.name.includes('管理費') ||
+                 parentCategory.name.includes('事務費')
         }
       }
       return false
     })
+    
+    console.log('一般管理費用科目フィルタ結果:', {
+      totalCategories: categories.length,
+      filteredCount: filtered.length,
+      filtered: filtered.map(c => ({ id: c.id, name: c.name, level: c.level }))
+    })
+    
+    return filtered
   }
 
   // エントリータイプの表示名を取得
@@ -628,12 +657,15 @@ export default function CostEntryForm({
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">原価科目を選択してください</option>
-                {getProjectCategories().map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {'　'.repeat(category.level - 1)}{category.name}
-                    {category.level > 1 && ` (レベル${category.level})`}
-                  </option>
-                ))}
+                {getProjectCategories().length === 0 ? (
+                  <option value="" disabled>科目が設定されていません</option>
+                ) : (
+                  getProjectCategories().map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {'　'.repeat(category.level - 1)}{category.name}
+                    </option>
+                  ))
+                )}
               </select>
               
 
@@ -756,12 +788,15 @@ export default function CostEntryForm({
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
               >
                 <option value="">原価科目を選択してください</option>
-                {getGeneralCategories().map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {'　'.repeat(category.level - 1)}{category.name}
-                    {category.level > 1 && ` (レベル${category.level})`}
-                  </option>
-                ))}
+                {getGeneralCategories().length === 0 ? (
+                  <option value="" disabled>科目が設定されていません</option>
+                ) : (
+                  getGeneralCategories().map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {'　'.repeat(category.level - 1)}{category.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 

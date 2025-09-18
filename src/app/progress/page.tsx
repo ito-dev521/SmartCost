@@ -110,7 +110,7 @@ export default function Progress() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canViewProgress">
+      <PermissionGuard requiredRole="user">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <TrendingUp className="h-8 w-8 text-blue-600" />

@@ -73,7 +73,7 @@ export default async function CaddonPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canManageCaddon">
+      <PermissionGuard requiredRole="admin">
         <CaddonManagementForm
           initialClients={clients || []}
           initialProjects={filteredProjects || []}

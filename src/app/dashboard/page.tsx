@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import DashboardOverview from '@/components/dashboard/DashboardOverview'
+import PermissionGuard from '@/components/auth/PermissionGuard'
 
 export default async function Dashboard() {
   const supabase = createServerComponentClient()
@@ -14,7 +15,9 @@ export default async function Dashboard() {
 
   return (
     <DashboardLayout>
-      <DashboardOverview />
+      <PermissionGuard requiredRole="user">
+        <DashboardOverview />
+      </PermissionGuard>
     </DashboardLayout>
   )
 }

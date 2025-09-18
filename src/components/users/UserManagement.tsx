@@ -233,6 +233,8 @@ export default function UserManagement({ onUserUpdate }: UserManagementProps) {
     setShowForm(false)
     setEditingUser(null)
     if (onUserUpdate) onUserUpdate()
+    
+    // 自動更新機能は無効化
   }
 
   const handleFormClose = () => {

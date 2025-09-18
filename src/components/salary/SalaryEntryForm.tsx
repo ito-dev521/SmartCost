@@ -288,18 +288,28 @@ export default function SalaryEntryForm({
       let error: any = null
 
       try {
-        // daily_reportsテーブルから直接データを取得
+        // 選択した社員のユーザーIDを取得
+        const selectedUser = users.find(user => user.name === salaryForm.employee_name)
+        if (!selectedUser) {
+          alert('選択した社員の情報が見つかりません')
+          return
+        }
+
+        // daily_reportsテーブルから選択した社員のデータのみを取得
         const result = await supabase
           .from('daily_reports')
           .select('*')
           .gte('date', selectedPeriod.start)
           .lte('date', selectedPeriod.end)
+          .eq('user_id', selectedUser.id) // 選択した社員のデータのみ取得
 
         dailyReports = result.data || []
         error = result.error
 
         if (process.env.NODE_ENV === 'development') {
           console.log('daily_reports取得結果:', {
+            selectedUser: selectedUser.name,
+            selectedUserId: selectedUser.id,
             count: dailyReports.length,
             sampleData: dailyReports[0],
             error: error?.message
@@ -353,24 +363,10 @@ export default function SalaryEntryForm({
       }
 
       if (!dailyReports || dailyReports.length === 0) {
-        // サンプルデータを作成してテスト
-        console.log('作業日報データがないため、サンプルデータを作成')
-        if (projects.length > 0) {
-          dailyReports = [
-            {
-              id: 'sample-1',
-              date: selectedPeriod.start,
-              project_id: projects[0].id,
-              work_hours: 8,
-              work_content: 'サンプル作業',
-              projects: { name: projects[0].name, business_number: projects[0].business_number || 'SP001' },
-              user_id: 'sample-user'
-            }
-          ]
-        } else {
-          alert('プロジェクトが登録されていません。まずプロジェクトを作成してください。')
-          return
-        }
+        // 選択した社員の作業日報データがない場合のメッセージ
+        console.log('選択した社員の作業日報データがありません')
+        alert(`${salaryForm.employee_name}さんの${selectedPeriod.start}～${selectedPeriod.end}期間の作業日報データがありません。\n作業日報を入力してから給与計算を行ってください。`)
+        return
       }
 
       // プロジェクト毎の工数集計（一般管理費は別途集計）
@@ -885,7 +881,14 @@ export default function SalaryEntryForm({
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center mb-6">
             <TrendingUp className="h-6 w-6 text-green-600 mr-2" />
-            <h2 className="text-lg font-medium text-gray-900">プロジェクト配分結果</h2>
+            <h2 className="text-lg font-medium text-gray-900">
+              プロジェクト配分結果
+              {salaryForm.employee_name && (
+                <span className="ml-2 text-sm font-normal text-gray-600">
+                  ({salaryForm.employee_name}さん)
+                </span>
+              )}
+            </h2>
           </div>
 
           {laborCosts.length === 0 ? (

@@ -41,7 +41,7 @@ export default async function ClientsPage() {
   console.log('✅ Clientsページ: 認証成功、ページ表示')
   return (
     <DashboardLayout>
-      <PermissionGuard requiredPermission="canViewClients">
+      <PermissionGuard requiredRole="user">
         <ClientManagement />
       </PermissionGuard>
     </DashboardLayout>

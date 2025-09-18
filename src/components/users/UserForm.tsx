@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase'
 import { User, Department } from '@/types/database'
-import { UserPlus, Edit, X, Save, Shield, Users, Eye } from 'lucide-react'
+import { UserPlus, Edit, X, Save, Shield, Users, Eye, AlertTriangle, EyeOff, Copy, Check, Lock } from 'lucide-react'
 
 interface UserFormProps {
   user?: User | null
@@ -59,7 +59,25 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
     password: '',
     showPassword: false
   })
+  const [passwordCopied, setPasswordCopied] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+
+  const togglePasswordVisibility = () => {
+    setGeneratedPassword(prev => ({
+      ...prev,
+      showPassword: !prev.showPassword
+    }))
+  }
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedPassword.password)
+      setPasswordCopied(true)
+      setTimeout(() => setPasswordCopied(false), 2000)
+    } catch (error) {
+      console.error('パスワードのコピーに失敗しました:', error)
+    }
+  }
   const [emailSent, setEmailSent] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
   const router = useRouter()
@@ -378,6 +396,37 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
           </div>
         </div>
 
+        {/* パスワード表示セクション */}
+        {generatedPassword.password && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-900 mb-3">生成されたパスワード</h4>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 text-sm text-gray-900 bg-white px-3 py-2 rounded border font-mono">
+                {generatedPassword.showPassword ? generatedPassword.password : '••••••••••••'}
+              </div>
+              <button
+                type="button"
+                onClick={togglePasswordVisibility}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
+              >
+                {generatedPassword.showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {generatedPassword.showPassword ? '隠す' : '表示'}
+              </button>
+              <button
+                type="button"
+                onClick={copyPassword}
+                className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50 flex items-center gap-1"
+              >
+                {passwordCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {passwordCopied ? 'コピー済み' : 'コピー'}
+              </button>
+            </div>
+            <p className="text-xs text-blue-700 mt-2">
+              このパスワードをユーザーに安全に共有してください。初回ログイン後に変更することを推奨します。
+            </p>
+          </div>
+        )}
+
         {/* ロール説明 */}
         <div className="bg-gray-50 p-4 rounded-md">
           <h4 className="font-medium text-gray-900 mb-2">選択されたロールの権限</h4>
@@ -397,6 +446,52 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
             {formData.role === 'viewer' && 'ビューアー権限: プロジェクト閲覧、レポート閲覧のみ'}
           </div>
         </div>
+
+        {/* パスワード再生成ボタン（編集時のみ） */}
+        {isEditing && !generatedPassword.password && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h4 className="font-medium text-yellow-900 mb-2">パスワード管理</h4>
+            <p className="text-sm text-yellow-800 mb-3">
+              ユーザーのパスワードを再生成できます。新しいパスワードは自動的にメールで送信されます。
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/admin/register', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      email: formData.email,
+                      name: formData.name,
+                      role: formData.role,
+                      department_id: formData.department_id,
+                      regeneratePassword: true
+                    }),
+                  })
+                  
+                  if (response.ok) {
+                    const responseData = await response.json()
+                    if (responseData.password) {
+                      setGeneratedPassword({
+                        password: responseData.password,
+                        showPassword: true
+                      })
+                    }
+                  }
+                } catch (error) {
+                  console.error('パスワード再生成エラー:', error)
+                }
+              }}
+              className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors flex items-center gap-2"
+            >
+              <Lock className="h-4 w-4" />
+              パスワードを再生成
+            </button>
+          </div>
+        )}
 
         {/* 送信ボタン */}
         <div className="flex justify-end space-x-4 pt-4 border-t">
@@ -465,10 +560,19 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
                   </div>
                   <button
                     type="button"
-                    onClick={() => setGeneratedPassword(prev => ({ ...prev, showPassword: !prev.showPassword }))}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+                    onClick={togglePasswordVisibility}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
                   >
+                    {generatedPassword.showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     {generatedPassword.showPassword ? '隠す' : '表示'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={copyPassword}
+                    className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50 flex items-center gap-1"
+                  >
+                    {passwordCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {passwordCopied ? 'コピー済み' : 'コピー'}
                   </button>
                 </div>
               </div>
@@ -511,9 +615,7 @@ export default function UserForm({ user, departments = [], onClose, onSuccess }:
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
+                    <AlertTriangle className="h-5 w-5 text-yellow-400" />
                   </div>
                   <div className="ml-3">
                     <p className="text-sm text-yellow-800">

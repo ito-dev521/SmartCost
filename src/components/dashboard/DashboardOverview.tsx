@@ -28,11 +28,35 @@ interface DashboardStats {
 export default function DashboardOverview() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
     fetchDashboardStats()
+    fetchUserRole()
   }, [])
+
+  const fetchUserRole = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+        
+        if (error) {
+          console.error('ユーザーロール取得エラー:', error)
+        } else {
+          setUserRole(user.role)
+        }
+      }
+    } catch (error) {
+      console.error('ユーザーロール取得エラー:', error)
+    }
+  }
 
   const fetchDashboardStats = async () => {
     try {
@@ -200,30 +224,42 @@ export default function DashboardOverview() {
       description: '新しいプロジェクトを開始',
       href: '/projects',
       icon: Building2,
-      color: 'bg-blue-500'
+      color: 'bg-blue-500',
+      requiredRole: ['user', 'manager', 'admin']
     },
     {
       title: '原価入力',
       description: '工事費を入力',
       href: '/cost-entry',
       icon: Calculator,
-      color: 'bg-green-500'
+      color: 'bg-green-500',
+      requiredRole: ['user', 'manager', 'admin']
     },
     {
       title: '資金管理',
       description: '資金状況を確認',
       href: '/cash-flow',
       icon: DollarSign,
-      color: 'bg-yellow-500'
+      color: 'bg-yellow-500',
+      requiredRole: ['admin']
     },
     {
       title: 'レポート',
       description: '分析・レポート作成',
       href: '/analytics',
       icon: BarChart3,
-      color: 'bg-purple-500'
+      color: 'bg-purple-500',
+      requiredRole: ['user', 'manager', 'admin']
     }
   ]
+
+  // 権限チェック関数
+  const hasPermission = (action: any): boolean => {
+    if (!userRole || !action.requiredRole) {
+      return true
+    }
+    return action.requiredRole.includes(userRole)
+  }
 
   const statCards = [
     {
@@ -380,6 +416,12 @@ export default function DashboardOverview() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {quickActions
             .filter(a => {
+              // 権限チェック
+              if (!hasPermission(a)) {
+                return false
+              }
+              
+              // CADDONの特別な処理
               if (a.href === '/caddon') {
                 try {
                   const m = typeof document !== 'undefined' ? document.cookie.match(/company_caddon_enabled=([^;]+)/) : null
