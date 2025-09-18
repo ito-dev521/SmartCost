@@ -6,13 +6,10 @@ import DailyReportPage from '@/components/daily-report/DailyReportPage'
 
 export default async function DailyReport() {
   try {
-    console.log('作業日報ページ開始')
     
     const supabase = createServerComponentClient()
-    console.log('Supabaseクライアント作成完了')
 
     const { data: { session }, error } = await supabase.auth.getSession()
-    console.log('セッション取得結果:', { session: !!session, error: !!error })
 
     if (error) {
       console.error('セッション取得エラー:', error)
@@ -20,11 +17,9 @@ export default async function DailyReport() {
     }
 
     if (!session) {
-      console.log('セッションなし、ログインページにリダイレクト')
       redirect('/login')
     }
 
-    console.log('セッション確認完了、作業日報ページ表示')
     
     return (
       <DashboardLayout>

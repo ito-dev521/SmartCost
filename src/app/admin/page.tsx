@@ -9,14 +9,12 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Shield, Building, Settings, FileText } from 'lucide-react'
 
 export default async function AdminPage() {
-  console.log('🔍 Adminページ: 認証チェック開始')
 
   const supabase = createServerComponentClient()
 
   const { data: { session } } = await supabase.auth.getSession()
   
   if (!session) {
-    console.log('❌ Adminページ: セッションなし、/loginにリダイレクト')
     redirect('/login')
   }
 
@@ -24,17 +22,10 @@ export default async function AdminPage() {
   const { data: { user }, error: authUserError } = await supabase.auth.getUser()
   
   if (authUserError || !user) {
-    console.log('❌ Adminページ: ユーザー認証失敗、/loginにリダイレクト')
     redirect('/login')
   }
 
-  console.log('📋 Adminページ: ユーザー認証状態', {
-    userEmail: user.email,
-    userId: user.id,
-    emailConfirmed: user.email_confirmed_at ? 'はい' : 'いいえ'
-  })
 
-  console.log('🔍 Adminページ: 管理者権限チェック開始')
 
   // 現在のユーザーが管理者かどうか確認
   let currentUser;
@@ -47,32 +38,20 @@ export default async function AdminPage() {
 
     currentUser = userData;
 
-    console.log('📋 Adminページ: ユーザー権限チェック結果', {
-      userFound: !!currentUser,
-      userRole: currentUser?.role,
-      userName: currentUser?.name,
-      error: userError?.message,
-      errorCode: userError?.code
-    })
 
     // 管理者権限がない場合はダッシュボードにリダイレクト
     if (!currentUser || currentUser?.role !== 'admin') {
       // superadminの場合は/super-adminにリダイレクト
       if (currentUser?.role === 'superadmin') {
-        console.log('❌ Adminページ: スーパー管理者アクセス、/super-adminにリダイレクト')
         // スーパー管理者は/super-adminにリダイレクト
         redirect('/super-admin')
       }
-      console.log('❌ Adminページ: 管理者権限なし、/dashboardにリダイレクト')
-      console.log('   理由:', !currentUser ? 'ユーザーデータなし' : `ロール: ${currentUser?.role}`)
       redirect('/dashboard')
     }
 
-    console.log('✅ Adminページ: 管理者権限確認、ページ表示')
   } catch (error) {
     console.error('❌ Adminページ: 権限チェックエラー', error)
     // エラーの場合はダッシュボードにリダイレクト
-    console.log('⚠️ Adminページ: 権限チェックエラーのため、/dashboardにリダイレクト')
     redirect('/dashboard')
   }
 
