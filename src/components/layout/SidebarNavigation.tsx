@@ -49,7 +49,7 @@ const defaultNavigationItems: NavigationItem[] = [
 ]
 
 export default function SidebarNavigation({
-  title = '原価管理システム',
+  title = 'SmartCost',
   navigationItems = defaultNavigationItems,
   currentPath
 }: SidebarNavigationProps) {
