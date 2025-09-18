@@ -22,7 +22,7 @@ interface BudgetCategoryFormData {
   name: string
   level: number
   parent_id: string | null
-  sort_order: number
+  sort_order: number | null
 }
 
 export default function BudgetCategoryManagement() {
@@ -37,7 +37,7 @@ export default function BudgetCategoryManagement() {
     name: '',
     level: 1,
     parent_id: null,
-    sort_order: 1
+    sort_order: null
   })
 
   const supabase = createClientComponentClient()
@@ -90,7 +90,7 @@ export default function BudgetCategoryManagement() {
     const categoryMap = new Map<string, BudgetCategory & { children: BudgetCategory[] }>()
     const rootCategories: (BudgetCategory & { children: BudgetCategory[] })[] = []
 
-    // 全カテゴリをマップに追加
+    // 全カテゴリをマップに追加（全てにchildrenプロパティを追加）
     categories.forEach(category => {
       categoryMap.set(category.id, { ...category, children: [] })
     })
@@ -131,7 +131,7 @@ export default function BudgetCategoryManagement() {
       name: '',
       level: 1,
       parent_id: null,
-      sort_order: 1
+      sort_order: null
     })
     setIsAdding(false)
     setEditingId(null)
@@ -244,8 +244,7 @@ export default function BudgetCategoryManagement() {
       console.error('エラー詳細:', {
         error: err,
         formData,
-        editingId,
-        userData: userData?.company_id
+        editingId
       })
       
       let errorMessage = '保存に失敗しました'
@@ -335,16 +334,16 @@ export default function BudgetCategoryManagement() {
   }
 
   // 階層表示用のコンポーネント
-  const CategoryItem = ({ 
-    category, 
-    depth = 0 
-  }: { 
-    category: BudgetCategory & { children: BudgetCategory[] }
-    depth?: number 
+  const CategoryItem = ({
+    category,
+    depth = 0
+  }: {
+    category: BudgetCategory & { children?: BudgetCategory[] }
+    depth?: number
   }) => {
     const isExpanded = expandedCategories.has(category.id)
     const isEditing = editingId === category.id
-    const hasChildren = category.children.length > 0
+    const hasChildren = (category.children?.length ?? 0) > 0
 
     return (
       <div className="border-l border-gray-200 ml-4">
@@ -409,7 +408,7 @@ export default function BudgetCategoryManagement() {
 
         {hasChildren && isExpanded && (
           <div className="ml-4">
-            {category.children.map(child => (
+            {category.children?.map(child => (
               <CategoryItem key={child.id} category={child} depth={depth + 1} />
             ))}
           </div>
@@ -529,10 +528,10 @@ export default function BudgetCategoryManagement() {
               <input
                 type="number"
                 min="1"
-                value={formData.sort_order}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  sort_order: parseInt(e.target.value) || 1 
+                value={formData.sort_order || ''}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  sort_order: e.target.value === '' ? null : parseInt(e.target.value) || null
                 }))}
                 className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               />

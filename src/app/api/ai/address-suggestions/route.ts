@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
+}) : null
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +43,18 @@ export async function POST(request: NextRequest) {
 `
 
     console.log('🔍 OpenAI API呼び出し開始:', { companyName })
-    
+
+    if (!openai) {
+      console.log('⚠️ OpenAI APIキーが設定されていないため、デフォルトの住所を返します')
+      return NextResponse.json({
+        suggestions: [
+          '東京都渋谷区渋谷1-1-1',
+          '東京都新宿区新宿2-2-2',
+          '東京都港区赤坂3-3-3'
+        ]
+      })
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
