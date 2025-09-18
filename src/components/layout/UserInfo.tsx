@@ -61,12 +61,10 @@ export default function UserInfo() {
           
           // ユーザーが存在しない場合は、セッションをクリア
           if (error.code === 'PGRST116') {
-            console.log('ユーザーが存在しません。セッションをクリアします。')
             await supabase.auth.signOut()
             window.location.href = '/login'
           }
         } else {
-          console.log('✅ ユーザー情報取得成功:', userData)
           setUser(userData as any)
         }
       } catch (error) {

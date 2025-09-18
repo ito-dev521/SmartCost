@@ -63,7 +63,6 @@ export default function SidebarNavigation({
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
-        console.log('🔍 SidebarNavigation: ユーザーロール取得開始')
         const { data: { session } } = await supabase.auth.getSession()
         
         if (session?.user) {
@@ -76,7 +75,6 @@ export default function SidebarNavigation({
           if (error) {
             console.error('❌ SidebarNavigation: ユーザーロール取得エラー:', error)
           } else {
-            console.log('✅ SidebarNavigation: ユーザーロール取得成功:', user.role)
             setUserRole(user.role)
           }
         }
@@ -89,20 +87,16 @@ export default function SidebarNavigation({
 
     const fetchCaddonStatus = async () => {
       try {
-        console.log('🔍 SidebarNavigation: CADDON状態取得開始')
         const response = await fetch('/api/company-settings', {
           credentials: 'include', // クッキーを含める
           headers: {
             'Content-Type': 'application/json',
           },
         })
-        console.log('📡 SidebarNavigation: APIレスポンス:', response.status, response.ok)
         
         if (response.ok) {
           const data = await response.json()
-          console.log('📋 SidebarNavigation: 取得したデータ:', data)
           setCaddonEnabled(data.caddon_enabled)
-          console.log('✅ SidebarNavigation: CADDON状態設定:', data.caddon_enabled)
         } else {
           const errorText = await response.text()
           console.error('❌ SidebarNavigation: APIエラー:', response.status, errorText)
@@ -115,7 +109,6 @@ export default function SidebarNavigation({
         setCaddonEnabled(true)
       } finally {
         setLoading(false)
-        console.log('🏁 SidebarNavigation: ローディング完了')
       }
     }
 
@@ -156,12 +149,6 @@ export default function SidebarNavigation({
     // 必要なロールにユーザーロールが含まれているかチェック
     const hasRequiredRole = item.requiredRole.includes(userRole)
     
-    console.log('🔍 SidebarNavigation: 権限チェック:', {
-      item: item.label,
-      userRole,
-      requiredRole: item.requiredRole,
-      hasRequiredRole
-    })
     
     return hasRequiredRole
   }
@@ -180,17 +167,13 @@ export default function SidebarNavigation({
           
           // CADDONリンクは会社設定が無効なら非表示
           if (item.href === '/caddon') {
-            console.log('🔍 SidebarNavigation: CADDONメニュー表示判定:', { loading, caddonEnabled })
             if (loading) {
-              console.log('⏳ SidebarNavigation: ローディング中のため非表示')
               // ローディング中は表示しない
               return null
             }
             if (!caddonEnabled) {
-              console.log('❌ SidebarNavigation: CADDON無効のため非表示')
               return null
             }
-            console.log('✅ SidebarNavigation: CADDON有効のため表示')
           }
           
           return (

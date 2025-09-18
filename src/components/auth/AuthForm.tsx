@@ -22,8 +22,6 @@ export default function AuthForm() {
   // デモアカウントを取得
   const fetchDemoAccounts = useCallback(async () => {
     try {
-      console.log('🔍 デモアカウント取得開始')
-      console.log('🔍 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
       
       // まず全ユーザーを取得してデバッグ
       const { data: allUsers, error: allUsersError } = await supabase
@@ -31,7 +29,6 @@ export default function AuthForm() {
         .select('email, name, role, company_id')
         .not('email', 'is', null)
       
-      console.log('🔍 全ユーザー取得結果:', allUsers)
       if (allUsersError) {
         console.error('❌ 全ユーザー取得エラー:', allUsersError)
       }
@@ -63,8 +60,6 @@ export default function AuthForm() {
         return
       }
 
-      console.log('✅ ユーザーデータ取得成功:', users)
-      console.log('✅ 取得件数:', users?.length || 0)
       
       // デモアカウントとして表示するデータを整形（会社未設定のアカウントは除外）
       const demoAccountsData: DemoAccount[] = users?.map((user) => ({
@@ -75,13 +70,10 @@ export default function AuthForm() {
         company_name: (user as any).companies?.name || '会社未設定'
       })) || [] // 一時的に会社名フィルタを無効化
 
-      console.log('✅ デモアカウント取得成功:', demoAccountsData)
-      console.log('✅ 表示対象件数:', demoAccountsData.length)
       // データが取得できた場合のみ更新（空の場合は固定データを維持）
       if (demoAccountsData && demoAccountsData.length > 0) {
         setDemoAccounts(demoAccountsData)
       } else {
-        console.log('⚠️ Supabaseからデータが取得できませんでした。固定データを使用します。')
       }
     } catch (error) {
       console.error('デモアカウント取得エラー:', error)
@@ -94,8 +86,6 @@ export default function AuthForm() {
   const loginWithDemoAccount = async (email: string, password: string) => {
     setLoading(true)
     try {
-      console.log('🔐 デモログイン開始:', email)
-      console.log('🔐 使用パスワード:', password)
       
       // 認証を試行（エラーハンドリングを改善）
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -113,18 +103,12 @@ export default function AuthForm() {
         
         // スキーマエラーの場合は特別な処理
         if (error.message.includes('Database error querying schema')) {
-          console.log('⚠️ スキーマエラーが発生しました。認証は成功している可能性があります。')
-          console.log('🔍 認証データの確認:', data)
           
           // スキーマエラーでも認証が成功している場合はリダイレクト
           if (data?.user) {
-            console.log('✅ ユーザー認証は成功しています:', (data.user as any).email)
-            console.log('🔄 プロジェクトページにリダイレクトします...')
             window.location.href = '/projects'
             return
           } else {
-            console.log('❌ 認証データが取得できませんでした')
-            console.log('🔄 スキーマエラーを無視してリダイレクトを試行します...')
             // スキーマエラーの場合は強制的にリダイレクト
             window.location.href = '/projects'
             return
@@ -140,7 +124,6 @@ export default function AuthForm() {
         return
       }
 
-      console.log('✅ デモログイン成功:', data.user?.email)
       
       // 認証成功後、直接プロジェクトページにリダイレクト
       window.location.href = '/projects'
@@ -224,14 +207,11 @@ export default function AuthForm() {
       }
     ]
     
-    console.log('🔧 固定デモアカウントを設定:', fixedAccounts.length, '件')
     setDemoAccounts(fixedAccounts)
 
     // 認証状態の変更を監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔐 AuthForm: 認証状態変更', event, session?.user?.email)
       if (event === 'SIGNED_IN' && session) {
-        console.log('✅ ログイン成功:', session.user.email)
         // ユーザーのロールを確認してリダイレクト先を決定
         void (async () => {
           try {
@@ -255,7 +235,6 @@ export default function AuthForm() {
 
     // 現在のセッションを確認
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔍 AuthForm: 現在のセッション', session?.user?.email || 'なし')
     })
 
     return () => subscription.unsubscribe()
