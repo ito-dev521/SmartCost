@@ -16,11 +16,9 @@ function generatePassword(): string {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 /api/users: GETリクエスト受信')
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
-    console.log('🔑 /api/users: Authorizationヘッダー:', authHeader ? '存在' : 'なし')
 
     let userId = null
 
@@ -31,7 +29,6 @@ export async function GET(request: NextRequest) {
         // JWTデコード（簡易版）
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
         userId = payload.sub
-        console.log('👤 /api/users: JWTから取得したユーザーID:', userId)
       } catch (error) {
         console.error('❌ /api/users: JWTデコードエラー:', error)
       }
@@ -40,7 +37,6 @@ export async function GET(request: NextRequest) {
     // クッキーからセッション情報を取得
     const cookieHeader = request.headers.get('cookie')
     if (cookieHeader && !userId) {
-      console.log('🍪 /api/users: クッキーヘッダーから認証情報を取得')
       // シンプルなSupabaseクライアントを作成
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(
@@ -62,7 +58,6 @@ export async function GET(request: NextRequest) {
             const token = cookies['sb-access-token']
             const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
             userId = payload.sub
-            console.log('🍪 /api/users: クッキーから取得したユーザーID:', userId)
           } catch (error) {
             console.error('❌ /api/users: クッキートークンデコードエラー:', error)
           }
@@ -100,10 +95,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('✅ /api/users: 認証成功、ユーザー:', userData.email)
 
     // 管理者権限チェック（ユーザーのロールを確認）
-    console.log('🔍 /api/users: 管理者権限チェック開始', { userId, role: userData.role })
     const isAdmin = userData.role === 'admin'
 
     if (!isAdmin) {
@@ -117,24 +110,16 @@ export async function GET(request: NextRequest) {
     // ユーザー一覧取得（companyIdクエリ対応）
     const { searchParams } = new URL(request.url)
     let companyId = searchParams.get('companyId')
-    console.log('🔍 /api/users: URLパラメータから取得したcompanyId:', companyId)
     
     if (!companyId) {
       const cookieHeader = request.headers.get('cookie') || ''
       const m = cookieHeader.match(/(?:^|; )scope_company_id=([^;]+)/)
       if (m) {
         companyId = decodeURIComponent(m[1])
-        console.log('🍪 /api/users: クッキーから取得したcompanyId:', companyId)
       }
     }
     
     if (!companyId) {
-      console.log('⚠️ /api/users: companyIdが指定されていないため、空の配列を返します')
-      console.log('🔍 /api/users: デバッグ情報:', {
-        url: request.url,
-        searchParams: Object.fromEntries(searchParams.entries()),
-        cookieHeader: request.headers.get('cookie') || 'なし'
-      })
       return NextResponse.json({ users: [] })
     }
 
@@ -152,7 +137,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('✅ /api/users: ユーザー一覧取得成功', users?.length || 0, '件')
     return NextResponse.json({ users })
   } catch (error) {
     console.error('Users API error:', error)
@@ -165,11 +149,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/users: POSTリクエスト受信')
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
-    console.log('🔑 /api/users: Authorizationヘッダー:', authHeader ? '存在' : 'なし')
 
     let userId = null
 
@@ -180,7 +162,6 @@ export async function POST(request: NextRequest) {
         // JWTデコード（簡易版）
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
         userId = payload.sub
-        console.log('👤 /api/users: JWTから取得したユーザーID:', userId)
       } catch (error) {
         console.error('❌ /api/users: JWTデコードエラー:', error)
       }
@@ -189,7 +170,6 @@ export async function POST(request: NextRequest) {
     // クッキーからセッション情報を取得
     const cookieHeader = request.headers.get('cookie')
     if (cookieHeader && !userId) {
-      console.log('🍪 /api/users: クッキーヘッダーから認証情報を取得')
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
         const [name, value] = cookie.trim().split('=')
         acc[name] = value
@@ -239,10 +219,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ /api/users: 認証成功、ユーザー:', userData.email)
 
     // 管理者権限チェック（ユーザーのロールを確認）
-    console.log('🔍 /api/users: 管理者権限チェック開始', { userId, role: userData.role })
     const isAdmin = userData.role === 'admin'
 
     if (!isAdmin) {
@@ -299,13 +277,6 @@ export async function POST(request: NextRequest) {
     // パスワードを自動生成
     const generatedPassword = generatePassword()
     
-    console.log('🔍 /api/users: 認証ユーザー作成開始', {
-      email,
-      hasPassword: !!generatedPassword,
-      passwordLength: generatedPassword.length,
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '設定済み' : '未設定',
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? '設定済み' : '未設定'
-    })
     
     // Supabaseの認証システムでユーザーを作成
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
@@ -331,7 +302,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ /api/users: 認証ユーザー作成成功:', authUser.user.id)
 
     // カスタムユーザーテーブルにユーザー情報を保存
     const { data: newUser, error: createError } = await supabase
@@ -380,11 +350,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    console.log('🔍 /api/users: PUTリクエスト受信')
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
-    console.log('🔑 /api/users: Authorizationヘッダー:', authHeader ? '存在' : 'なし')
 
     let userId = null
 
@@ -395,7 +363,6 @@ export async function PUT(request: NextRequest) {
         // JWTデコード（簡易版）
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
         userId = payload.sub
-        console.log('👤 /api/users: JWTから取得したユーザーID:', userId)
       } catch (error) {
         console.error('❌ /api/users: JWTデコードエラー:', error)
       }
@@ -404,7 +371,6 @@ export async function PUT(request: NextRequest) {
     // クッキーからセッション情報を取得
     const cookieHeader = request.headers.get('cookie')
     if (cookieHeader && !userId) {
-      console.log('🍪 /api/users: クッキーヘッダーから認証情報を取得')
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
         const [name, value] = cookie.trim().split('=')
         acc[name] = value
@@ -497,11 +463,9 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    console.log('🔍 /api/users: DELETEリクエスト受信')
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
-    console.log('🔑 /api/users: Authorizationヘッダー:', authHeader ? '存在' : 'なし')
 
     let currentUserId = null
 
@@ -521,7 +485,6 @@ export async function DELETE(request: NextRequest) {
     // クッキーからセッション情報を取得
     const cookieHeader = request.headers.get('cookie')
     if (cookieHeader && !currentUserId) {
-      console.log('🍪 /api/users: クッキーヘッダーから認証情報を取得')
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
         const [name, value] = cookie.trim().split('=')
         acc[name] = value
@@ -562,12 +525,6 @@ export async function DELETE(request: NextRequest) {
     // Supabaseクライアントを作成
     const { createClient } = await import('@supabase/supabase-js')
     
-    console.log('🔍 /api/users: Supabaseクライアント作成', {
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '設定済み' : '未設定',
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? '設定済み' : '未設定',
-      urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
-      keyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0
-    })
     
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

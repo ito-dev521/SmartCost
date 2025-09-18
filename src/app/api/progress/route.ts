@@ -3,23 +3,12 @@ import { createClient } from '@/lib/supabase-api'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== API /api/progress POST 開始 ===')
     const requestBody = await request.json()
-    console.log('リクエストボディ:', requestBody)
 
     const { project_id, progress_rate, progress_date, notes, companyId } = requestBody
 
-    console.log('パラメータ確認:', {
-      project_id,
-      progress_rate,
-      progress_date,
-      notes,
-      companyId,
-      progress_rate_type: typeof progress_rate
-    })
 
     if (!project_id || progress_rate === undefined || !progress_date) {
-      console.log('バリデーションエラー: 必須フィールドが不足')
       return NextResponse.json(
         { error: 'project_id, progress_rate, progress_date は必須です' },
         { status: 400 }
@@ -27,7 +16,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!companyId) {
-      console.log('バリデーションエラー: companyIdが不足')
       return NextResponse.json(
         { error: 'companyId は必須です' },
         { status: 400 }
@@ -35,7 +23,6 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient()
-    console.log('Supabaseクライアント作成完了')
 
     // 進捗率範囲チェック
     if (progress_rate < 0 || progress_rate > 100) {
@@ -64,7 +51,6 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     }
 
-    console.log('INSERTデータ:', insertData)
 
     const { data, error } = await supabase
       .from('project_progress')
@@ -86,11 +72,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('INSERT成功:', data)
 
     // 進捗率が100%の場合はプロジェクトを完了に更新
     if (Number(progress_rate) >= 100) {
-      console.log('進捗率100%: プロジェクトステータスを完了に更新')
       const { error: statusErr } = await supabase
         .from('projects')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -99,13 +83,10 @@ export async function POST(request: NextRequest) {
       if (statusErr) {
         console.error('project status update error:', statusErr)
       } else {
-        console.log('プロジェクトステータス更新成功')
       }
     }
 
     const responseData = { success: true, message: '進捗を記録しました', data }
-    console.log('レスポンスデータ:', responseData)
-    console.log('=== API /api/progress POST 完了 ===')
 
     return NextResponse.json(responseData)
   } catch (error) {
