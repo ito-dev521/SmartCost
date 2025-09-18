@@ -6,7 +6,6 @@ import { Client } from '@/types/database'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 /api/clients: GETリクエスト受信')
 
     // Supabaseクライアントを作成
     const cookieStore = await cookies()
@@ -40,7 +39,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
-    console.log('👤 /api/clients: 認証済みユーザー:', user.id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userError } = await supabase
@@ -55,7 +53,6 @@ export async function GET(request: NextRequest) {
     }
 
     const companyId = userData.company_id
-    console.log('🏢 /api/clients: 会社ID:', companyId)
 
     const { data: clients, error } = await supabase
       .from('clients')
@@ -68,7 +65,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'クライアントの取得に失敗しました' }, { status: 500 })
     }
 
-    console.log('✅ /api/clients: クライアント取得成功:', clients?.length || 0, '件')
     return NextResponse.json({ clients })
   } catch (error) {
     console.error('クライアント取得エラー:', error)
@@ -78,7 +74,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/clients POST: クライアント作成開始')
     
     // Supabaseクライアントを作成
     const cookieStore = await cookies()
@@ -112,7 +107,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
     }
 
-    console.log('👤 /api/clients POST: 認証済みユーザー:', user.id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userError } = await supabase
@@ -127,7 +121,6 @@ export async function POST(request: NextRequest) {
     }
 
     const companyId = userData.company_id
-    console.log('🏢 /api/clients POST: 会社ID:', companyId)
 
     const body = await request.json()
     const { 
@@ -161,7 +154,6 @@ export async function POST(request: NextRequest) {
       payment_cycle_description: payment_cycle_description || '',
     }
 
-    console.log('💾 /api/clients POST: クライアントデータ:', clientData)
 
     const { data: client, error } = await supabase
       .from('clients')
@@ -174,7 +166,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'クライアントの作成に失敗しました' }, { status: 500 })
     }
 
-    console.log('✅ /api/clients POST: クライアント作成成功:', client)
     return NextResponse.json({ client }, { status: 201 })
   } catch (error) {
     console.error('クライアント作成エラー:', error)

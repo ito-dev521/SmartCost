@@ -54,7 +54,6 @@ export default function ChatBot() {
   // 認証状態を確認（クライアントサイド）
   const checkClientAuthStatus = async () => {
     try {
-      console.log('🔍 ChatBot: クライアント認証状態確認開始')
       const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -66,7 +65,6 @@ export default function ChatBot() {
         return false
       }
       
-      console.log('✅ ChatBot: クライアント認証状態:', user ? { id: user.id, email: user.email } : null)
       return !!user
     } catch (error) {
       console.error('❌ ChatBot: クライアント認証状態確認エラー:', error)
@@ -77,7 +75,6 @@ export default function ChatBot() {
   // 認証状態を確認（サーバーサイド）
   const checkServerAuthStatus = async () => {
     try {
-      console.log('🔍 ChatBot: サーバー認証状態確認開始')
       
       // セッション状態を確認
       const { data: { session }, error } = await supabase.auth.getSession()
@@ -92,10 +89,6 @@ export default function ChatBot() {
         return false
       }
       
-      console.log('✅ ChatBot: サーバー認証状態:', {
-        user_id: session.user.id,
-        email: session.user.email
-      })
       return true
     } catch (error) {
       console.error('❌ ChatBot: サーバー認証状態確認エラー:', error)
@@ -107,15 +100,12 @@ export default function ChatBot() {
   const sendMessage = async (content: string) => {
     try {
       setIsLoading(true)
-      console.log('🔍 ChatBot: メッセージ送信開始:', content)
       
       // 認証状態を確認（クライアントサイド）
       const clientAuth = await checkClientAuthStatus()
-      console.log('🔍 ChatBot: クライアント認証結果:', clientAuth)
       
       // 認証状態を確認（サーバーサイド）
       const serverAuth = await checkServerAuthStatus()
-      console.log('🔍 ChatBot: サーバー認証結果:', serverAuth)
       
       if (!clientAuth || !serverAuth) {
         throw new Error('認証が必要です。ログインし直してください。')
@@ -130,7 +120,6 @@ export default function ChatBot() {
         credentials: 'include'
       })
 
-      console.log('📡 ChatBot: APIレスポンス:', response.status, response.ok)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -139,7 +128,6 @@ export default function ChatBot() {
       }
 
       const data = await response.json()
-      console.log('✅ ChatBot: APIレスポンス取得成功')
       
       const newMessage: Message = {
         id: Date.now().toString(),

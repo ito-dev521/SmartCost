@@ -5,7 +5,6 @@ import { cookies } from 'next/headers'
 // GET: 銀行残高履歴を取得
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 /api/bank-balance-history GET: リクエスト受信')
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +35,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('👤 /api/bank-balance-history GET: 認証済みユーザー:', user.id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userError } = await supabase
@@ -53,11 +51,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🏢 /api/bank-balance-history GET: 会社ID:', userData.company_id)
 
     // company_idがnullの場合は空の配列を返す
     if (!userData.company_id) {
-      console.log('⚠️  /api/bank-balance-history GET: ユーザーのcompany_idがnullです')
       return NextResponse.json({
         history: [],
         total: 0,
@@ -74,7 +70,6 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('❌ /api/bank-balance-history GET: 履歴取得エラー:', error)
     } else {
-      console.log('✅ /api/bank-balance-history GET: 履歴取得成功:', history?.length || 0, '件')
     }
 
     if (error) {
@@ -102,9 +97,7 @@ export async function GET(request: NextRequest) {
 // POST: 新しい銀行残高履歴を作成
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/bank-balance-history POST: リクエスト受信')
     const body = await request.json()
-    console.log('📤 /api/bank-balance-history POST: リクエストボディ:', body)
 
     // 総支出を自動計算
     const openingBalance = body.opening_balance || 0
@@ -112,12 +105,6 @@ export async function POST(request: NextRequest) {
     const closingBalance = body.closing_balance || 0
     const totalExpense = openingBalance + totalIncome - closingBalance
     
-    console.log('💰 /api/bank-balance-history POST: 計算結果:', {
-      openingBalance,
-      totalIncome,
-      closingBalance,
-      totalExpense
-    })
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,7 +135,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('👤 /api/bank-balance-history POST: 認証済みユーザー:', user.id)
 
     const { data: userData, error: userError } = await supabase
       .from('users')
@@ -164,7 +150,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('🏢 /api/bank-balance-history POST: 会社ID:', userData.company_id)
 
     // 重複チェック（年月のみ）
     const monthYear = body.balance_date.substring(0, 7) // 年月のみ（例：2025-08）
@@ -201,7 +186,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingData && existingData.length > 0) {
-      console.log('重複データ検出:', existingData)
       return NextResponse.json({ 
         error: '同じ年月のデータは既に存在します。編集機能を使用して既存のデータを更新してください。',
         monthYear,
@@ -216,7 +200,6 @@ export async function POST(request: NextRequest) {
       total_expense: totalExpense
     }
     
-    console.log('💾 /api/bank-balance-history POST: 挿入データ:', insertData)
 
     const { data, error } = await supabase
       .from('bank_balance_history')
@@ -249,7 +232,6 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    console.log('✅ /api/bank-balance-history POST: 作成成功:', data?.[0])
     return NextResponse.json({ message: '銀行残高履歴を作成しました', history: data?.[0] })
   } catch (error) {
     console.error('銀行残高履歴作成APIエラー:', error)
@@ -326,7 +308,6 @@ export async function PUT(request: NextRequest) {
     }
 
     if (existingData && existingData.length > 0) {
-      console.log('重複データ検出:', existingData)
       return NextResponse.json({ 
         error: '同じ年月のデータは既に存在します',
         monthYear,

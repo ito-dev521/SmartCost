@@ -261,7 +261,6 @@ export default function AnalyticsDashboard() {
   // CADDON請求データの更新をリッスン
   useEffect(() => {
     const handleCaddonBillingUpdate = (event: CustomEvent) => {
-      console.log('🔔 CADDON請求データが更新されました:', event.detail)
       // データを再取得
       fetchData()
     }
@@ -278,7 +277,6 @@ export default function AnalyticsDashboard() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       if (process.env.NODE_ENV === 'development') {
-        console.log('認証状況:', { user: !!user, error, userId: user?.id })
       }
       if (error) {
         console.error('認証エラー:', error)
@@ -291,11 +289,6 @@ export default function AnalyticsDashboard() {
   // プロジェクト、クライアント、決算情報が取得された後に月次収益を計算
   useEffect(() => {
     if (projects.length > 0 && fiscalInfo) {
-      console.log('データが揃ったため月次収益を計算します:', {
-        projects: projects.length,
-        clients: clients.length,
-        fiscalInfo
-      })
       calculateMonthlyRevenue()
     }
   }, [projects, clients, fiscalInfo])
@@ -324,7 +317,6 @@ export default function AnalyticsDashboard() {
         return
       }
 
-      console.log('分析ページ - ユーザーの会社ID:', userData.company_id)
       
       // プロジェクトデータを取得（会社IDでフィルタリング）
       const { data: projectsData } = await supabase
@@ -368,7 +360,6 @@ export default function AnalyticsDashboard() {
         if (response.ok) {
           const data = await response.json()
           fiscalInfoData = data.fiscalInfo ? [data.fiscalInfo] : null
-          console.log('管理者ページ設定から取得した決算情報:', fiscalInfoData?.[0])
         }
       } catch (error) {
         console.error('決算情報取得エラー:', error)
@@ -376,7 +367,6 @@ export default function AnalyticsDashboard() {
 
       // フォールバック：Supabaseから取得（会社IDでフィルタリング）
       if (!fiscalInfoData) {
-        console.log('管理者ページ設定が見つからないため、Supabaseから取得します')
         const { data: supabaseData } = await supabase
           .from('fiscal_info')
           .select('*')
@@ -388,10 +378,8 @@ export default function AnalyticsDashboard() {
 
       // 決算情報を設定
       if (fiscalInfoData && fiscalInfoData.length > 0) {
-        console.log('Supabaseから取得した決算情報:', fiscalInfoData[0])
         setFiscalInfo(fiscalInfoData[0])
       } else {
-        console.log('決算情報が取得できません。デフォルト値（3月決算）を使用します。')
         const defaultFiscalInfo: FiscalInfo = {
           id: 'default',
           fiscal_year: new Date().getFullYear(),
@@ -400,18 +388,9 @@ export default function AnalyticsDashboard() {
           bank_balance: 0,
           notes: 'デフォルト設定'
         }
-        console.log('デフォルト決算情報:', defaultFiscalInfo)
         setFiscalInfo(defaultFiscalInfo)
       }
 
-      console.log('データ取得結果:', {
-        projects: projectsData?.length || 0,
-        costEntries: costEntriesData?.length || 0,
-        categories: categoriesData?.length || 0,
-        clients: clientsData?.length || 0,
-        caddonBillings: caddonBillingsData?.length || 0,
-        fiscalInfo: fiscalInfoData?.length || 0
-      })
 
       if (projectsData) setProjects(projectsData)
       if (costEntriesData) setCostEntries(costEntriesData)

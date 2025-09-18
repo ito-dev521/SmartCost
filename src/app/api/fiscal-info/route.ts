@@ -4,7 +4,6 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('fiscal-info GET called')
     const url = new URL(request.url)
     const list = url.searchParams.get('list')
     const yearParam = url.searchParams.get('year')
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🔍 決算情報取得: 会社ID', userData.company_id)
 
     // データベースから決算情報を取得
     const { data: fiscalInfoData, error: fiscalError } = await supabase
@@ -78,7 +76,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (!fiscalInfoData || fiscalError?.code === 'PGRST116') {
-      console.log('📋 決算情報が存在しないため、デフォルト値を作成')
       // デフォルト値
       fiscalInfo = {
         id: 'default',
@@ -90,7 +87,6 @@ export async function GET(request: NextRequest) {
         notes: 'デフォルト設定'
       }
     } else {
-      console.log('✅ 決算情報取得成功:', fiscalInfoData)
       fiscalInfo = fiscalInfoData
     }
 
@@ -134,7 +130,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ fiscalInfo, readonly: false })
     }
 
-    console.log('Returning fiscal info:', fiscalInfo)
     return NextResponse.json({ fiscalInfo, readonly: false })
   } catch (error) {
     console.error('GET: 決算情報取得エラー:', error)
@@ -147,10 +142,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('fiscal-info POST called')
     const body = await request.json()
     const { fiscal_year, settlement_month, current_period, bank_balance, notes } = body
-    console.log('POST body:', body)
 
     // Supabaseクライアントを作成
     const cookieStore = await cookies()
@@ -209,7 +202,6 @@ export async function POST(request: NextRequest) {
       notes: notes || '更新された設定'
     }
 
-    console.log('💾 決算情報をデータベースに保存:', fiscalInfoData)
 
     // 既存の決算情報があるかチェック
     const { error: checkError } = await supabase
@@ -236,7 +228,6 @@ export async function POST(request: NextRequest) {
         )
       }
       result = data
-      console.log('✅ 決算情報を新規作成:', result)
     } else if (checkError) {
       console.error('❌ 決算情報チェックエラー:', checkError)
       return NextResponse.json(
@@ -261,7 +252,6 @@ export async function POST(request: NextRequest) {
         )
       }
       result = data
-      console.log('✅ 決算情報を更新:', result)
     }
 
     return NextResponse.json({

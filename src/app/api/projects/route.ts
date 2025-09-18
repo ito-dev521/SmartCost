@@ -4,7 +4,6 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 /api/projects: GETリクエスト受信')
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,10 +50,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🏢 会社ID:', userData.company_id)
-
     // プロジェクト一覧を取得（会社IDでフィルタリング、一般管理費プロジェクトとCADDONシステムは除外）
-    console.log('🔍 /api/projects: プロジェクト一覧取得開始')
     const { data: projects, error } = await supabase
       .from('projects')
       .select('*')
@@ -70,7 +66,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'プロジェクトの取得に失敗しました' }, { status: 500 })
     }
 
-    console.log('✅ /api/projects: 取得件数:', projects?.length || 0)
     return NextResponse.json({ projects: projects || [] })
   } catch (error) {
     console.error('プロジェクト取得エラー:', error)
@@ -80,7 +75,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/projects: POSTリクエスト受信')
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -127,11 +121,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('🏢 会社ID:', userData.company_id)
 
     // リクエストボディを取得
     const body = await request.json()
-    console.log('📋 /api/projects: リクエストボディ:', body)
 
     const {
       name,
@@ -149,7 +141,6 @@ export async function POST(request: NextRequest) {
 
     // バリデーション
                 if (!name || !business_number || !client_id || !start_date || !end_date) {
-              console.log('❌ /api/projects: 必須項目不足')
               return NextResponse.json({ error: '必須項目が入力されていません' }, { status: 400 })
             }
 
@@ -166,7 +157,6 @@ export async function POST(request: NextRequest) {
             }
 
             if (existingProject) {
-              console.log('❌ /api/projects: 業務番号重複:', { business_number, existingProject })
               return NextResponse.json({ 
                 error: `業務番号「${business_number}」は既に使用されています（プロジェクト: ${existingProject.name}）` 
               }, { status: 400 })
@@ -187,16 +177,7 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString()
     }
 
-    // descriptionがある場合はログに記録（将来的な拡張用）
-    if (description) {
-      console.log('📋 /api/projects: descriptionフィールド（未使用）:', description.trim())
-    }
-
-    console.log('📋 /api/projects: 作成するプロジェクトデータ:', projectData)
-
     // プロジェクトを作成
-    console.log('🔍 /api/projects: データベース挿入開始')
-    console.log('📋 /api/projects: 挿入データ:', projectData)
 
     const { data, error } = await supabase
       .from('projects')
@@ -204,7 +185,6 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    console.log('📋 /api/projects: 挿入結果:', { data, error })
 
     if (error) {
       console.error('❌ /api/projects: プロジェクト作成エラー:', error)
@@ -220,7 +200,6 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    console.log('✅ /api/projects: プロジェクト作成成功:', data)
     return NextResponse.json({ project: data }, { status: 201 })
   } catch (error) {
     console.error('プロジェクト作成エラー:', error)
