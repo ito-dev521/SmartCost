@@ -183,10 +183,6 @@ export default function CostEntryForm({
         .eq('company_id', userData.company_id)
         .order('created_at', { ascending: false })
 
-      console.log('科目データ再取得結果:', {
-        categoriesCount: categoriesData?.length || 0,
-        categories: categoriesData?.map(c => ({ id: c.id, name: c.name, level: c.level }))
-      })
 
       if (projectsData) setProjects(projectsData)
       if (categoriesData) setCategories(categoriesData)
@@ -452,12 +448,6 @@ export default function CostEntryForm({
       return false
     })
     
-    console.log('プロジェクト原価用科目フィルタ結果:', {
-      totalCategories: categories.length,
-      filteredCount: filtered.length,
-      filtered: filtered.map(c => ({ id: c.id, name: c.name, level: c.level }))
-    })
-    
     return filtered
   }
 
@@ -488,12 +478,6 @@ export default function CostEntryForm({
       return false
     })
     
-    console.log('一般管理費用科目フィルタ結果:', {
-      totalCategories: categories.length,
-      filteredCount: filtered.length,
-      filtered: filtered.map(c => ({ id: c.id, name: c.name, level: c.level }))
-    })
-    
     return filtered
   }
 
@@ -522,11 +506,6 @@ export default function CostEntryForm({
   // 表示するエントリを取得（5件 or 全て）
   const getDisplayedEntries = () => {
     const entries = showAllEntries ? costEntries : costEntries.slice(0, 5)
-    console.log('表示エントリー取得:', {
-      showAllEntries,
-      totalEntries: costEntries.length,
-      displayedCount: entries.length
-    })
     return entries
   }
 

@@ -42,7 +42,6 @@ export default async function SalaryEntry() {
     redirect('/login')
   }
 
-  console.log('🏢 給与管理ページ - 会社ID:', userData.company_id)
 
   // 部署データを取得（会社IDでフィルタリング）
   const { data: departments } = await supabase
@@ -75,9 +74,6 @@ export default async function SalaryEntry() {
   }) || []
 
   // デバッグ用ログ
-  console.log('取得したユーザーデータ:', usersData)
-  console.log('変換後のユーザーデータ:', users)
-  console.log('ユーザー取得エラー:', usersError)
 
   // プロジェクトデータを取得（会社IDでフィルタリング、一般管理費プロジェクトは除外）
   const { data: projectsData } = await supabase
@@ -121,9 +117,6 @@ export default async function SalaryEntry() {
   }) || []
 
   // デバッグ用ログ
-  console.log('給与入力ページ - 取得した人件費カテゴリ:', categories)
-  console.log('給与入力ページ - 全カテゴリ数:', allCategories?.length || 0)
-  console.log('給与入力ページ - 人件費カテゴリ数:', categories.length)
 
   return (
     <DashboardLayout>

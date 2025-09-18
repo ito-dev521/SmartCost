@@ -301,15 +301,8 @@ export default function DailyReportPage() {
     // 月間データが既に存在する場合は、該当する日付のデータを即座に表示
     if (monthlyEntries.length > 0) {
       const entriesFromMonthly = monthlyEntries.filter(entry => entry.date === selectedDate)
-      console.log('選択された日付の月間データ検索結果:', {
-        selectedDate,
-        monthlyEntriesCount: monthlyEntries.length,
-        foundEntries: entriesFromMonthly,
-        allDates: monthlyEntries.map(e => e.date)
-      })
       
       if (entriesFromMonthly.length > 0) {
-        console.log('月間データから該当日付のエントリーを即座に表示:', entriesFromMonthly)
         setEntries(entriesFromMonthly)
         return
       }
@@ -333,19 +326,13 @@ export default function DailyReportPage() {
   // 作業日報専用のプロジェクト取得（一般管理費を含む）
   const fetchProjects = async () => {
     try {
-      console.log('プロジェクト取得開始（作業日報用）...')
 
       // 現在のユーザーの認証情報を確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      console.log('現在のユーザー:', user)
-      console.log('ユーザーID:', user?.id)
-      console.log('ユーザーメール:', user?.email)
       if (userError) console.error('ユーザー取得エラー:', userError)
 
       // セッション情報も確認
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      console.log('現在のセッション:', session)
-      console.log('アクセストークン:', session?.access_token ? 'あり' : 'なし')
       if (sessionError) console.error('セッション取得エラー:', sessionError)
 
       // ユーザーの会社IDを取得
@@ -361,7 +348,6 @@ export default function DailyReportPage() {
         return
       }
 
-      console.log('ユーザーの会社ID:', userData.company_id)
 
       // プロジェクト取得（必要なフィールドのみ）
       // プロジェクト一覧を取得（作業日報用なので一般管理費プロジェクトも含む、会社IDでフィルタリング）

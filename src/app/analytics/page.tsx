@@ -14,7 +14,6 @@ export default async function Analytics() {
     redirect('/login')
   }
 
-  console.log('✅ Analyticsページ: 認証成功、ページ表示')
 
   return (
     <DashboardLayout>

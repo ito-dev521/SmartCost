@@ -4,7 +4,6 @@ import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 /api/analytics/progress-cost: 工事進行基準原価分析データ取得開始')
     
     // 認証チェック
     const cookieStore = await cookies()
@@ -55,7 +54,6 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    console.log('👤 /api/analytics/progress-cost: 認証済みユーザー:', user.id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userDataError } = await supabase
@@ -72,7 +70,6 @@ export async function GET(request: NextRequest) {
     }
 
     const companyId = userData.company_id
-    console.log('🏢 /api/analytics/progress-cost: 会社ID:', companyId)
 
     // プロジェクトデータを取得（CADDONシステムを除外）
     const { data: allProjects, error: projectsError } = await supabase
@@ -101,8 +98,6 @@ export async function GET(request: NextRequest) {
       return !isCaddonSystem && !isOverheadProject
     }) || []
 
-    console.log('📊 /api/analytics/progress-cost: 全プロジェクト数:', allProjects?.length || 0)
-    console.log('📊 /api/analytics/progress-cost: CADDON・一般管理費除外後プロジェクト数:', projects.length)
 
     // 進捗データを取得（CADDONシステムのプロジェクトを除外）
     const { data: allProgressData, error: progressError } = await supabase
@@ -134,8 +129,6 @@ export async function GET(request: NextRequest) {
       return !isCaddonSystem && !isOverheadProject
     }) || []
 
-    console.log('📈 /api/analytics/progress-cost: 全進捗レコード数:', allProgressData?.length || 0)
-    console.log('📈 /api/analytics/progress-cost: CADDON・一般管理費除外後進捗レコード数:', progressData.length)
 
     // 原価データを取得（CADDONシステムのプロジェクトを除外）
     const { data: allCostData, error: costError } = await supabase
@@ -168,8 +161,6 @@ export async function GET(request: NextRequest) {
       return !isCaddonSystem && !isOverheadProject
     }) || []
 
-    console.log('💰 /api/analytics/progress-cost: 全原価レコード数:', allCostData?.length || 0)
-    console.log('💰 /api/analytics/progress-cost: CADDON・一般管理費除外後原価レコード数:', costData.length)
 
     // 予算科目データを取得
     const { data: categories, error: categoriesError } = await supabase
@@ -184,7 +175,6 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    console.log('📋 /api/analytics/progress-cost: 予算科目数:', categories?.length || 0)
 
     // データを統合・分析
     const analysisData = projects?.map(project => {
@@ -251,7 +241,6 @@ export async function GET(request: NextRequest) {
       }
     }) || []
 
-    console.log('✅ /api/analytics/progress-cost: 分析データ生成完了:', analysisData.length, '件')
 
     return NextResponse.json({
       success: true,

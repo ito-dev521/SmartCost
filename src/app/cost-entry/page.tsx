@@ -42,7 +42,6 @@ export default async function CostEntry() {
     redirect('/login')
   }
 
-  console.log('🏢 原価入力ページ - 会社ID:', userData.company_id)
 
   // サーバーサイドでプロジェクトデータを取得（会社IDでフィルタリング、一般管理費プロジェクトのみ除外）
   const { data: projects, error: projectsError } = await supabase
@@ -60,28 +59,13 @@ export default async function CostEntry() {
   // 会社IDでフィルタリング済みなので、そのまま使用
   const filteredProjects = projects || []
 
-  console.log('=== 原価入力ページのプロジェクトデータ ===')
-  projects?.forEach((project, index) => {
-    console.log(`プロジェクト ${index + 1}:`, {
-      id: project.id,
-      name: project.name,
-      business_number: project.business_number,
-      status: project.status,
-      isCaddonSystem: project.business_number?.startsWith('C') || project.name?.includes('CADDON')
-    })
-  })
-  console.log(`総プロジェクト数: ${projects?.length || 0}`)
 
   // CADDONシステムのプロジェクトが存在するかチェック
   const hasCaddonSystem = filteredProjects?.some(p => p.business_number?.startsWith('C') || p.name?.includes('CADDON'))
-  console.log(`CADDONシステムプロジェクト有無: ${hasCaddonSystem ? 'あり' : 'なし'}`)
 
   if (!hasCaddonSystem) {
-    console.log('CADDONシステムのプロジェクトが見つかりません')
-    console.log('プロジェクト管理ページでCADDONシステムのプロジェクトを作成してください')
   }
 
-  console.log('=======================================')
 
   // 予算科目データを取得（会社IDでフィルタリング）
   const { data: categories } = await supabase

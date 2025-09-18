@@ -275,21 +275,11 @@ export default function SalaryEntryForm({
         dailyReports = result.data || []
         error = result.error
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log('daily_reports取得結果:', {
-            selectedUser: selectedUser.name,
-            selectedUserId: selectedUser.id,
-            count: dailyReports.length,
-            sampleData: dailyReports[0],
-            error: error?.message
-          })
-        }
 
         // プロジェクト情報を個別に取得
         if (dailyReports.length > 0) {
           const projectIds = [...new Set(dailyReports.map(report => report.project_id).filter(Boolean))]
           if (process.env.NODE_ENV === 'development') {
-            console.log('取得するプロジェクトID:', projectIds)
           }
 
           const { data: projectData, error: projectError } = await supabase
@@ -297,10 +287,6 @@ export default function SalaryEntryForm({
             .select('id, name, business_number')
             .in('id', projectIds)
 
-          console.log('プロジェクト情報取得結果:', {
-            projectData,
-            projectError: projectError?.message
-          })
 
           // プロジェクト情報をdailyReportsにマージ
           dailyReports = dailyReports.map(report => ({
@@ -314,17 +300,11 @@ export default function SalaryEntryForm({
         }
 
       } catch (tableError) {
-        console.log('daily_reportsテーブルアクセスエラー:', tableError)
         // エラーの場合は、サンプルデータを使用
         dailyReports = []
         error = null
       }
 
-      console.log('作業日報データ取得結果:', {
-        dailyReports,
-        error: error?.message,
-        count: dailyReports?.length || 0
-      })
 
       if (error) {
         console.error('作業日報データ取得エラー:', error)
@@ -333,7 +313,6 @@ export default function SalaryEntryForm({
 
       if (!dailyReports || dailyReports.length === 0) {
         // 選択した社員の作業日報データがない場合のメッセージ
-        console.log('選択した社員の作業日報データがありません')
         alert(`${salaryForm.employee_name}さんの${selectedPeriod.start}～${selectedPeriod.end}期間の作業日報データがありません。\n作業日報を入力してから給与計算を行ってください。`)
         return
       }
@@ -345,7 +324,6 @@ export default function SalaryEntryForm({
       dailyReports.forEach(report => {
         const projectKey = report.project_id
         if (!projectKey) {
-          console.log('project_idがnullのレポートをスキップ:', report)
           return
         }
 
@@ -353,7 +331,6 @@ export default function SalaryEntryForm({
         
         // 一般管理費プロジェクトは別途集計
         if (project.name === '一般管理費' || project.business_number === 'IP') {
-          console.log('一般管理費プロジェクトを別途集計:', project)
           overheadHours += report.work_hours || 0
           return
         }
@@ -367,19 +344,13 @@ export default function SalaryEntryForm({
         projectHours[projectKey].totalHours += report.work_hours || 0
       })
 
-      console.log('一般管理費工数:', overheadHours)
       setOverheadHours(overheadHours) // 状態を更新
 
-      console.log('プロジェクト毎の工数集計結果:', projectHours)
 
       // 総工数を計算（一般管理費も含む）
       const projectWorkHours = Object.values(projectHours).reduce((sum, item) => sum + item.totalHours, 0)
       const totalHours = projectWorkHours + overheadHours // 一般管理費も含む
 
-      console.log('総工数計算結果:', {
-        totalHours,
-        projectCount: Object.keys(projectHours).length
-      })
 
       if (totalHours === 0) {
         alert('指定期間に作業日報データがありません')
@@ -398,13 +369,6 @@ export default function SalaryEntryForm({
       }
 
       const totalHoursForCalculation = workManagementType === 'time' ? totalHours : totalHours * 8 // 人工管理の場合は8時間に変換
-      console.log('時給単価計算結果:', {
-        salaryAmount: salaryForm.salary_amount,
-        totalHours,
-        totalHoursForCalculation,
-        hourlyRate,
-        workManagementType
-      })
 
       // プロジェクト毎の人件費を計算
       const allocations: ProjectAllocation[] = Object.entries(projectHours).map(([projectId, data]) => {
@@ -422,8 +386,6 @@ export default function SalaryEntryForm({
       const overheadWorkHours = workManagementType === 'time' ? overheadHours : overheadHours * 8 // 人工管理の場合は8時間に変換
       const overheadLaborCost = overheadWorkHours * hourlyRate
 
-      console.log('プロジェクト配分計算結果:', allocations)
-      console.log('一般管理費人件費:', { overheadHours, hourlyRate, overheadLaborCost })
       setOverheadLaborCost(overheadLaborCost) // 状態を更新
 
 
@@ -439,7 +401,6 @@ export default function SalaryEntryForm({
         return
       }
 
-      console.log('使用する人件費カテゴリ:', laborCostCategory)
 
       // プロジェクト毎の人件費データを生成
       const costs = allocations.map(allocation => {
@@ -453,11 +414,9 @@ export default function SalaryEntryForm({
           labor_cost: allocation.labor_cost,
           category_id: laborCostCategory.id
         }
-        console.log('プロジェクト人件費データ:', cost)
         return cost
       })
 
-      console.log('最終的な人件費データ:', costs)
       setLaborCosts(costs)
 
     } catch (error) {
@@ -479,7 +438,6 @@ export default function SalaryEntryForm({
 
   // 給与データを保存
   const saveSalaryData = async () => {
-    console.log('💾 給与データ保存開始:', { laborCosts, salaryForm, selectedPeriod })
     
     if (laborCosts.length === 0) {
       alert('まずプロジェクト配分を計算してください')
