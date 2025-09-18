@@ -14,10 +14,6 @@ function createSupabaseClient() {
     throw new Error('Supabase環境変数が設定されていません')
   }
   
-  console.log('🔍 Supabase接続情報:', {
-    url: supabaseUrl,
-    hasServiceKey: !!supabaseServiceKey
-  })
   
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
@@ -30,7 +26,6 @@ function createSupabaseClient() {
 // データベース接続テスト
 async function testDatabaseConnection(supabase: any) {
   try {
-    console.log('🔍 データベース接続テスト開始')
     
     // companiesテーブルの存在確認
     const { data: companiesTest, error: companiesError } = await supabase
@@ -43,7 +38,6 @@ async function testDatabaseConnection(supabase: any) {
       throw new Error(`companiesテーブルに接続できません: ${companiesError.message}`)
     }
     
-    console.log('✅ companiesテーブル接続成功')
     
     // company_settingsテーブルの存在確認
     const { data: settingsTest, error: settingsError } = await supabase
@@ -53,9 +47,6 @@ async function testDatabaseConnection(supabase: any) {
     
     if (settingsError) {
       console.error('❌ company_settingsテーブル接続エラー:', settingsError)
-      console.log('⚠️ company_settingsテーブルが存在しない可能性があります。データベースマイグレーションを実行してください。')
-    } else {
-      console.log('✅ company_settingsテーブル接続成功')
     }
     
     // usersテーブルの存在確認
@@ -69,8 +60,6 @@ async function testDatabaseConnection(supabase: any) {
       throw new Error(`usersテーブルに接続できません: ${usersError.message}`)
     }
     
-    console.log('✅ usersテーブル接続成功')
-    console.log('✅ データベース接続テスト完了')
     
   } catch (error) {
     console.error('❌ データベース接続テスト失敗:', error)
@@ -161,25 +150,11 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
     const fromName = process.env.MAILGUN_FROM_NAME || 'SmartCost System'
     
     // 詳細なデバッグ情報を出力
-    console.log('🔍 Mailgun設定確認:')
-    console.log('  - API Key:', mailgunApiKey ? `${mailgunApiKey.substring(0, 8)}...` : '未設定')
-    console.log('  - Domain:', mailgunDomain || '未設定')
-    console.log('  - From Email:', fromEmail)
-    console.log('  - From Name:', fromName)
     
     if (!mailgunApiKey || !mailgunDomain) {
-      console.log('⚠️ Mailgun設定が不完全です。ログ出力のみ行います。')
-      console.log('【法人作成メール送信（ログのみ）】')
-      console.log('宛先:', email)
-      console.log('件名: 法人アカウント作成完了のお知らせ')
-      console.log('会社名:', companyName)
-      console.log('パスワード:', password)
       return { success: true, method: 'log' }
     }
 
-    console.log('🔍 Mailgunメール送信開始')
-    console.log('宛先:', email)
-    console.log('件名: 法人アカウント作成完了のお知らせ')
     
     // Mailgun APIを使用してメール送信
     const formData = new URLSearchParams()
@@ -189,10 +164,6 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
     formData.append('html', generateCompanyEmailHTML(companyName, email, password))
     formData.append('text', generateCompanyEmailText(companyName, email, password))
 
-    console.log('🔍 Mailgun APIリクエスト送信:')
-    console.log('  - URL:', `https://api.mailgun.net/v3/${mailgunDomain}/messages`)
-    console.log('  - Method: POST')
-    console.log('  - Auth Header:', `Basic ${Buffer.from(`api:${mailgunApiKey}`).toString('base64')}`)
 
     const response = await fetch(`https://api.mailgun.net/v3/${mailgunDomain}/messages`, {
       method: 'POST',
@@ -203,17 +174,12 @@ async function sendCompanyCreationEmail(email: string, companyName: string, pass
       body: formData
     })
 
-    console.log('🔍 Mailgun APIレスポンス:')
-    console.log('  - Status:', response.status)
-    console.log('  - Status Text:', response.statusText)
     
     // レスポンスヘッダーも確認
     const responseHeaders = Object.fromEntries(response.headers.entries())
-    console.log('  - Response Headers:', responseHeaders)
 
     if (response.ok) {
       const result = await response.json()
-      console.log('✅ Mailgunメール送信成功:', result)
       return { success: true, method: 'mailgun', messageId: result.id }
     } else {
       const errorData = await response.text()
@@ -257,7 +223,6 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    console.log('🔍 ユーザー削除API: 開始')
     
     const supabase = createSupabaseClient()
     const body = await request.json()
@@ -267,7 +232,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'メールアドレスが必要です' }, { status: 400 })
     }
     
-    console.log('📋 削除対象メールアドレス:', email)
     
     // 1. まずSupabase Authからユーザーを検索して削除
     const { data: authUsers, error: listError } = await supabase.auth.admin.listUsers()
@@ -285,7 +249,6 @@ export async function DELETE(request: NextRequest) {
       if (authError) {
         console.error('Auth削除エラー:', authError)
       } else {
-        console.log('✅ Authユーザー削除完了:', authUser.id)
       }
     }
     
@@ -313,7 +276,6 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'ユーザーの削除に失敗しました' }, { status: 500 })
       }
       
-      console.log('✅ ユーザー削除完了:', user.id)
     }
     
     // 3. 法人テーブルから削除
@@ -346,7 +308,6 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: '法人の削除に失敗しました' }, { status: 500 })
       }
       
-      console.log('✅ 法人削除完了:', company.id)
     }
     
     return NextResponse.json({ 
@@ -364,16 +325,13 @@ export async function DELETE(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 法人作成API: 開始')
     
     const supabase = createSupabaseClient()
-    console.log('✅ Supabaseクライアント作成完了')
     
     // データベース接続テスト
     await testDatabaseConnection(supabase)
     
     const body = await request.json()
-    console.log('📋 リクエストボディ:', { name: body.name, email: body.email })
     
     const { name, contact_name, email, address, phone, caddon_enabled } = body
 
@@ -416,12 +374,6 @@ export async function POST(request: NextRequest) {
 
     // 会社設定（CADDON有効/無効）: 新規はtrueで作成
     if (company?.id) {
-      console.log('🔍 CADDON設定保存開始:', { 
-        caddon_enabled, 
-        type: typeof caddon_enabled,
-        isFalse: caddon_enabled === false,
-        isTrue: caddon_enabled === true
-      })
       
       // caddon_enabledが明示的にfalseの場合はfalse、それ以外はtrue
       const finalCaddonEnabled = caddon_enabled === false ? false : true
@@ -440,7 +392,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '会社設定の保存に失敗しました。DBマイグレーション（company_settings）を適用してください。' }, { status: 500 })
       }
       
-      console.log('✅ CADDON設定保存完了:', finalCaddonEnabled)
     }
 
     // 法人管理者アカウントを作成

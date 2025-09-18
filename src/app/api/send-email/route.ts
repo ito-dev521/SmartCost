@@ -22,9 +22,6 @@ export async function POST(request: NextRequest) {
     // SupabaseのGoTrue Admin APIには sendRawEmail はありません。ここではログ出力のみ行います。
     const data = null
     const error = null
-    console.log('【メール送信(ログのみ)】宛先:', email)
-    console.log('件名: アカウント作成完了のお知らせ')
-    console.log('本文(HTML/テキスト)は省略')
     /* 実運用の例:
        await fetch(process.env.MAIL_WEBHOOK_URL!, { method: 'POST', body: JSON.stringify({ to: email, subject, html, text }) })
     */
@@ -99,7 +96,6 @@ ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login
       )
     }
 
-    console.log('✅ メール送信成功:', email)
     return NextResponse.json({
       message: 'メールが正常に送信されました',
       email

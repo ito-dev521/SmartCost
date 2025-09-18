@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/split-billing POST: リクエスト開始')
     
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -57,7 +56,6 @@ export async function POST(request: NextRequest) {
     }
 
     const { projectId, monthlyData } = await request.json()
-    console.log('📋 /api/split-billing POST: リクエストデータ:', { projectId, monthlyDataKeys: Object.keys(monthlyData || {}) })
 
     // プロジェクトがユーザーの会社に属しているか確認
     const { data: project, error: projectError } = await supabase
@@ -70,7 +68,6 @@ export async function POST(request: NextRequest) {
       console.error('❌ /api/split-billing POST: プロジェクト取得エラー:', projectError)
       return NextResponse.json({ error: 'プロジェクトが見つかりません' }, { status: 404 })
     }
-    console.log('✅ /api/split-billing POST: プロジェクト確認完了:', project.company_id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userDataError } = await supabase
@@ -83,7 +80,6 @@ export async function POST(request: NextRequest) {
       console.error('❌ /api/split-billing POST: ユーザー会社ID取得エラー:', userDataError)
       return NextResponse.json({ error: '会社情報の取得に失敗しました' }, { status: 500 })
     }
-    console.log('✅ /api/split-billing POST: ユーザー会社ID確認完了:', userData.company_id)
 
     // プロジェクトがユーザーの会社に属しているか確認
     if (project.company_id !== userData.company_id) {

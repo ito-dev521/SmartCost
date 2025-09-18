@@ -7,7 +7,6 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    console.log('🔍 /api/users/[id]: DELETEリクエスト受信', { userId: id })
 
     // AuthorizationヘッダーからJWTトークンを取得
     const authHeader = request.headers.get('authorization')
@@ -26,7 +25,6 @@ export async function DELETE(
       // JWTデコード（簡易版）
       const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
       userId = payload.sub
-      console.log('👤 /api/users/[id]: JWTから取得したユーザーID:', userId)
     } catch (error) {
       console.error('❌ /api/users/[id]: JWTデコードエラー:', error)
       return NextResponse.json(
@@ -101,7 +99,6 @@ export async function DELETE(
       )
     }
 
-    console.log('✅ /api/users/[id]: 削除権限確認完了、削除実行開始')
 
     // トランザクション開始
     const { error: deleteError } = await supabase
@@ -124,13 +121,11 @@ export async function DELETE(
         console.warn('⚠️ /api/users/[id]: 認証ユーザー削除エラー（テーブルは削除済み）:', authDeleteError)
         // 認証ユーザーの削除に失敗しても、テーブルは削除されているので警告のみ
       } else {
-        console.log('✅ /api/users/[id]: 認証ユーザー削除成功')
       }
     } catch (authError) {
       console.warn('⚠️ /api/users/[id]: 認証ユーザー削除で例外発生（テーブルは削除済み）:', authError)
     }
 
-    console.log('✅ /api/users/[id]: ユーザー削除完了')
     return NextResponse.json({
       message: 'ユーザーが正常に削除されました',
       deletedUserId: id
