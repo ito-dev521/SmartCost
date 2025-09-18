@@ -108,7 +108,6 @@ export default function AuthForm() {
         console.error('❌ エラー詳細:', {
           message: error.message,
           status: error.status,
-          statusText: error.statusText,
           email: email
         })
         
@@ -119,7 +118,7 @@ export default function AuthForm() {
           
           // スキーマエラーでも認証が成功している場合はリダイレクト
           if (data?.user) {
-            console.log('✅ ユーザー認証は成功しています:', data.user.email)
+            console.log('✅ ユーザー認証は成功しています:', (data.user as any).email)
             console.log('🔄 プロジェクトページにリダイレクトします...')
             window.location.href = '/projects'
             return
