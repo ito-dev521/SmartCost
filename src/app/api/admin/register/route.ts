@@ -62,21 +62,8 @@ async function sendUserCreationEmail(email: string, name: string, password: stri
     const fromEmail = process.env.MAILGUN_FROM_EMAIL || `noreply@${mailgunDomain}`
     const fromName = process.env.MAILGUN_FROM_NAME || 'SmartCost System'
     
-    console.log('🔍 ユーザー作成メール送信開始:', {
-      email,
-      name,
-      hasPassword: !!password,
-      mailgunDomain: mailgunDomain ? '設定済み' : '未設定',
-      mailgunApiKey: mailgunApiKey ? '設定済み' : '未設定'
-    })
     
     if (!mailgunApiKey || !mailgunDomain) {
-      console.log('⚠️ Mailgun設定が不完全です。ログ出力のみ行います。')
-      console.log('【ユーザー作成メール送信（ログのみ）】')
-      console.log('宛先:', email)
-      console.log('件名: アカウント作成完了のお知らせ')
-      console.log('名前:', name)
-      console.log('パスワード:', password)
       return { success: true, method: 'log' }
     }
 
@@ -99,7 +86,6 @@ async function sendUserCreationEmail(email: string, name: string, password: stri
 
     if (response.ok) {
       const result = await response.json()
-      console.log('✅ ユーザー作成メール送信成功:', result)
       return { success: true, method: 'mailgun', messageId: result.id }
     } else {
       const errorData = await response.text()
@@ -178,11 +164,6 @@ export async function POST(request: NextRequest) {
     
     const generatedPassword = generatePassword()
     
-    console.log('🔍 /api/admin/register: 認証ユーザー作成開始', {
-      email,
-      hasPassword: !!generatedPassword,
-      passwordLength: generatedPassword.length
-    })
     
     // Supabaseの認証システムでユーザーを作成
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({

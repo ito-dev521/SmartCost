@@ -422,10 +422,8 @@ export default function AIEnhancedCashFlow() {
       
       if (response.ok) {
         const data = await response.json()
-        console.log('取得した年間入金予定表データ:', data)
         return data.monthlyTotals || []
       } else {
-        console.log('年間入金予定表APIレスポンスがNG:', response.status)
       }
     } catch (error) {
       console.error('年間入金予定表取得エラー:', error)
@@ -443,11 +441,9 @@ export default function AIEnhancedCashFlow() {
         // 銀行残高履歴の最新データから初期残高を取得
         const latestBalance = history[0]
         currentBalance = latestBalance.closing_balance || 0
-        console.log(`💰 AIEnhancedCashFlow: 銀行残高履歴から初期残高を取得: ${currentBalance} (${latestBalance.balance_date})`)
       } else {
         // 銀行残高履歴がない場合は決算情報の銀行残高を使用
         currentBalance = fiscalInfo?.bank_balance || 0
-        console.log(`💰 AIEnhancedCashFlow: 決算情報から初期残高を取得: ${currentBalance}`)
       }
       
       let runningBalance = currentBalance // 現在の残高
@@ -518,11 +514,9 @@ export default function AIEnhancedCashFlow() {
         const latestBalance = history[0] // 最新のデータ
         // closing_balanceは既にその月の収支を含んだ月末残高なので、そのまま使用
         currentBalance = latestBalance.closing_balance || currentBalance
-        console.log('💰 銀行残高履歴から現在の残高を取得:', currentBalance, '日付:', latestBalance.balance_date)
       } else {
         // 銀行残高履歴がない場合は決算情報の銀行残高を使用
         currentBalance = fiscalInfo?.bank_balance || 0
-        console.log('💰 決算情報から現在の残高を取得:', currentBalance)
       }
 
       // 予測は常にAPIから取得して一貫性を保つ
@@ -535,7 +529,6 @@ export default function AIEnhancedCashFlow() {
         predData = await predictionRes.json()
         setDetailedPredictions(predData.predictions || [])
         setPredictionSummary(predData.summary)
-        console.log('再分析: /api/cash-flow-prediction から取得した詳細予測:', predData)
       } else {
         console.error('再分析時の詳細予測取得に失敗しました:', predictionRes.status)
       }

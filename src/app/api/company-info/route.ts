@@ -8,7 +8,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '会社名が必要です' }, { status: 400 })
     }
 
-    console.log('🔍 企業情報検索開始:', { companyName })
 
     // 企業ナビの検索URLを構築
     const searchUrl = `https://corp.navi.com/search?q=${encodeURIComponent(companyName)}`
@@ -31,11 +30,9 @@ export async function POST(request: NextRequest) {
       const companyInfo = extractCompanyInfo(html, companyName)
       
       if (companyInfo) {
-        console.log('✅ 企業情報取得成功:', companyInfo)
         return NextResponse.json(companyInfo)
       } else {
         // 企業情報が見つからない場合、一般的な住所候補を返す
-        console.log('⚠️ 企業情報が見つからない、一般的な住所候補を返す')
         return NextResponse.json({
           suggestions: generateGeneralAddresses(companyName),
           source: 'general'

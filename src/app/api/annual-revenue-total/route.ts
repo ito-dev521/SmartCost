@@ -78,7 +78,6 @@ const calculatePaymentDate = (endDate: string, client: Client): Date => {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Annual revenue total API called')
 
     // Supabaseクライアントを作成
     const supabase = createServerClient(
@@ -122,7 +121,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🔍 年間入金予定表合計取得: 会社ID', userData.company_id)
 
     // プロジェクトデータを取得（会社IDでフィルタリング）
     const { data: projects, error: projectsError } = await supabase
@@ -198,7 +196,6 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log('年間入金予定表の画面と同じ方法で計算した年間合計:', totalRevenue)
 
     return NextResponse.json({
       annualTotal: totalRevenue,

@@ -444,7 +444,6 @@ export default function DailyReportPage() {
 
 
       if (!data || data.length === 0) {
-        console.log('日次データがありません')
         setEntries([])
         return
       }
@@ -453,16 +452,12 @@ export default function DailyReportPage() {
       const userIds = [...new Set(data.map(entry => entry.user_id).filter(Boolean))]
       const projectIds = [...new Set(data.map(entry => entry.project_id).filter(Boolean))]
 
-      console.log('fetchDailyReports - 取得対象ユーザーID:', userIds)
-      console.log('fetchDailyReports - 取得対象プロジェクトID:', projectIds)
 
       const [usersResult, projectsResult] = await Promise.all([
         userIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', userIds) : Promise.resolve({ data: [] }),
         projectIds.length > 0 ? supabase.from('projects').select('id, name, business_number').in('id', projectIds) : Promise.resolve({ data: [] })
       ])
 
-      console.log('fetchDailyReports - ユーザー情報取得結果:', usersResult)
-      console.log('fetchDailyReports - プロジェクト情報取得結果:', projectsResult)
 
       const usersMap = new Map(usersResult.data?.map(user => [user.id, user]) || [])
       const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
@@ -496,7 +491,6 @@ export default function DailyReportPage() {
         }
       })
 
-      console.log('エントリー情報:', entriesWithUserInfo)
       setEntries(entriesWithUserInfo)
     } catch (error) {
       console.error('作業日報取得エラー:', error)
@@ -509,7 +503,6 @@ export default function DailyReportPage() {
   // 月間の作業日報を取得（カレンダー表示用）
   const fetchMonthlyEntries = async () => {
     try {
-      console.log('月間作業日報取得開始（カレンダー用）...')
       
       // 現在表示中の月の日付範囲を計算
       const currentDate = new Date(selectedDate)
@@ -518,7 +511,6 @@ export default function DailyReportPage() {
       const startDate = new Date(year, month, 1).toISOString().slice(0, 10)
       const endDate = new Date(year, month + 1, 0).toISOString().slice(0, 10)
       
-      console.log('カレンダー用日付範囲:', startDate, '〜', endDate)
 
       // 現在のユーザーの会社IDを取得
       const { data: { user } } = await supabase.auth.getUser()
@@ -556,10 +548,8 @@ export default function DailyReportPage() {
         return
       }
 
-      console.log('カレンダー用月間データ:', data)
 
       if (!data || data.length === 0) {
-        console.log('月間データがありません')
         setMonthlyEntries([])
         return
       }
@@ -568,16 +558,12 @@ export default function DailyReportPage() {
       const userIds = [...new Set(data.map(entry => entry.user_id).filter(Boolean))]
       const projectIds = [...new Set(data.map(entry => entry.project_id).filter(Boolean))]
 
-      console.log('fetchMonthlyEntries - 取得対象ユーザーID:', userIds)
-      console.log('fetchMonthlyEntries - 取得対象プロジェクトID:', projectIds)
 
       const [usersResult, projectsResult] = await Promise.all([
         userIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', userIds) : Promise.resolve({ data: [] }),
         projectIds.length > 0 ? supabase.from('projects').select('id, name, business_number').in('id', projectIds) : Promise.resolve({ data: [] })
       ])
 
-      console.log('fetchMonthlyEntries - ユーザー情報取得結果:', usersResult)
-      console.log('fetchMonthlyEntries - プロジェクト情報取得結果:', projectsResult)
 
       const usersMap = new Map(usersResult.data?.map(user => [user.id, user]) || [])
       const projectsMap = new Map(projectsResult.data?.map(project => [project.id, project]) || [])
@@ -611,7 +597,6 @@ export default function DailyReportPage() {
         }
       })
 
-      console.log('カレンダー用エントリー情報:', entriesWithUserInfo)
       setMonthlyEntries(entriesWithUserInfo)
     } catch (error) {
       console.error('月間作業日報取得エラー（カレンダー用）:', error)
@@ -621,8 +606,6 @@ export default function DailyReportPage() {
 
   const fetchMonthlyReports = async () => {
     try {
-      console.log('月次作業日報取得開始...')
-      console.log('選択された月:', selectedMonth)
 
       // 日付範囲の計算
       const startDate = `${selectedMonth}-01`
@@ -630,7 +613,6 @@ export default function DailyReportPage() {
       nextMonth.setMonth(nextMonth.getMonth() + 1)
       const endDate = nextMonth.toISOString().slice(0, 10)
 
-      console.log('日付範囲:', startDate, '〜', endDate)
 
       // 現在のユーザー情報を取得
       const { data: { user } } = await supabase.auth.getUser()
@@ -678,10 +660,8 @@ export default function DailyReportPage() {
         throw error
       }
 
-      console.log('取得した月次作業日報:', data)
       
       if (!data || data.length === 0) {
-        console.log('データがありません')
         setMonthlyReports([])
         return
       }
@@ -729,7 +709,6 @@ export default function DailyReportPage() {
         totalHours: groupedByDate[date].reduce((sum: number, entry: DailyReportEntry) => sum + (entry.work_hours || 0), 0)
       }))
 
-      console.log('月次データ:', monthlyData)
       setMonthlyReports(monthlyData)
 
       // 時間管理の場合、人件費計算を行う
@@ -824,7 +803,6 @@ export default function DailyReportPage() {
 
   const removeEntry = (index: number) => {
     const entryToRemove = entries[index]
-    console.log('削除対象エントリー:', entryToRemove)
     
     // 削除対象を削除リストに追加（既存エントリーの場合）
     if (entryToRemove.id) {
@@ -848,11 +826,9 @@ export default function DailyReportPage() {
     
     setIsSaving(true)
     try {
-      console.log('保存開始:', entries)
       
       // 現在のユーザー情報を確認
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      console.log('保存時のユーザー:', user)
       if (userError) {
         console.error('ユーザー取得エラー:', userError)
         throw userError
@@ -872,7 +848,6 @@ export default function DailyReportPage() {
 
       // 削除されたエントリーを処理
       if (deletedEntries.length > 0) {
-        console.log('削除対象エントリー:', deletedEntries)
         for (const deletedId of deletedEntries) {
           const { error } = await supabase
             .from('daily_reports')
@@ -885,17 +860,14 @@ export default function DailyReportPage() {
             console.error('削除エラーの詳細:', error.message)
             throw error
           }
-          console.log('削除成功:', deletedId)
         }
       }
 
       // 既存のエントリーを更新または新規作成
       for (const entry of entries) {
-        console.log('処理中のエントリー:', entry)
         
         if (entry.id) {
           // 既存エントリーの更新
-          console.log('既存エントリーの更新:', entry.id)
           const { data, error } = await supabase
             .from('daily_reports')
             .update({
@@ -914,10 +886,8 @@ export default function DailyReportPage() {
             console.error('更新エラーの詳細:', error.message)
             throw error
           }
-          console.log('更新成功:', data)
         } else {
           // 新規エントリーの作成
-          console.log('新規エントリーの作成')
           const insertData = {
             date: entry.date,
             project_id: entry.project_id,
@@ -928,7 +898,6 @@ export default function DailyReportPage() {
             user_id: user?.id, // ユーザーIDを明示的に追加
             company_id: userData.company_id // 会社IDを追加
           }
-          console.log('挿入データ:', insertData)
           
           const { data, error } = await supabase
             .from('daily_reports')
@@ -940,7 +909,6 @@ export default function DailyReportPage() {
             console.error('挿入エラーのコード:', error.code)
             throw error
           }
-          console.log('挿入成功:', data)
         }
       }
 
@@ -1184,11 +1152,6 @@ export default function DailyReportPage() {
           const month = String(date.getMonth() + 1).padStart(2, '0')
           const day = String(date.getDate()).padStart(2, '0')
           const dateString = `${year}-${month}-${day}`
-          console.log('カレンダーから日付選択:', {
-            originalDate: date,
-            dateString,
-            isoString: date.toISOString().slice(0, 10)
-          })
           setSelectedDate(dateString)
         }}
               onClose={() => setShowCalendar(false)}

@@ -90,7 +90,6 @@ const calculatePaymentDate = (endDate: string, client: Client): Date => {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Annual revenue schedule API called')
 
     // Supabaseクライアントを作成
     const supabase = createServerClient(
@@ -134,7 +133,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🔍 年間入金予定表取得: 会社ID', userData.company_id)
 
     // プロジェクトデータを取得（会社IDでフィルタリング）
     const { data: projects, error: projectsError } = await supabase
@@ -168,10 +166,6 @@ export async function GET(request: NextRequest) {
       console.error('クライアントデータ取得エラー:', clientsError)
     }
 
-    console.log('取得したデータ:', {
-      projects: projects?.length || 0,
-      caddonBillings: caddonBillings?.length || 0
-    })
 
     // 閲覧年度の取得（クッキー fiscal-view-year があれば優先）
     const cookieStore = await cookies()
@@ -206,20 +200,17 @@ export async function GET(request: NextRequest) {
 
     // プロジェクトの収入を月毎に分配
     if (projects) {
-      console.log('プロジェクトデータ処理開始:', projects.length, '件')
       let processedProjects = 0
       let totalContractAmount = 0
       
       projects.forEach(project => {
         // 一般管理費を除外
         if (project.name.includes('一般管理費') || project.name.includes('その他経費')) {
-          console.log(`プロジェクト ${project.business_number} (${project.name}): 一般管理費のためスキップ`)
           return
         }
 
         // CADDONプロジェクトの場合
         if (project.business_number?.startsWith('C') || project.name.includes('CADDON')) {
-          console.log(`CADDONプロジェクト処理: ${project.business_number} (${project.name})`)
           
           // このプロジェクトのCADDON請求を取得
           const projectBillings = caddonBillings?.filter(billing => billing.project_id === project.id)
@@ -227,15 +218,12 @@ export async function GET(request: NextRequest) {
             projectBillings.forEach(billing => {
               // amountフィールドを優先使用（CADDON管理と整合性を保つ）
               const amount = billing.amount || billing.total_amount || 0
-              console.log(`CADDON請求データ: ${billing.billing_month} - amount: ${billing.amount}, total_amount: ${billing.total_amount}, 使用値: ${amount}`)
               if (amount > 0) {
                 const billingDate = new Date(billing.billing_month)
                 const key = `${billingDate.getFullYear()}-${String(billingDate.getMonth() + 1).padStart(2, '0')}`
                 if (monthlyMap[key] !== undefined) {
                   monthlyMap[key] += amount
-                  console.log(`CADDON請求: ${key} に ${amount.toLocaleString()}円 追加 (${project.business_number} - ${billing.billing_month})`)
                 } else {
-                  console.log(`CADDON請求: ${key} は今期の範囲外 (${project.business_number} - ${billing.billing_month})`)
                 }
               } else {
                 console.log(`CADDON請求: ${project.business_number} の ${billing.billing_month} は金額0円のためスキップ`)

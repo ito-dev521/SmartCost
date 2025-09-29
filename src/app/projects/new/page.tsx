@@ -21,12 +21,9 @@ export default async function NewProjectPage() {
   }
 
   // マネージャー権限チェック（デバッグ用に完全に無効化）
-  console.log('🔍 /projects/new: 権限チェック開始')
   const isManager = await permissionChecker.isManager(user.id)
-  console.log('📋 /projects/new: 権限チェック結果:', { isManager, userId: user.id })
   
   // デバッグ用に権限チェックを完全にスキップ
-  console.log('✅ /projects/new: 権限チェックスキップ、ページ表示')
 
   return (
     <DashboardLayout>

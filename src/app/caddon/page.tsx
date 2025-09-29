@@ -48,12 +48,6 @@ export default async function CaddonPage() {
     .eq('company_id', userCompanyId)
     .order('name')
 
-  // デバッグ用ログ
-  console.log('CADDON管理ページ - クライアントデータ取得:', {
-    userCompanyId,
-    clients,
-    clientsError
-  })
 
   // プロジェクトデータを取得
   const { data: projects } = await supabase

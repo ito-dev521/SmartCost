@@ -110,15 +110,10 @@ const SYSTEM_PROMPT = `
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔍 /api/ai-chat: AIチャットリクエスト受信')
-    console.log('🔍 /api/ai-chat: リクエストURL:', request.url)
-    console.log('🔍 /api/ai-chat: リクエストメソッド:', request.method)
-    console.log('🔍 /api/ai-chat: リクエストヘッダー:', Object.fromEntries(request.headers.entries()))
     
     // 認証チェック - 複数の方法で認証を試行
     const cookieStore = await cookies()
     const allCookies = cookieStore.getAll()
-    console.log('🍪 /api/ai-chat: クッキー情報:', allCookies.map(c => ({ name: c.name, value: c.value?.substring(0, 20) + '...' })))
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -169,7 +164,6 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    console.log('👤 /api/ai-chat: 認証済みユーザー:', user.id)
 
     const { message } = await request.json()
 
@@ -177,7 +171,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
     }
 
-    console.log('💬 /api/ai-chat: メッセージ受信:', message)
 
     // OpenAI APIキーの確認
     if (!process.env.OPENAI_API_KEY) {
@@ -185,8 +178,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AIサービスが利用できません' }, { status: 500 })
     }
 
-    console.log('🤖 /api/ai-chat: OpenAI API呼び出し開始')
-    console.log('🤖 /api/ai-chat: OpenAI APIキー存在確認:', !!process.env.OPENAI_API_KEY)
     console.log('🤖 /api/ai-chat: リクエストボディ:', {
       model: 'gpt-4o-mini',
       messages: [

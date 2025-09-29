@@ -40,12 +40,10 @@ export default function ClientManagement() {
 
       // 権限を直接設定
       setUserPermissions(permissions)
-      console.log('✅ ClientManagement: 権限設定完了')
     } catch (error) {
       console.error('❌ ClientManagement: 権限チェックエラー:', error)
     } finally {
       setIsLoading(false)
-      console.log('✅ ClientManagement: 読み込み完了')
     }
   }
 
@@ -100,34 +98,21 @@ export default function ClientManagement() {
   }
 
   const handleDelete = async (clientId: string) => {
-    console.log('🔍 ClientManagement: handleDelete呼び出し:', { clientId, userPermissions })
-    console.log('🔍 ClientManagement: handleDelete関数の型:', typeof handleDelete)
-    console.log('🔍 ClientManagement: handleDelete関数の内容:', handleDelete.toString())
     
     if (!userPermissions.canDelete) {
-      console.log('❌ ClientManagement: 削除権限なし')
       alert('クライアントを削除する権限がありません')
       return
     }
 
-    console.log('✅ ClientManagement: 削除権限確認完了')
 
     try {
-      console.log('🔍 ClientManagement: クライアント削除開始:', clientId)
-      console.log('🔍 ClientManagement: 削除API URL:', `/api/clients/${clientId}`)
-
-      console.log('📡 ClientManagement: API呼び出し開始')
       const response = await fetch(`/api/clients/${clientId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       })
-      console.log('📡 ClientManagement: API呼び出し完了')
 
-      console.log('📋 ClientManagement: API応答:', { status: response.status, ok: response.ok })
-      console.log('📋 ClientManagement: レスポンスオブジェクト:', response)
 
       if (!response.ok) {
-        console.log('❌ ClientManagement: API応答が失敗:', response.status)
         try {
           const error = await response.json()
           console.error('❌ ClientManagement: APIエラー:', error)
@@ -138,25 +123,19 @@ export default function ClientManagement() {
         }
       }
 
-      console.log('✅ ClientManagement: クライアント削除成功')
       
       // レスポンス内容を確認
       try {
         const responseData = await response.json()
-        console.log('📋 ClientManagement: レスポンスデータ:', responseData)
       } catch (jsonError) {
-        console.log('⚠️ ClientManagement: レスポンスJSONパースエラー:', jsonError)
       }
       
       // 削除成功後、フロントエンド側の状態を更新
-      console.log('🔄 ClientManagement: フロントエンド状態更新開始')
       
       // 強制的にページをリロードして確実に状態を更新
-      console.log('🔄 ClientManagement: ページリロード開始')
       window.location.reload()
       
       // 削除処理完了のログ
-      console.log('🎉 ClientManagement: 削除処理完了')
     } catch (error) {
       console.error('❌ ClientManagement: クライアント削除エラー:', error)
       alert(error instanceof Error ? error.message : 'クライアントの削除に失敗しました')
@@ -173,13 +152,9 @@ export default function ClientManagement() {
   }
 
   // デバッグ用に権限チェックを一時的にスキップ
-  console.log('📋 ClientManagement: 現在の権限状態:', userPermissions)
-  console.log('📋 ClientManagement: 読み込み状態:', isLoading)
-  console.log('📋 ClientManagement: canView権限:', userPermissions.canView)
 
   // デバッグ用に一時的に権限チェックを完全に無効化
   const showAccessDenied = false // デバッグ用にfalseに設定
-  console.log('📋 ClientManagement: アクセス拒否表示:', showAccessDenied)
 
   if (showAccessDenied) {
     return (

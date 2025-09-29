@@ -42,10 +42,8 @@ export async function POST(request: NextRequest) {
 などが適切です。
 `
 
-    console.log('🔍 OpenAI API呼び出し開始:', { companyName })
 
     if (!openai) {
-      console.log('⚠️ OpenAI APIキーが設定されていないため、デフォルトの住所を返します')
       return NextResponse.json({
         suggestions: [
           '東京都渋谷区渋谷1-1-1',
@@ -72,8 +70,6 @@ export async function POST(request: NextRequest) {
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
-    console.log('📋 OpenAI API応答:', responseText)
-    console.log('🔍 応答の長さ:', responseText.length)
     console.log('🔍 応答の内容確認:', responseText.substring(0, 200) + '...')
     
     try {

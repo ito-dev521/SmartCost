@@ -32,7 +32,6 @@ export default function Progress() {
 
   // データ取得関数
   const fetchData = async () => {
-    console.log('=== データ再取得開始 ===')
     try {
       // 現在のユーザーの会社IDを取得
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -54,7 +53,6 @@ export default function Progress() {
         return
       }
 
-      console.log('進捗管理ページ - ユーザーの会社ID:', userData.company_id)
 
       // プロジェクトデータの取得（会社IDでフィルタリング）
       const { data: projRows } = await supabase
@@ -73,10 +71,6 @@ export default function Progress() {
       const progressJson = await progressRes.json()
       const progress = progressJson.data
 
-      console.log('再取得したデータ:', {
-        projectsCount: (projRows as any)?.length,
-        progressCount: progress?.length
-      })
 
       setProjects((projRows as any) || [])
       setProgressData(progress || [])
@@ -94,7 +88,6 @@ export default function Progress() {
 
   // 進捗更新時のコールバック
   const handleProgressUpdate = () => {
-    console.log('=== 進捗更新コールバック実行 ===')
     fetchData()
   }
 

@@ -72,7 +72,6 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
         }
 
         const data = await response.json()
-        console.log('✅ ClientList: クライアント取得成功:', data.clients?.length || 0, '件')
         setClients(data.clients || [])
       } catch (error) {
         console.error('❌ ClientList: クライアント取得エラー:', error)
@@ -91,35 +90,24 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
   )
 
   const handleDelete = async (clientId: string, clientName: string) => {
-    console.log('🔍 ClientList: handleDelete呼び出し:', { clientId, clientName })
     
     // 削除確認
     if (!confirm(`${clientName}を削除しますか？この操作は取り消せません。`)) {
-      console.log('❌ ClientList: 削除キャンセル')
       return
     }
 
-    console.log('✅ ClientList: 削除確認完了')
 
     // 親コンポーネントのonDeleteコールバックを呼び出し
     if (onDelete) {
-      console.log('📋 ClientList: 親コンポーネントのonDeleteを呼び出し')
-      console.log('📋 ClientList: onDelete関数の型:', typeof onDelete)
-      console.log('📋 ClientList: onDelete関数の内容:', onDelete.toString())
       
       try {
-        console.log('🔍 ClientList: onDelete関数を実行中...')
         onDelete(clientId)
-        console.log('✅ ClientList: onDelete呼び出し完了')
-        console.log('🎉 ClientList: 削除処理完了')
       } catch (error) {
         console.error('❌ ClientList: onDelete呼び出しエラー:', error)
       }
     } else {
-      console.log('⚠️ ClientList: onDeleteプロパティが存在しない、フォールバック処理を実行')
       // フォールバック: 直接削除処理を実行
       try {
-        console.log('🔍 ClientList: フォールバック削除処理開始:', clientId)
 
         const response = await fetch(`/api/clients/${clientId}`, {
           method: 'DELETE',
@@ -130,7 +118,6 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
           throw new Error(errorData.error || 'クライアントの削除に失敗しました')
         }
 
-        console.log('✅ ClientList: フォールバック削除処理成功')
 
         // ローカル状態を更新
         setClients(prev => prev.filter(client => client.id !== clientId))
@@ -251,7 +238,6 @@ export default function ClientList({ onEdit, onDelete, onCreateNew, canCreate = 
                     {canDelete && (
                       <button
                         onClick={() => {
-                          console.log('🔍 ClientList: 削除ボタンクリック:', { clientId: client.id, clientName: client.name })
                           handleDelete(client.id, client.name)
                         }}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"

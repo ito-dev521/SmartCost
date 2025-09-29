@@ -13,7 +13,6 @@ export async function middleware(request: NextRequest) {
       return res
     }
   } catch (e) {
-    console.log('Middleware: companyId cookie set error', e)
   }
   // 会社単位のCADDONガード: セッションからcompany_idを取得し company_settings を参照
   try {
@@ -50,7 +49,6 @@ export async function middleware(request: NextRequest) {
       }
     }
   } catch (e) {
-    console.log('Middleware: caddon guard error', e)
   }
   // 開発用: Supabase 未設定（placeholder）の場合は認証チェックをスキップ
   const isPlaceholderSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'

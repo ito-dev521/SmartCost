@@ -210,13 +210,11 @@ function calculateMonthlyCost(
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Cash flow prediction API called')
 
     const { searchParams } = new URL(request.url)
     const fiscalYear = parseInt(searchParams.get('fiscal_year') || new Date().getFullYear().toString())
     const months = parseInt(searchParams.get('months') || '12')
 
-    console.log('Parameters:', { fiscalYear, months })
 
     // Supabaseクライアントを作成
     const supabase = createServerClient(
@@ -237,7 +235,6 @@ export async function GET(request: NextRequest) {
         },
       }
     )
-    console.log('Supabase client created')
 
     // 認証されたユーザー情報を取得
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -250,7 +247,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('認証されたユーザー:', user.id)
 
     // ユーザーの会社IDを取得
     const { data: userData, error: userError } = await supabase
@@ -267,7 +263,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('🏢 会社ID:', userData.company_id)
 
     // プロジェクトデータを取得（会社IDでフィルタリング）
     const { data: projects } = await supabase
@@ -329,7 +324,6 @@ export async function GET(request: NextRequest) {
       notes: 'デフォルト設定'
     }
 
-    console.log('使用する決算情報:', fiscalInfo)
 
     // 年間入金予定表の月毎の金額を計算
     const monthlyRevenue = calculateMonthlyRevenueFromProjects(
@@ -344,8 +338,6 @@ export async function GET(request: NextRequest) {
       costEntries || []
     )
 
-    console.log('月別収入データ:', monthlyRevenue)
-    console.log('月別原価データ:', monthlyCost)
 
     // 新規法人の場合は、プロジェクトや入金予定がない場合は予測を表示しない
     const hasProjectData = (projects && projects.length > 0) || (caddonBillings && caddonBillings.length > 0)
@@ -353,7 +345,6 @@ export async function GET(request: NextRequest) {
     const hasCostData = monthlyCost.some(month => month.amount > 0)
     
     if (!hasProjectData && !hasRevenueData && !hasCostData) {
-      console.log('新規法人でデータが存在しないため、予測を表示しません')
       return NextResponse.json({
         predictions: [],
         message: '新規法人のため、プロジェクトや入金予定のデータを入力してください。'
@@ -372,7 +363,6 @@ export async function GET(request: NextRequest) {
       console.error('銀行残高履歴取得エラー:', bankHistoryError)
     }
 
-    console.log('💰 銀行残高履歴:', bankBalanceHistory)
 
     // 予測データを生成（決算月の翌月1日から開始）
     const predictions = []
@@ -388,16 +378,11 @@ export async function GET(request: NextRequest) {
       // 銀行残高履歴の最新データから初期残高を取得
       const latestHistory = bankBalanceHistory[0]
       runningBalance = latestHistory.closing_balance || 0
-      console.log(`💰 銀行残高履歴から初期残高を取得: ${runningBalance} (${latestHistory.balance_date})`)
     } else {
       // 銀行残高履歴がない場合は決算情報の銀行残高を使用
       runningBalance = fiscalInfo.bank_balance || 0
-      console.log(`💰 決算情報から初期残高を取得: ${runningBalance}`)
     }
 
-    console.log(`決算月: ${settlementMonth}月, 翌月: ${nextMonth}月 (${nextYear}年)`)
-    console.log(`予測開始日付: ${nextYear}年${nextMonth}月1日`)
-    console.log(`初期残高: ${runningBalance} (銀行残高履歴: ${bankBalanceHistory?.[0]?.closing_balance || 'なし'}, fiscalInfo: ${fiscalInfo.bank_balance})`)
 
     // 進捗データをプロジェクトID -> 進捗 へ変換
     const projectIdToProgress: Record<string, { progress: number; expectedEnd: Date | null }> = {}
@@ -426,12 +411,9 @@ export async function GET(request: NextRequest) {
       // 月表示のみの文字列を生成
       const dateString = `${year}年${month}月`
 
-      console.log(`i=${i}: 計算前: nextMonth=${nextMonth}, targetMonth=${nextMonth + i}`)
-      console.log(`i=${i}: 計算後: targetMonth=${targetMonth}, targetYear=${targetYear}, dateString=${dateString}`)
 
       // デバッグ: 最初の数回の計算を確認
       if (i < 3) {
-        console.log(`計算詳細: i=${i}, 元の月=${nextMonth + i}, 最終月=${targetMonth}, 年=${targetYear}`)
       }
 
       const revenueData = monthlyRevenue.find(r => r.month === month && r.year === year)

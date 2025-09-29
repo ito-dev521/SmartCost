@@ -30,14 +30,12 @@ export class PermissionChecker {
   // ユーザーのロールを取得
   async getUserRole(userId: string): Promise<Role | null> {
     try {
-      console.log('🔍 PermissionChecker: getUserRole開始', { userId })
       const { data: user, error } = await this.supabase
         .from('users')
         .select('role')
         .eq('id', userId)
         .single()
 
-      console.log('📋 PermissionChecker: getUserRole 結果', { userId, user, error })
       return user?.role as Role || null
     } catch (error) {
       console.error('❌ PermissionChecker: getUserRole エラー:', error)
@@ -64,7 +62,6 @@ export class PermissionChecker {
   // APIルート用の管理者権限チェック
   async isAdminWithClient(supabase: SupabaseClient, userId: string): Promise<boolean> {
     try {
-      console.log('🔍 PermissionChecker: isAdminWithClientチェック開始', { userId })
       const { data: user } = await supabase
         .from('users')
         .select('role')
@@ -72,7 +69,6 @@ export class PermissionChecker {
         .single()
 
       const role = user?.role as Role
-      console.log('📋 PermissionChecker: ユーザーロール取得', { userId, role })
       return role === ROLES.ADMIN
     } catch (error) {
       console.error('❌ PermissionChecker: isAdminWithClientエラー:', error)
@@ -123,11 +119,8 @@ export class PermissionChecker {
 
   // ビューアー権限チェック（閲覧権限以上）
   async canView(userId: string): Promise<boolean> {
-    console.log('🔍 PermissionChecker: canViewチェック開始', { userId })
     const role = await this.getUserRole(userId)
-    console.log('📋 PermissionChecker: canView ユーザーロール取得', { userId, role })
     const result = role === ROLES.VIEWER || role === ROLES.USER || role === ROLES.MANAGER || role === ROLES.ADMIN || role === ROLES.SUPERADMIN
-    console.log('📋 PermissionChecker: canView 結果', { userId, role, result })
     return result
   }
 
@@ -246,9 +239,7 @@ export class PermissionChecker {
 
   // クライアント閲覧権限チェック
   async canViewClients(userId: string): Promise<boolean> {
-    console.log('🔍 PermissionChecker: canViewClientsチェック開始', { userId })
     const result = await this.canView(userId)
-    console.log('📋 PermissionChecker: canViewClients結果', { userId, result })
     return result
   }
 

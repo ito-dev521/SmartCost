@@ -54,7 +54,6 @@ interface SeasonalRisks { winterRisk: boolean; yearEndRisk: boolean; fiscalYearE
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('AI Cash Flow Analysis API called')
 
     const { predictions, projects, fiscalInfo } = await request.json()
 

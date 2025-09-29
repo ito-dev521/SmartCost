@@ -24,9 +24,7 @@ export default async function EditProjectPage({
   }
 
   // デバッグ用に権限チェックを完全にスキップ
-  console.log('🔍 /projects/[id]/edit: 権限チェック開始')
   const { id } = await params
-  console.log('✅ /projects/[id]/edit: 権限チェックスキップ、ページ表示')
 
   return (
     <DashboardLayout>
