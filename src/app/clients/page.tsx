@@ -32,7 +32,7 @@ export default async function ClientsPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard requiredRole="user">
+      <PermissionGuard requiredRole="viewer">
         <ClientManagement />
       </PermissionGuard>
     </DashboardLayout>
