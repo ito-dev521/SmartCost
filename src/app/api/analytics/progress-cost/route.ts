@@ -178,9 +178,13 @@ export async function GET(request: NextRequest) {
 
     // データを統合・分析
     const analysisData = projects?.map(project => {
-      // 最新の進捗データを取得
+      // 最新の進捗データを取得（工事進行基準と同じロジック）
       const projectProgress = progressData?.filter(p => p.project_id === project.id) || []
-      const latestProgress = projectProgress.length > 0 ? projectProgress[0] : null
+      const latestProgress = projectProgress.sort((a, b) => {
+        const bTime = new Date(b.created_at || b.progress_date).getTime()
+        const aTime = new Date(a.created_at || a.progress_date).getTime()
+        return bTime - aTime
+      })[0] || null
 
       // プロジェクトの原価データを取得
       const projectCosts = costData?.filter(c => c.project_id === project.id) || []
