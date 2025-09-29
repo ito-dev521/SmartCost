@@ -88,6 +88,12 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           const data = await response.json()
           
           const project = data.project
+          // 注文書名が既に入力されており、ステータスが「計画中」の場合、「進行中」に自動変更
+          let initialStatus = project.status || 'planning'
+          if (project.order_form_name && project.order_form_name.trim() && initialStatus === 'planning') {
+            initialStatus = 'in_progress'
+          }
+
           setFormData({
             name: project.name || '',
             business_number: project.business_number || '',
@@ -99,7 +105,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
             budget: project.contract_amount?.toString() || '',
             start_date: project.start_date || '',
             end_date: project.end_date || '',
-            status: project.status || 'planning'
+            status: initialStatus
           })
         } else {
           const errorText = await response.text()

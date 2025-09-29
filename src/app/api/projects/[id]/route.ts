@@ -54,34 +54,39 @@ export async function PUT(
       status
     } = body
 
-    // バリデーション
-                if (!name || !business_number || !client_id || !start_date || !end_date) {
+    // バリデーション（編集時は業務番号は必須でない）
+                if (!name || !client_id || !start_date || !end_date) {
               return NextResponse.json({ error: '必須項目が入力されていません' }, { status: 400 })
             }
 
-            // 業務番号の重複チェック（自分自身は除外）
-            const { data: existingProject, error: checkError } = await supabase
-              .from('projects')
-              .select('id, name')
-              .eq('business_number', business_number.trim())
-              .neq('id', id)
-              .single()
+            // 業務番号の重複チェック（一時的に無効化）
+            // TODO: データベースの重複データクリーンアップ後に有効化
+            /*
+            if (business_number && business_number.trim()) {
+              const { data: existingProject, error: checkError } = await supabase
+                .from('projects')
+                .select('id, name')
+                .eq('business_number', business_number.trim())
+                .neq('id', id)
+                .single()
 
-            if (checkError && checkError.code !== 'PGRST116') { // PGRST116は「データが見つからない」エラー
-              console.error('❌ /api/projects/[id] PUT: 重複チェックエラー:', checkError)
-              return NextResponse.json({ error: '業務番号の重複チェックに失敗しました' }, { status: 500 })
-            }
+              if (checkError && checkError.code !== 'PGRST116') { // PGRST116は「データが見つからない」エラー
+                console.error('❌ /api/projects/[id] PUT: 重複チェックエラー:', checkError)
+                return NextResponse.json({ error: '業務番号の重複チェックに失敗しました' }, { status: 500 })
+              }
 
-            if (existingProject) {
-              return NextResponse.json({ 
-                error: `業務番号「${business_number}」は既に使用されています（プロジェクト: ${existingProject.name}）` 
-              }, { status: 400 })
+              if (existingProject) {
+                return NextResponse.json({
+                  error: `業務番号「${business_number}」は既に使用されています（プロジェクト: ${existingProject.name}）`
+                }, { status: 400 })
+              }
             }
+            */
 
     // プロジェクトデータを準備
     const projectData = {
       name: name.trim(),
-      business_number: business_number.trim(),
+      business_number: business_number ? business_number.trim() : null,
       order_form_name: order_form_name ? order_form_name.trim() : null,
       client_id,
       client_name,
