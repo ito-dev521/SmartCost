@@ -13,6 +13,7 @@ import {
   Save
 } from 'lucide-react'
 import Link from 'next/link'
+import ProjectMemos from './ProjectMemos'
 
 interface ProjectFormData {
   name: string
@@ -557,6 +558,9 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           </button>
         </div>
       </form>
+
+      {/* メモセクション */}
+      <ProjectMemos projectId={projectId} />
     </div>
   )
 }
