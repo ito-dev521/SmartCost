@@ -550,7 +550,6 @@ export default function AIEnhancedCashFlow() {
           const data = await response.json()
           const annualTotal = data.annualTotal || 0
           setTotalIncome(annualTotal)
-          console.log('再分析: 年間入金予定表から取得した年間合計:', annualTotal)
         } else {
           console.error('再分析: 年間入金予定表APIエラー:', response.status)
           // フォールバック: 予測データから計算
@@ -594,7 +593,6 @@ export default function AIEnhancedCashFlow() {
         const annual = await fetchAnnualRevenueSchedule()
         if (annual.length > 0) {
           const diff = totalIncome - annual.reduce((s: number, r: any) => s + r.amount, 0)
-          console.log('年間入金予定表と予測収入の差分(ログのみ):', diff)
         }
       } catch (e) {
         console.warn('年間入金予定表の照合に失敗:', e)
@@ -770,7 +768,6 @@ export default function AIEnhancedCashFlow() {
       if (response.ok) {
         const result = await response.json()
         setAiAnalysisResult(result.analysis)
-        console.log('AI分析結果:', result.analysis)
       } else {
         console.error('AI分析APIエラー:', response.status)
       }

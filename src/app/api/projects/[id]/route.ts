@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-api'
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -44,8 +44,10 @@ export async function PUT(
     const {
       name,
       business_number,
+      order_form_name,
       client_id,
       client_name,
+      person_in_charge,
       contract_amount,
       start_date,
       end_date,
@@ -80,8 +82,10 @@ export async function PUT(
     const projectData = {
       name: name.trim(),
       business_number: business_number.trim(),
+      order_form_name: order_form_name ? order_form_name.trim() : null,
       client_id,
       client_name,
+      person_in_charge: person_in_charge ? person_in_charge.trim() : null,
       contract_amount: contract_amount || 0,
       start_date,
       end_date,
@@ -154,7 +158,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

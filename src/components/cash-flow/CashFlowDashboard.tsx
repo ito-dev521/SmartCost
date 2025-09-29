@@ -295,15 +295,11 @@ export default function CashFlowDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('取得した決算情報:', data)
         if (data.fiscalInfo) {
-          console.log('設定する決算情報:', data.fiscalInfo)
           setFiscalInfo(data.fiscalInfo)
         } else {
-          console.log('fiscalInfoが空です')
         }
       } else {
-        console.log('APIレスポンスがNG:', response.status)
       }
     } catch (error) {
       console.error('決算情報取得エラー:', error)
@@ -312,22 +308,16 @@ export default function CashFlowDashboard() {
 
   const fetchBankBalanceHistory = async () => {
     try {
-      console.log('fetchBankBalanceHistory開始')
       const response = await fetch('/api/bank-balance-history')
-      console.log('銀行残高履歴APIレスポンス:', response.status, response.ok)
 
       if (response.ok) {
         const data = await response.json()
-        console.log('取得した銀行残高履歴:', data)
         if (data.history) {
-          console.log('設定する銀行残高履歴:', data.history)
           setBankBalanceHistory(data.history)
         } else {
-          console.log('銀行残高履歴が空です')
           setBankBalanceHistory([])
         }
       } else {
-        console.log('銀行残高履歴APIレスポンスがNG:', response.status)
         setBankBalanceHistory([])
       }
     } catch (error) {
@@ -348,10 +338,6 @@ export default function CashFlowDashboard() {
       const thirtyDaysLater = new Date()
       thirtyDaysLater.setDate(today.getDate() + 30)
 
-      console.log('支払いデータ自動更新:', {
-        today: today.toISOString().split('T')[0],
-        thirtyDaysLater: thirtyDaysLater.toISOString().split('T')[0]
-      })
 
       // cost_entriesからデータを取得
       let costEntries: any[] | null = null
@@ -397,7 +383,6 @@ export default function CashFlowDashboard() {
 
       // エラーログは開発環境でのみ表示
       if (costError && salaryError && process.env.NODE_ENV === 'development') {
-        console.log('支払いデータ取得: cost_entriesとsalary_entriesの両方でエラーが発生しましたが、処理を継続します')
       }
 
       // データを統合してPaymentData形式に変換
@@ -465,9 +450,6 @@ export default function CashFlowDashboard() {
       // ステートを更新
       setPaymentData(newPaymentData)
 
-      console.log('支払いデータ更新完了:', {
-        count: newPaymentData.length
-      })
 
     } catch (error) {
       console.error('支払いデータ自動更新エラー:', error)
@@ -482,24 +464,15 @@ export default function CashFlowDashboard() {
       const thirtyDaysLater = new Date()
       thirtyDaysLater.setDate(today.getDate() + 30)
 
-      console.log('支払いデータ取得開始:', {
-        today: today.toISOString().split('T')[0],
-        thirtyDaysLater: thirtyDaysLater.toISOString().split('T')[0]
-      })
 
       // cost_entriesテーブルが存在するか確認
       const { error: simpleError } = await supabaseClient
         .from('cost_entries')
         .select('count', { count: 'exact', head: true })
 
-      console.log('cost_entriesテーブル存在確認:', {
-        exists: !simpleError,
-        error: simpleError?.message
-      })
 
       // テーブルが存在しない場合はsalary_entriesからデータを取得
       if (simpleError) {
-        console.log('cost_entriesテーブルが存在しないため、salary_entriesからデータを取得します')
 
         const { data: salaryData, error: salaryError } = await supabaseClient
           .from('salary_entries')
@@ -517,7 +490,6 @@ export default function CashFlowDashboard() {
           .order('salary_period_end', { ascending: true })
           .limit(20)
 
-        console.log('salary_entriesクエリ結果:', { salaryData, salaryError })
 
         if (salaryError) {
           console.error('salary_entries取得エラー:', salaryError)
@@ -569,7 +541,6 @@ export default function CashFlowDashboard() {
       }
 
       // 原価入力（cost_entries）と給与入力（salary_entries）の両方からデータを取得
-      console.log('原価入力と給与入力から支払いデータを取得します')
 
       // cost_entriesからデータを取得
       const { data: costEntries, error: costError } = await supabaseClient
@@ -588,7 +559,6 @@ export default function CashFlowDashboard() {
         .order('entry_date', { ascending: true })
         .limit(10)
 
-      console.log('cost_entriesクエリ結果:', { costEntries, costError })
 
       // salary_entriesからデータを取得
       const { data: salaryData, error: salaryError } = await supabaseClient
@@ -607,7 +577,6 @@ export default function CashFlowDashboard() {
         .order('salary_period_end', { ascending: true })
         .limit(10)
 
-      console.log('salary_entriesクエリ結果:', { salaryData, salaryError })
 
       // エラーチェック
       if (costError && salaryError) {
@@ -703,7 +672,6 @@ export default function CashFlowDashboard() {
       // データを期日順にソート
       paymentData.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
 
-      console.log('統合された支払いデータ:', { paymentData, count: paymentData.length })
 
       if (paymentData.length > 0) {
         setPaymentData(paymentData)
@@ -825,11 +793,9 @@ export default function CashFlowDashboard() {
                         // 管理者パネルの銀行残高履歴管理から最新の月末残高を取得
                         const latestBalance = bankBalanceHistory[0]
                         currentBalance = latestBalance.closing_balance || 0
-                        console.log(`💰 CashFlowDashboard: 銀行残高履歴から現在の残高を取得: ${currentBalance} (${latestBalance.balance_date})`)
                       } else if (fiscalInfo) {
                         // 銀行残高履歴がない場合は決算情報の銀行残高を使用
                         currentBalance = fiscalInfo.bank_balance || 0
-                        console.log(`💰 CashFlowDashboard: 決算情報から現在の残高を取得: ${currentBalance}`)
                       }
                       
                       return formatCurrency(currentBalance)

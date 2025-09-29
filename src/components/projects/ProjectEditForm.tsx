@@ -7,7 +7,6 @@ import { Client } from '@/types/database'
 import {
   Building2,
   Calendar,
-  DollarSign,
   Users,
   FileText,
   ArrowLeft,
@@ -18,9 +17,11 @@ import Link from 'next/link'
 interface ProjectFormData {
   name: string
   business_number: string
+  order_form_name: string
   description: string
   client_id: string
   client_name: string
+  person_in_charge: string
   budget: string
   start_date: string
   end_date: string
@@ -30,9 +31,11 @@ interface ProjectFormData {
 const initialFormData: ProjectFormData = {
   name: '',
   business_number: '',
+  order_form_name: '',
   description: '',
   client_id: '',
   client_name: '',
+  person_in_charge: '',
   budget: '',
   start_date: '',
   end_date: '',
@@ -57,9 +60,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
   const [isPending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
-  const [loadingClients, setLoadingClients] = useState(false)
   const [loadingProject, setLoadingProject] = useState(true)
-  const [businessNumberError, setBusinessNumberError] = useState<string>('')
   const router = useRouter()
   const supabase = createClientComponentClient()
 
@@ -90,9 +91,11 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           setFormData({
             name: project.name || '',
             business_number: project.business_number || '',
+            order_form_name: project.order_form_name || '',
             description: project.description || '',
             client_id: project.client_id || '',
             client_name: project.client_name || '',
+            person_in_charge: project.person_in_charge || '',
             budget: project.contract_amount?.toString() || '',
             start_date: project.start_date || '',
             end_date: project.end_date || '',
@@ -118,7 +121,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        setLoadingClients(true)
+        // setLoadingClients(true)
 
         const { data: { session } } = await supabase.auth.getSession()
         const headers: HeadersInit = {
@@ -147,7 +150,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
       } catch (error) {
         console.error('❌ ProjectEditForm: クライアント取得エラー:', error)
       } finally {
-        setLoadingClients(false)
+        // setLoadingClients(false)
       }
     }
 
@@ -203,8 +206,10 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
         const projectData = {
           name: formData.name.trim(),
           business_number: formData.business_number.trim(),
+          order_form_name: formData.order_form_name.trim(),
           client_id: formData.client_id,
           client_name: formData.client_name,
+          person_in_charge: formData.person_in_charge.trim(),
           contract_amount: formData.budget ? Number(formData.budget) : 0,
           start_date: formData.start_date,
           end_date: formData.end_date,
@@ -234,7 +239,7 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
           throw new Error(`プロジェクト更新に失敗しました (${response.status})`)
         }
 
-        const result = await response.json()
+        await response.json()
 
         // 成功したらプロジェクト一覧ページにリダイレクト
         const cidMatch2 = document.cookie.match(/(?:^|; )scope_company_id=([^;]+)/)
@@ -251,14 +256,19 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    
+    const newFormData = { ...formData, [name]: value }
+
+    // 注文書名が入力され、現在のステータスが「計画中」の場合、「進行中」に変更
+    if (name === 'order_form_name' && value.trim() && formData.status === 'planning') {
+      newFormData.status = 'in_progress'
+    }
+
+    setFormData(newFormData)
+
     // エラーをクリア
     if (errors[name as keyof ProjectFormData]) {
       setErrors(prev => ({ ...prev, [name]: undefined }))
     }
-
-
   }
 
   const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -377,6 +387,25 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
             <p className="mt-1 text-sm text-gray-500">業務番号は作成後に変更できません</p>
           </div>
 
+          {/* 注文書名 */}
+          <div className="md:col-span-2">
+            <label htmlFor="order_form_name" className="block text-sm font-medium text-gray-700 mb-2">
+              注文書名
+            </label>
+            <div className="relative">
+              <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                id="order_form_name"
+                name="order_form_name"
+                value={formData.order_form_name}
+                onChange={handleInputChange}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="注文書名を入力"
+              />
+            </div>
+          </div>
+
           {/* クライアント選択 */}
           <div className="md:col-span-2">
             <label htmlFor="client_id" className="block text-sm font-medium text-gray-700 mb-2">
@@ -399,6 +428,25 @@ export default function ProjectEditForm({ projectId }: ProjectEditFormProps) {
               ))}
             </select>
             {errors.client_id && <p className="mt-1 text-sm text-red-600">{errors.client_id}</p>}
+          </div>
+
+          {/* 担当者 */}
+          <div className="md:col-span-2">
+            <label htmlFor="person_in_charge" className="block text-sm font-medium text-gray-700 mb-2">
+              担当者
+            </label>
+            <div className="relative">
+              <Users className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                id="person_in_charge"
+                name="person_in_charge"
+                value={formData.person_in_charge}
+                onChange={handleInputChange}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="担当者名を入力"
+              />
+            </div>
           </div>
 
           {/* 契約金額 */}
